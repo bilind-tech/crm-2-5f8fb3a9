@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Home, ChevronRight, Pencil, Archive, Building2, Plus } from "lucide-react";
+import { Pencil, Archive, Building2, Plus } from "lucide-react";
 import { useKunde } from "@/hooks/useApi";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { SlideOver } from "@/components/ui/slide-over";
 import { ObjektForm } from "@/components/forms/ObjektForm";
 import { AngebotForm } from "@/components/forms/AngebotForm";
