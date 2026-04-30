@@ -122,9 +122,34 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
         </Field>
       </div>
 
-      <Field label="Titel *">
-        <Input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="z. B. Reinigung März 2026" />
-      </Field>
+      {kundeId && (
+        <AnsprechpartnerPicker
+          kundeId={kundeId}
+          value={ansprechpartnerId}
+          onChange={setAnsprechpartnerId}
+        />
+      )}
+
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <Field label="Titel *">
+            <Input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="z. B. Reinigung März 2026" />
+          </Field>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOptionen({ ...optionen, wiederkehrend: !optionen.wiederkehrend })}
+          className={`inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition ${
+            optionen.wiederkehrend
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border bg-background text-muted-foreground hover:bg-muted"
+          }`}
+          title="Als Dauerauftrag kennzeichnen"
+        >
+          <Repeat className="h-3.5 w-3.5" />
+          Dauerauftrag
+        </button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Rechnungsdatum">
