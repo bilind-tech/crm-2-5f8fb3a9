@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sparkles, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 export function LockScreen() {
   const { unlock, loading } = useAuth();
@@ -25,10 +26,8 @@ export function LockScreen() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-accent/30 p-4">
       <Card className="w-full max-w-md border-border/60 shadow-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg">
-            <Sparkles className="h-7 w-7" />
-          </div>
-          <CardTitle className="text-2xl">MCC Reinigungs-CRM</CardTitle>
+          <img src={logo} alt="My Clean Center" className="mx-auto mb-3 h-16 w-16 object-contain" />
+          <CardTitle className="text-2xl">My Clean Center</CardTitle>
           <CardDescription>Bitte gib dein Master-Passwort ein, um zu entsperren.</CardDescription>
         </CardHeader>
         <CardContent>
