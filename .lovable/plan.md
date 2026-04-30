@@ -1,156 +1,109 @@
+## Ziel
 
-# CRM-Frontend für Reinigungsbetrieb (Pi-ready)
+Das Frontend exakt an die mitgeschickten Screenshots angleichen — vollständiges Redesign der Sidebar, des Headers, der Listen, des Dashboards und der Einstellungen. Das Logo „My Clean Center" wird eingebunden. Module wie **Steuer-Export, Aufträge, Mahnwesen** werden NICHT in der Einstellungen-Seite umgesetzt (laut deiner Anweisung ignorieren) — sie erscheinen aber als Sidebar-Einträge wie auf den Screenshots.
 
-Ich baue ein vollständiges React-Frontend mit allen beschriebenen Bildschirmen. Das Backend läuft später separat auf deinem Raspberry Pi 5 (von Claude Code gebaut). Damit beides sauber zusammenspielt, liefere ich gleichzeitig eine **API-Spezifikation** als Markdown — das ist der Vertrag, den dein Pi-Backend erfüllen muss.
+## 1. Branding & Logo
 
-## Was du am Ende hast
+- Logo `ORIGINAL_LOGO_ohne_schatten.png` nach `src/assets/logo.png` kopieren.
+- Sidebar-Header: Logo + zweizeilig „**My Clean Center**" / „CRM • GmbH" (statt aktuell „MCC / Reinigungs-CRM" mit Sparkles-Icon).
+- Sidebar-Gruppen umbenennen entsprechend Screenshots:
+  - **Übersicht** → Dashboard
+  - **Stammdaten** → Kunden
+  - **Vertrieb & Abrechnung** → Angebote, Aufträge, Rechnungen, Mahnwesen, Dokumente, Steuer-Export
+  - **System** → Einstellungen
+- „Aktivität" aus Sidebar entfernen.
+- Sperren-Button als kleiner Eintrag unten links in der Sidebar (Icon „Schloss" + „Sperren") statt im Header.
+- Sidebar: hellerer Hintergrund (nahezu weiß mit leichtem Blaustich wie im Screenshot), aktiver Eintrag mit dezentem Border + Primary-Akzent.
 
-1. **Lauffähiges Frontend** im Browser — sofort klickbar, mit Demo-Daten
-2. **Mock-Modus** (`VITE_USE_MOCK=true`, Standard): alle Daten in-memory im Browser, ideal zum Entwickeln und Demoen
-3. **Live-Modus** (`VITE_USE_MOCK=false` + `VITE_API_BASE_URL=http://meinpi.local:3000`): Frontend redet mit deinem Pi-Backend
-4. **`API_SPEC.md`** im Repo: jede Route, jeder Request/Response, jeder Statuscode — Übergabe-Dokument für Claude Code
-5. **`docs/PI_DEPLOYMENT.md`**: wie du das gebuildete Frontend (`dist/`) auf den Pi packst und z. B. Nginx davorhängst
+## 2. Farbschema umstellen (Apple-like, Marineblau-Akzent)
 
-## Architektur des Frontends
+Die Screenshots zeigen klar **dunkles Marineblau** als Primärfarbe (Buttons „+ Neu", „+ Neues Angebot", aktive Sidebar-Indikator, Überschriften), nicht Türkis. Türkis bleibt nur als Logo-Akzent.
 
-```text
-src/
-├── routes/                    # TanStack-Router-Seiten
-│   ├── __root.tsx            # Layout: Sidebar + Header + Lock-Screen-Gate
-│   ├── index.tsx             # Dashboard
-│   ├── kunden.tsx / kunden.$id.tsx
-│   ├── objekte.tsx / objekte.$id.tsx
-│   ├── angebote.tsx / angebote.$id.tsx
-│   ├── rechnungen.tsx / rechnungen.$id.tsx
-│   ├── dokumente.tsx
-│   ├── aktivitaet.tsx
-│   └── einstellungen.tsx (+ Tabs als Child-Routes)
-├── components/
-│   ├── layout/               # Sidebar, Header, LockScreen, NotificationBell, GlobalSearch
-│   ├── crm/                  # KundenTable, ObjektCard, PositionsEditor, ZahlungsDialog, …
-│   └── ui/                   # shadcn (vorhanden)
-├── lib/
-│   ├── api/                  # ← Vertrag mit dem Pi-Backend
-│   │   ├── client.ts         # fetch-Wrapper, Auth-Header, Fehlerbehandlung
-│   │   ├── kunden.ts, objekte.ts, angebote.ts, rechnungen.ts, …
-│   │   └── types.ts          # TypeScript-Typen für ALLE Entitäten
-│   ├── mock/                 # In-Memory-Backend (gleicher Vertrag wie echtes API)
-│   │   ├── store.ts          # localStorage-persistiert
-│   │   └── seed.ts           # 1–2 Beispiele pro Entität
-│   ├── format.ts             # EUR, dd.mm.yyyy, deutsche Zahlen
-│   └── auth.ts               # Lock-Screen-State, Session-Handling
-├── hooks/                    # useKunden, useRechnungen, … (TanStack Query)
-└── styles.css                # Türkis-Akzent #0E9F8A, hell+dunkel
-```
+- `--primary` → tiefes Navy/Marineblau (~ `oklch(0.32 0.09 255)`, Hex ~ `#1E3A5F`).
+- `--background` → fast weiß mit Hauch Blau (`oklch(0.985 0.005 230)`).
+- `--sidebar` → noch heller, mit feinem rechten Border.
+- Erfolgs-Grün und Warn-Rot wie in Screenshots (Beträge grün, „0,00 € Überfällig" rot).
+- Card-Stil: weißer Hintergrund, sehr dezenter Schatten, weiche Border, `rounded-2xl`.
 
-**Wichtig:** Komponenten reden NIE direkt mit `fetch`. Sie nutzen Hooks → Hooks nutzen `lib/api/*` → der Client schaltet anhand der Env-Variable zwischen Mock und echtem Pi-Backend um. Dadurch ist der Wechsel später ein Ein-Zeilen-Switch.
+## 3. Header
 
-## Auth (verschlüsselt, einfach)
+- Höhe ~64 px, weißer Hintergrund (statt blur).
+- Suche: längeres Pill-Input mit grauem Rand und ⌘K-Badge rechts.
+- „+ Neu"-Button: Marineblau, abgerundet, mit Plus-Icon.
+- Glocken-Icon für Benachrichtigungen.
+- Schloss-Button raus aus Header (jetzt in Sidebar unten).
 
-Lock-Screen beim App-Start. Du gibst Master-Passwort ein → POST an `/auth/unlock` → Backend antwortet mit JWT (im **HttpOnly+Secure-Cookie**, vom Pi gesetzt). Frontend hält nur ein „is-unlocked"-Flag im Memory. Auto-Lock nach 30 Min Inaktivität (in Einstellungen änderbar). Im Mock-Modus: lokales Passwort `admin` zum Testen, ebenfalls über denselben Flow.
+## 4. Listen-Seiten (Angebote, Rechnungen, Dokumente)
 
-Das Passwort selbst wird auf dem Pi mit Argon2id gehasht (das ist Backend-Sache, steht in der API-Spec). Über LAN sollte später Nginx mit selbstsigniertem Cert oder Tailscale-HTTPS davor — auch das beschreibe ich in `PI_DEPLOYMENT.md`.
-
-## Bildschirme
-
-**Lock-Screen** — zentriertes Logo + Passwortfeld, kein Header/Sidebar.
-
-**Dashboard** — Kennzahlen-Karten (aktive Kunden/Objekte, offene Angebote/Rechnungen, Außenstände EUR), Umsatz-Chart 12 Monate (Recharts, brutto/netto-Toggle, Zeitraum-Filter), Warnungs-Liste (überfällige Rechnungen mit Tagen, alte offene Angebote, Kunden mit kumulierten Außenständen), letzte Aktivitäten, Quick-Action-Buttons.
-
-**Kunden** — Liste mit Suche/Filter/Tags. Detailseite mit Stammdaten (inline editierbar), Tabs für Ansprechpartner, Objekte, Angebote, Rechnungen, Dokumente, Notizen. Roter Banner bei überfälligen Rechnungen. Firma/Privat umschaltbar mit dynamischen Pflichtfeldern. Kundennummer auto.
-
-**Objekte** — Liste + Detail mit allen Reinigungs-spezifischen Feldern (Frequenz, Tage Mo–So Multi-Select, Zugangsinfo, m², Stockwerke, Vor-Ort-Ansprechpartner verlinkt zum Kunden).
-
-**Angebote** — Editor mit Positionen-Tabelle (Beschreibung, Menge, Einheit, Einzelpreis, Steuersatz, Zeilensumme, Gesamt). Vorlagen-Buttons fügen Standard-Positionen ein. Intro/Outro aus Textvorlagen. Status-Workflow (Entwurf → Versendet → Angenommen/Abgelehnt/Abgelaufen). Aktionen: PDF-Vorschau (iframe vom Backend), per E-Mail senden (Dialog), in Rechnung umwandeln (1 Klick → neue Rechnung mit kopierten Positionen, verlinkt), duplizieren, archivieren.
-
-**Rechnungen** — Wie Angebote, plus Zahlungs-Dialog (mehrere Teilzahlungen mit Datum/Betrag/Methode/Referenz), Resthö̈he wird live berechnet, Status springt automatisch (Teilbezahlt/Bezahlt). „Als bezahlt markieren"-Schnellbutton. Überfällig-Logik visuell + im Dashboard.
-
-**Dokumente** — Drag-&-Drop-Upload, Zuordnung zu Kunde+Objekt, Typ-Filter, Browser-Vorschau über vom Backend gelieferte URL.
-
-**Globale Suche** — Cmd/Ctrl+K → Command-Dialog (shadcn `Command`). Sucht parallel über alle Entitäten via `/search?q=`.
-
-**Benachrichtigungs-Glocke** — Header rechts, Badge mit Anzahl ungelesener, Popover-Liste mit Sprung-Links.
-
-**Einstellungen** — Tabs: Firmendaten (inkl. Logo-Upload), Erscheinungsbild (Theme + Akzentfarbe), Nummernkreise (Präfix-Builder mit `{YYYY}` `{####}`-Platzhaltern + Live-Preview), Positionsvorlagen (CRUD), Textvorlagen (CRUD mit Platzhalter-Hilfe `{kunde.name}` etc.), E-Mail/SMTP (Strato-Felder + Testmail-Button), Backup (Download-Button, Auto-Backup-Konfig, Wiederherstellen-Upload), Aktivitätsverlauf (Filter), Sicherheit (Passwort ändern, Auto-Lock-Timer).
-
-**Quick-Create** — Schwebender „+"-Button rechts unten + Cmd+N → öffnet Dialog mit Tabs (Kunde/Objekt/Angebot/Rechnung/Dokument).
-
-## Design
-
-- Akzentfarbe **Türkis #0E9F8A** (sauber, frisch, branchentypisch — falls du eine andere willst, einfach sagen)
-- Helles + dunkles Theme, umschaltbar in den Einstellungen, OS-Default als Start
-- Inter-Schrift, großzügige Abstände, abgerundete Karten, dezente Schatten
-- Deutsche Lokalisierung durchgängig: `1.234,56 €`, `30.04.2026`, Mo–So, ISO-Wochen wo sinnvoll
-
-## API-Vertrag (Auszug — vollständig in `API_SPEC.md`)
+Layout exakt wie Screenshot:
 
 ```text
-POST   /auth/unlock              { password } → 204 + Set-Cookie
-POST   /auth/lock                → 204
-GET    /me                       → { unlockedAt, autoLockMinutes }
-
-GET    /kunden?q=&status=&tag=   → Kunde[]
-POST   /kunden                   → Kunde
-GET    /kunden/:id               → KundeMitRelationen
-PATCH  /kunden/:id               → Kunde
-DELETE /kunden/:id               → 204 | 409 (wenn verknüpft)
-
-… analog: /objekte, /angebote, /rechnungen, /dokumente, /ansprechpartner, /notizen
-
-POST   /angebote/:id/in-rechnung-umwandeln  → Rechnung
-GET    /angebote/:id/pdf                     → application/pdf
-POST   /angebote/:id/senden                  → 204
-POST   /rechnungen/:id/zahlungen             → Zahlung
-GET    /rechnungen/:id/pdf                   → application/pdf
-
-GET    /dashboard/kennzahlen                 → { aktiveKunden, … }
-GET    /dashboard/umsatz?von=&bis=           → ChartPunkt[]
-GET    /dashboard/warnungen                  → Warnung[]
-
-GET    /search?q=                            → SuchTreffer[]
-GET    /aktivitaeten?typ=                    → Aktivitaet[]
-GET    /benachrichtigungen                   → Benachrichtigung[]
-PATCH  /benachrichtigungen/:id/gelesen       → 204
-
-GET/PATCH /einstellungen/firma | /smtp | /nummernkreise | /sicherheit
-GET/POST/DELETE /einstellungen/positionsvorlagen
-GET/POST/DELETE /einstellungen/textvorlagen
-POST   /backup/erstellen                     → application/zip
-POST   /backup/wiederherstellen (multipart)  → 204
+Breadcrumb (Home › Angebote)
+H1 + Untertitel                                    [+ Neues Angebot]
+─────────────────────────────────────────────────
+[ KPI-Card ] [ KPI-Card ] [ KPI-Card ] [ KPI-Card ]
+─────────────────────────────────────────────────
+[ Tabs: Alle | Entwurf | Versendet | Angenommen ]   [ 🔍 Suche ]
+─────────────────────────────────────────────────
+Tabelle mit Hover-Zeilen + Aktions-Icons rechts
 ```
 
-Jede Route bekommt in `API_SPEC.md`: Beschreibung, Request-Schema (TypeScript), Response-Schema, Beispiel-Payload, Fehler-Codes. Das ist der einzige Input, den Claude Code braucht.
+Details:
+- KPI-Cards: weißer Hintergrund, große Zahl oben (Navy oder Grün), kleines Label darunter.
+- Filter-Tabs als Pill-Group mit Outline-Stil.
+- Tabellen-Aktionen: Auge (Detail), Papier-Flieger (Senden), Mülleimer rot (Löschen), Chevron (Details).
+- Status-Badges: hellgrauer Pill für „Entwurf", grüner Pill für „Angenommen/Bezahlt", blauer Pill für „Versendet".
 
-## Reihenfolge / Phasen
+## 5. Dashboard
 
-Da du sagst „Frontend vollständig" — ich baue alles in einem Rutsch, aber in dieser logischen Reihenfolge, damit Zwischenstände sinnvoll sind:
+Wie Screenshot 2:
+- 4 große KPI-Cards (Kunden, Aufträge, Umsatz Monat, Offene Rechnungen) mit Icon rechts oben.
+- Umsatz-Diagramm-Card (Linien-/Balken-Chart, Recharts) mit „Summe"-Anzeige rechts oben.
+- Zwei Cards unten nebeneinander: „Offene Rechnungen" und „Aktive Aufträge".
 
-1. **Fundament**: Layout (Sidebar + Header), Theme/Akzent, Lock-Screen, Mock-Store, API-Client-Schicht, Routing-Skeleton
-2. **Stammdaten**: Kunden + Ansprechpartner + Objekte (Listen, Detailseiten, Inline-Editing, Quick-Create)
-3. **Belege**: Angebote (mit Positionseditor + Vorlagen) → Rechnungen (mit Zahlungen) → Umwandlung Angebot→Rechnung → PDF-iframe-Vorschau
-4. **Querschnitt**: Dokumente, Globale Suche (Cmd+K), Benachrichtigungs-Glocke, Aktivitätsverlauf, Dashboard-Warnungen + Chart
-5. **Einstellungen**: alle Tabs inkl. Vorlagen-Editoren, SMTP-Form, Backup-UI
-6. **Auslieferung**: `API_SPEC.md` finalisieren, `PI_DEPLOYMENT.md` schreiben, Mock-Daten polieren
+## 6. Einstellungen-Seite (komplett neu)
 
-## Stolperfallen, die ich für dich/Claude Code dokumentiere
+Tab-Leiste exakt wie Screenshot 6:
+**Firmendaten · Erscheinungsbild · Nummernkreise · Mahnwesen · Textbausteine & Vorlagen · Google Drive · Backup & Download · Verlauf**
 
-In `docs/PI_DEPLOYMENT.md` und `API_SPEC.md` notiere ich:
+> Hinweis: Inhaltlich umgesetzt wird in dieser Runde nur **Firmendaten** (laut Screenshot 6 + 7) — die anderen Tabs bekommen einen Platzhalter „kommt mit Backend".  Die alten Bereiche „Steuer-Export", „Mahnwesen-Setup" usw. werden auf der Einstellungen-Seite **NICHT** als eigene Sektionen umgesetzt (deine Anweisung).
 
-- **`better-sqlite3` auf ARM64 (Pi 5)**: aktuelle Versionen liefern Prebuilds für `linux-arm64`; falls nicht, `npm rebuild better-sqlite3` braucht `build-essential` + `python3`. Pi 5 mit 64-Bit-OS empfohlen.
-- **PDF ohne Headless-Chrome**: `pdfmake` oder `pdf-lib` — beide reine JS, kein Puppeteer. Schont RAM (Chromium auf Pi = 500 MB+).
-- **SMTP zu Strato**: Port 465 (SSL) ist zuverlässiger als 587/STARTTLS. SPF/Reverse-DNS beachten — sonst landen Mails im Spam. `nodemailer` mit `secure: true`.
-- **Datei-Uploads**: Express/Fastify-Body-Limit hochsetzen (Default 1 MB ist zu klein für Belege). Multipart via `busboy` oder `@fastify/multipart`.
-- **SQLite-Backups**: Nicht einfach `cp` — `VACUUM INTO` oder `sqlite3 .backup` benutzen, damit konsistent. Cron täglich, Rotation 14 Tage.
-- **Zeitzone**: Pi auf `Europe/Berlin` setzen (`timedatectl set-timezone`), sonst stimmen Fälligkeitsberechnungen nicht.
-- **CORS**: Backend muss `http://meinpi.local:3000` (oder Origin des Frontends) explizit erlauben + `credentials: true` für Cookie-Auth.
-- **Reverse Proxy**: Nginx vor Node, Frontend-`dist/` als statische Dateien, `/api/*` an Node (Port 4000) proxien. Beispiel-Nginx-Config liefere ich mit.
+Firmendaten-Tab erhält die Sektionen aus den Screenshots:
+- **Unternehmen** (Firmenname, Rechtsform, Slogan)
+- **Anschrift** (Straße, PLZ, Ort, Land)
+- **Kontakt** (Telefon, E-Mail, Website)
+- **Steuer & Register** (USt-IdNr., Steuernummer, Handelsregister, Geschäftsführung)
+- **Bankverbindung** (Bank, IBAN, BIC)
+- **Standardwerte** (Standard-Steuersatz %, Zahlungsziel Tage)
 
-## Was ich NICHT mache
+Footer-Leiste fix unten: „Änderungen werden im Aktivitätsprotokoll festgehalten." + [Zurücksetzen] [💾 Speichern]
 
-- Kein Backend-Code (das macht Claude Code auf dem Pi)
-- Kein echter SMTP-Versand aus Lovable heraus
-- Keine echten PDFs in der Cloud-Vorschau (im Mock-Modus zeige ich einen Platzhalter-iframe; echte PDFs kommen später vom Pi)
+Default-Werte aus Screenshot vorbefüllt (My Clean Center GmbH, Gartenstr. 16, 53757 St. Augustin, DE459095049, Sparkasse Köln Bonn, IBAN DE50…, etc.).
 
----
+## 7. Neue Sidebar-Routen (nur Stub-Seiten)
 
-Wenn du auf „Implement plan" klickst, lege ich los und baue alles oben Beschriebene. Sag vorher noch Bescheid, falls die Türkis-Farbe nicht passt — sonst geht's mit #0E9F8A los.
+Damit die im Screenshot sichtbaren Sidebar-Einträge auch klickbar sind, kommen leere Routen mit Empty-State + „kommt im nächsten Schritt"-Hinweis:
+- `/auftraege`
+- `/mahnwesen`
+- `/steuer-export`
+
+Inhaltlich kein Aufwand — nur damit die Navigation komplett ist wie im Screenshot.
+
+## Technische Umsetzung
+
+1. `code--copy user-uploads://ORIGINAL_LOGO_ONLY_ohne_schatten.png src/assets/logo.png`
+2. `src/styles.css` — neue Primary/Background/Sidebar-Tokens (Navy + fast-weiß).
+3. `src/components/layout/AppSidebar.tsx` — neue Gruppen, Logo, Sperren-Footer-Button.
+4. `src/components/layout/AppHeader.tsx` — Suchpill, „+ Neu", Glocke; Schloss raus.
+5. `src/routes/__root.tsx` (falls nötig) — Layout-Hintergrund anpassen.
+6. `src/routes/index.tsx` — Dashboard-KPIs/Charts an Screenshot 2 angleichen.
+7. `src/routes/angebote.tsx`, `rechnungen.tsx`, `dokumente.tsx`, `kunden.tsx` — neues Listen-Layout (Breadcrumb, KPI-Row, Tabs+Suche, Tabelle).
+8. `src/routes/einstellungen.tsx` — komplett neu schreiben mit Tabs + Firmendaten-Form.
+9. `src/routes/auftraege.tsx`, `mahnwesen.tsx`, `steuer-export.tsx` — neue Stub-Seiten.
+10. `src/lib/mock/seed.ts` & `src/lib/api/types.ts` — Firmendaten um neue Felder erweitern (Slogan, Rechtsform, Anschriftsfelder einzeln, Steuernummer, Handelsregister, Geschäftsführung, Bankname, Standard-Steuersatz, Zahlungsziel).
+
+## Out of Scope (diese Runde)
+
+- Echte Implementierung von Mahnwesen, Aufträge, Steuer-Export (nur Stub-Seiten).
+- Andere Einstellungen-Tabs außer Firmendaten (Platzhalter).
+- Backend-Integration — bleibt Mock.
