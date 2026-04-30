@@ -1,34 +1,220 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useState, useMemo } from "react";
+import { Plus, Eye, CheckCircle2, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useRechnungen } from "@/hooks/useApi";
-import { Plus } from "lucide-react";
-import { formatDate } from "@/lib/format";
+import { useRechnungen, useDeleteRechnung } from "@/hooks/useApi";
+import { formatEUR, formatDate } from "@/lib/format";
+import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { FilterBar } from "@/routes/angebote";
+import type { Rechnung } from "@/lib/api/types";
+
 export const Route = createFileRoute("/rechnungen")({ component: Page });
-function Page() {
-  const { data = [] } = useRechnungen();
+
+const statusLabel: Record<string, string> = {
+  entwurf: "Entwurf",
+  versendet: "Versendet",
+  teilbezahlt: "Teilbez.",
+  bezahlt: "Bezahlt",
+  ueberfaellig: "Überfällig",
+  storniert: "Storniert",
+};
+
+function statusBadge(status: string) {
+  const map: Record<string, string> = {
+    entwurf: "bg-muted text-foreground/70 border-border",
+    versendet: "bg-primary/10 text-primary border-primary/20",
+    teilbezahlt: "bg-warning/10 text-warning border-warning/20",
+    bezahlt: "bg-success/10 text-success border-success/20",
+    ueberfaellig: "bg-destructive/10 text-destructive border-destructive/20",
+    storniert: "bg-muted text-muted-foreground border-border",
+  };
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div><h1 className="text-2xl font-semibold">Rechnungen</h1><p className="text-sm text-muted-foreground">{data.length} Einträge</p></div>
-        <Button asChild><Link to="/rechnungen/neu"><Plus className="mr-1 h-4 w-4" />Neue Rechnung</Link></Button>
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${map[status] ?? map.entwurf}`}
+    >
+      {statusLabel[status] ?? status}
+    </span>
+  );
+}
+
+function brutto(r: Rechnung) {
+  return (
+    r.positionen.reduce((a, p) => a + p.menge * p.einzelpreisNetto * (1 - p.rabatt / 100), 0) *
+    (1 + r.steuersatz / 100)
+  );
+}
+function bezahlt(r: Rechnung) {
+  return r.zahlungen.reduce((a, z) => a + z.betrag, 0);
+}
+
+function Page() {
+  const { data: alle = [] } = useRechnungen();
+  const del = useDeleteRechnung();
+  const [filter, setFilter] = useState("alle");
+  const [q, setQ] = useState("");
+
+  const heute = new Date().toISOString().slice(0, 10);
+  const monat = heute.slice(0, 7);
+
+  const counts = useMemo(() => {
+    const offen = alle.filter((r) => r.status !== "bezahlt" && r.status !== "storniert");
+    const ueberfaellig = alle.filter((r) => r.status === "ueberfaellig" || (r.faelligkeitsdatum < heute && r.status !== "bezahlt" && r.status !== "storniert"));
+    return {
+      offenSumme: offen.reduce((a, r) => a + brutto(r) - bezahlt(r), 0),
+      offenAnzahl: offen.length,
+      ueberSumme: ueberfaellig.reduce((a, r) => a + brutto(r) - bezahlt(r), 0),
+      ueberAnzahl: ueberfaellig.length,
+      eingangMonat: alle
+        .flatMap((r) => r.zahlungen.filter((z) => z.datum.startsWith(monat)))
+        .reduce((a, z) => a + z.betrag, 0),
+      gesamt: alle.length,
+    };
+  }, [alle, heute, monat]);
+
+  const filtered = useMemo(() => {
+    let list = alle;
+    if (filter !== "alle") {
+      if (filter === "teilbezahlt") list = list.filter((r) => r.status === "teilbezahlt");
+      else list = list.filter((r) => r.status === filter);
+    }
+    if (q.trim()) {
+      const t = q.toLowerCase();
+      list = list.filter((r) => r.nummer.toLowerCase().includes(t) || r.titel.toLowerCase().includes(t));
+    }
+    return [...list].sort((a, b) => b.rechnungsdatum.localeCompare(a.rechnungsdatum));
+  }, [alle, filter, q]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        breadcrumb="Rechnungen"
+        title="Rechnungen"
+        subtitle="Rechnungen erstellen, Zahlungen erfassen, Mahnungen senden."
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild className="h-10 gap-1.5 rounded-full px-5">
+              <Link to="/rechnungen/neu">
+                <Plus className="h-4 w-4" />
+                Aus Auftrag
+              </Link>
+            </Button>
+            <Button asChild className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
+              <Link to="/rechnungen/neu">
+                <Plus className="h-4 w-4" />
+                Neue Rechnung
+              </Link>
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label="Offene Posten"
+          value={formatEUR(counts.offenSumme)}
+          sublabel={`${counts.offenAnzahl} Rechnung(en)`}
+          tone="primary"
+        />
+        <KpiCard
+          label="Überfällig"
+          value={formatEUR(counts.ueberSumme)}
+          sublabel={`${counts.ueberAnzahl} Rechnung(en)`}
+          tone="danger"
+        />
+        <KpiCard
+          label="Eingang diesen Monat"
+          value={formatEUR(counts.eingangMonat)}
+          sublabel="Bezahlt im Monat"
+          tone="success"
+        />
+        <KpiCard label="Gesamt" value={counts.gesamt} sublabel="Alle Rechnungen" />
       </div>
-      <Card><CardHeader><CardTitle>Übersicht</CardTitle></CardHeader>
-        <CardContent>
-          <ul className="divide-y">
-            {data.map((r) => (
-              <li key={r.id}>
-                <Link to="/rechnungen/$id" params={{ id: r.id }} className="flex items-center justify-between py-3 hover:text-primary">
-                  <div><p className="font-medium">{r.nummer} – {r.titel}</p><p className="text-xs text-muted-foreground">Fällig: {formatDate(r.faelligkeitsdatum)}</p></div>
-                  <Badge variant={r.status === "ueberfaellig" ? "destructive" : "secondary"}>{r.status}</Badge>
-                </Link>
-              </li>
-            ))}
-            {data.length === 0 && <li className="py-6 text-center text-sm text-muted-foreground">Keine Rechnungen vorhanden.</li>}
-          </ul>
-        </CardContent>
-      </Card>
+
+      <FilterBar
+        filter={filter}
+        setFilter={setFilter}
+        q={q}
+        setQ={setQ}
+        tabs={[
+          { value: "alle", label: "Alle" },
+          { value: "entwurf", label: "Entwurf" },
+          { value: "versendet", label: "Versendet" },
+          { value: "teilbezahlt", label: "Teilbez." },
+          { value: "ueberfaellig", label: "Überfällig" },
+          { value: "bezahlt", label: "Bezahlt" },
+        ]}
+        placeholder="Suche nach Nummer, Titel, Kunde…"
+      />
+
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+              <th className="px-4 py-3 font-medium">Nummer</th>
+              <th className="px-4 py-3 font-medium">Kunde</th>
+              <th className="px-4 py-3 font-medium">Datum</th>
+              <th className="px-4 py-3 font-medium">Fällig</th>
+              <th className="px-4 py-3 text-right font-medium">Brutto</th>
+              <th className="px-4 py-3 text-right font-medium">Offen</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 text-right font-medium">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => {
+              const b = brutto(r);
+              const offen = b - bezahlt(r);
+              return (
+                <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{r.nummer}</td>
+                  <td className="px-4 py-3 font-medium">{r.titel}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{formatDate(r.rechnungsdatum)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{formatDate(r.faelligkeitsdatum)}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{formatEUR(b)}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{formatEUR(offen)}</td>
+                  <td className="px-4 py-3">{statusBadge(r.status)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1 text-muted-foreground">
+                      <Link
+                        to="/rechnungen/$id"
+                        params={{ id: r.id }}
+                        className="rounded-md p-1.5 hover:bg-muted hover:text-foreground"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                      <button className="rounded-md p-1.5 text-success hover:bg-success/10" title="Bezahlt markieren">
+                        <CheckCircle2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Rechnung ${r.nummer} löschen?`)) del.mutate(r.id);
+                        }}
+                        className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      <Link
+                        to="/rechnungen/$id"
+                        params={{ id: r.id }}
+                        className="rounded-md p-1.5 hover:bg-muted hover:text-foreground"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  Keine Rechnungen gefunden.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

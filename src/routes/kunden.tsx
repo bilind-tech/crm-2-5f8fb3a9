@@ -1,47 +1,128 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useState, useMemo } from "react";
+import { Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useKunden } from "@/hooks/useApi";
-import { Plus } from "lucide-react";
+import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { FilterBar } from "@/routes/angebote";
 
 export const Route = createFileRoute("/kunden")({ component: Page });
 
 function Page() {
-  const { data: kunden = [], isLoading } = useKunden();
+  const { data: alle = [] } = useKunden();
+  const [filter, setFilter] = useState("alle");
+  const [q, setQ] = useState("");
+
+  const counts = useMemo(
+    () => ({
+      gesamt: alle.length,
+      aktiv: alle.filter((k) => k.status === "aktiv").length,
+      interessent: alle.filter((k) => k.status === "interessent").length,
+      inaktiv: alle.filter((k) => k.status === "inaktiv").length,
+    }),
+    [alle]
+  );
+
+  const filtered = useMemo(() => {
+    let list = alle;
+    if (filter !== "alle") list = list.filter((k) => k.status === filter);
+    if (q.trim()) {
+      const t = q.toLowerCase();
+      list = list.filter(
+        (k) =>
+          (k.firmenname ?? "").toLowerCase().includes(t) ||
+          (k.nachname ?? "").toLowerCase().includes(t) ||
+          k.nummer.toLowerCase().includes(t) ||
+          (k.ort ?? "").toLowerCase().includes(t)
+      );
+    }
+    return list;
+  }, [alle, filter, q]);
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Kunden</h1>
-          <p className="text-sm text-muted-foreground">{kunden.length} Einträge</p>
-        </div>
-        <Button asChild>
-          <Link to="/kunden/neu"><Plus className="mr-1 h-4 w-4" />Neuer Kunde</Link>
-        </Button>
+    <div className="space-y-6">
+      <PageHeader
+        breadcrumb="Kunden"
+        title="Kunden"
+        subtitle="Stammdaten deiner Kunden zentral verwalten."
+        actions={
+          <Button asChild className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
+            <Link to="/kunden/neu">
+              <Plus className="h-4 w-4" />
+              Neuer Kunde
+            </Link>
+          </Button>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Gesamt" value={counts.gesamt} tone="primary" />
+        <KpiCard label="Aktiv" value={counts.aktiv} tone="success" />
+        <KpiCard label="Interessenten" value={counts.interessent} />
+        <KpiCard label="Inaktiv" value={counts.inaktiv} />
       </div>
-      <Card>
-        <CardHeader><CardTitle>Übersicht</CardTitle></CardHeader>
-        <CardContent>
-          {isLoading && <p className="text-sm text-muted-foreground">Lade …</p>}
-          <ul className="divide-y">
-            {kunden.map((k) => (
-              <li key={k.id}>
-                <Link to="/kunden/$id" params={{ id: k.id }} className="flex items-center justify-between py-3 hover:text-primary">
-                  <div>
-                    <p className="font-medium">{k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()}</p>
-                    <p className="text-xs text-muted-foreground">{k.nummer} · {k.ort ?? "—"}</p>
-                  </div>
-                  <Badge variant="secondary">{k.status}</Badge>
-                </Link>
-              </li>
+
+      <FilterBar
+        filter={filter}
+        setFilter={setFilter}
+        q={q}
+        setQ={setQ}
+        tabs={[
+          { value: "alle", label: "Alle" },
+          { value: "aktiv", label: "Aktiv" },
+          { value: "interessent", label: "Interessent" },
+          { value: "inaktiv", label: "Inaktiv" },
+        ]}
+        placeholder="Suche nach Name, Nummer, Ort…"
+      />
+
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
+              <th className="px-4 py-3 font-medium">Nummer</th>
+              <th className="px-4 py-3 font-medium">Name</th>
+              <th className="px-4 py-3 font-medium">Ort</th>
+              <th className="px-4 py-3 font-medium">E-Mail</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((k) => (
+              <tr key={k.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{k.nummer}</td>
+                <td className="px-4 py-3 font-medium">
+                  {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">{k.ort ?? "—"}</td>
+                <td className="px-4 py-3 text-muted-foreground">{k.email ?? "—"}</td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium capitalize">
+                    {k.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Link
+                    to="/kunden/$id"
+                    params={{ id: k.id }}
+                    className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </td>
+              </tr>
             ))}
-            {!isLoading && kunden.length === 0 && (
-              <li className="py-6 text-center text-sm text-muted-foreground">Noch keine Kunden angelegt.</li>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  Keine Kunden gefunden.
+                </td>
+              </tr>
             )}
-          </ul>
-        </CardContent>
-      </Card>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

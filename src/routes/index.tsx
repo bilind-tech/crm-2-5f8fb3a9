@@ -1,14 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   useDashboardKennzahlen,
   useUmsatz,
-  useWarnungen,
-  useAktivitaeten,
+  useRechnungen,
 } from "@/hooks/useApi";
-import { formatEUR, formatDateTime } from "@/lib/format";
-import { AlertTriangle, Building2, FileText, Receipt, Users, Wallet } from "lucide-react";
+import { formatEUR, formatDate } from "@/lib/format";
+import {
+  Building2,
+  ClipboardList,
+  Euro,
+  FileText,
+  Receipt,
+  CheckCircle2,
+} from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -18,6 +22,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -26,113 +31,150 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const { data: k } = useDashboardKennzahlen();
   const { data: umsatz = [] } = useUmsatz();
-  const { data: warnungen = [] } = useWarnungen();
-  const { data: aktivitaeten = [] } = useAktivitaeten();
+  const { data: rechnungen = [] } = useRechnungen();
 
-  const kpis = [
-    { label: "Aktive Kunden", value: k?.aktiveKunden ?? 0, icon: Users, link: "/kunden" as const },
-    { label: "Aktive Objekte", value: k?.aktiveObjekte ?? 0, icon: Building2, link: "/objekte" as const },
-    { label: "Offene Angebote", value: k?.offeneAngebote ?? 0, icon: FileText, link: "/angebote" as const },
-    { label: "Offene Rechnungen", value: k?.offeneRechnungen ?? 0, icon: Receipt, link: "/rechnungen" as const },
-    { label: "Außenstände", value: formatEUR(k?.ausstehendEUR ?? 0), icon: Wallet, link: "/rechnungen" as const, wide: true },
-  ];
+  const offene = rechnungen.filter(
+    (r) => r.status === "versendet" || r.status === "ueberfaellig" || r.status === "teilbezahlt"
+  );
+
+  const summe = umsatz.reduce((acc, u) => acc + u.brutto, 0);
+
+  // Letzte 6 Monate
+  const last6 = umsatz.slice(-6).map((u) => ({
+    ...u,
+    label: new Date(u.monat + "-01").toLocaleDateString("de-DE", { month: "short" }),
+  }));
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Dein Überblick über Kunden, Belege und offene Beträge.</p>
+      <PageHeader
+        breadcrumb=""
+        title="Übersicht"
+        subtitle="Aktueller Stand auf einen Blick"
+        hint="Hier findest du die wichtigsten Kennzahlen aus deinem Reinigungsbetrieb."
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label="Kunden"
+          value={k?.aktiveKunden ?? 0}
+          sublabel="aktiv"
+          icon={Building2}
+        />
+        <KpiCard
+          label="Aufträge"
+          value={k?.aktiveObjekte ?? 0}
+          sublabel={`${k?.aktiveObjekte ?? 0} Objekte`}
+          icon={ClipboardList}
+        />
+        <KpiCard
+          label="Umsatz Monat"
+          value={formatEUR(last6[last6.length - 1]?.brutto ?? 0)}
+          sublabel="brutto"
+          icon={Euro}
+        />
+        <KpiCard
+          label="Offene Rechnungen"
+          value={offene.length}
+          sublabel={`${k?.offeneAngebote ?? 0} offene Angebote`}
+          icon={FileText}
+        />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-        {kpis.map((kpi) => (
-          <Link key={kpi.label} to={kpi.link} className="block">
-            <Card className="h-full transition hover:border-primary hover:shadow-md">
-              <CardContent className="flex items-center gap-3 p-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <kpi.icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{kpi.label}</p>
-                  <p className="truncate text-lg font-semibold">{kpi.value}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Umsatz</h2>
+            <p className="text-xs text-muted-foreground">Letzte 6 Monate (brutto)</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Summe</p>
+            <p className="text-lg font-semibold">{formatEUR(summe)}</p>
+          </div>
+        </div>
+        <div className="mt-4 h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={last6}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v) => `${Math.round(Number(v))} €`}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 12,
+                  fontSize: 12,
+                }}
+                formatter={(v: number) => formatEUR(v)}
+              />
+              <Bar dataKey="brutto" fill="var(--primary)" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Umsatz · letzte 12 Monate</CardTitle>
-            <CardDescription>Brutto pro Monat</CardDescription>
-          </CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={umsatz}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="monat" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${Math.round(Number(v))} €`} />
-                <Tooltip
-                  contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8 }}
-                  formatter={(v: number) => formatEUR(v)}
-                />
-                <Bar dataKey="brutto" fill="var(--primary)" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-semibold">Offene Rechnungen</h2>
+          </div>
+          {offene.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Keine offenen Rechnungen.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {offene.slice(0, 4).map((r) => {
+                const summe =
+                  r.positionen.reduce(
+                    (a, p) => a + p.menge * p.einzelpreisNetto * (1 - p.rabatt / 100),
+                    0
+                  ) *
+                  (1 + r.steuersatz / 100);
+                return (
+                  <li key={r.id}>
+                    <Link
+                      to="/rechnungen/$id"
+                      params={{ id: r.id }}
+                      className="flex items-center justify-between gap-3 py-3 hover:text-primary"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{r.nummer} · {r.titel}</p>
+                        <p className="text-xs text-muted-foreground">{r.titel}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 text-right">
+                        <div>
+                          <p className="text-sm font-semibold">{formatEUR(summe)}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            fällig {formatDate(r.faelligkeitsdatum)}
+                          </p>
+                        </div>
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-warning" /> Hinweise
-            </CardTitle>
-            <CardDescription>Was deine Aufmerksamkeit braucht</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {warnungen.length === 0 && (
-              <p className="text-sm text-muted-foreground">Aktuell keine Warnungen — alles im grünen Bereich.</p>
-            )}
-            {warnungen.map((w) => (
-              <div
-                key={w.id}
-                className={`rounded-lg border p-3 text-sm ${
-                  w.schwere === "fehler"
-                    ? "border-destructive/40 bg-destructive/5"
-                    : w.schwere === "warnung"
-                    ? "border-warning/40 bg-warning/5"
-                    : "border-border bg-muted/40"
-                }`}
-              >
-                {w.text}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-semibold">Aktive Aufträge</h2>
+          </div>
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Keine aktiven Aufträge.
+          </p>
+        </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Letzte Aktivitäten</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="divide-y">
-            {aktivitaeten.slice(0, 8).map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="truncate">{a.beschreibung}</span>
-                <Badge variant="secondary" className="shrink-0 text-[10px]">
-                  {formatDateTime(a.zeitpunkt)}
-                </Badge>
-              </li>
-            ))}
-            {aktivitaeten.length === 0 && (
-              <li className="py-2 text-sm text-muted-foreground">Noch keine Aktivitäten.</li>
-            )}
-          </ul>
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -12,7 +12,7 @@ interface ThemeState {
 }
 
 const Ctx = createContext<ThemeState | null>(null);
-const STORAGE = "mcc_theme_v1";
+const STORAGE = "mcc_theme_v2";
 
 function applyAkzent(hex: string) {
   // Konvertiert Hex grob zu oklch — bei Tailwind v4 reicht --primary als CSS-Var-Setzung.
@@ -33,8 +33,8 @@ function applyTheme(t: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [akzent, setAkzentState] = useState<string>("#0E9F8A");
+  const [theme, setThemeState] = useState<Theme>("hell");
+  const [akzent, setAkzentState] = useState<string>("#1E3A5F");
 
   useEffect(() => {
     try {
