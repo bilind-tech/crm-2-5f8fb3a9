@@ -13,6 +13,8 @@ import {
   type PositionDraft,
 } from "./PositionenEditor";
 import { OptionenBlock, defaultOptionen, type OptionenState } from "./OptionenBlock";
+import { AnsprechpartnerPicker } from "./AnsprechpartnerPicker";
+import { Repeat } from "lucide-react";
 
 interface Props {
   onClose: () => void;
@@ -34,6 +36,7 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
   const [gueltigBis, setGueltigBis] = useState(addDays(todayISO(), 30));
   const [positionen, setPositionen] = useState<PositionDraft[]>([emptyPosition(19)]);
   const [optionen, setOptionen] = useState<OptionenState>(defaultOptionen);
+  const [ansprechpartnerId, setAnsprechpartnerId] = useState<string | undefined>();
 
   const objekteVonKunde = useMemo(
     () => objekteAlle.filter((o) => o.kundeId === kundeId),
@@ -48,6 +51,7 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
     const a = await create.mutateAsync({
       kundeId,
       objektId: objektId || undefined,
+      ansprechpartnerId: ansprechpartnerId || undefined,
       titel,
       positionen: toApiPositionen(positionen),
       rabattGesamt,
@@ -106,9 +110,34 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
         </Field>
       </div>
 
-      <Field label="Titel *">
-        <Input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="z. B. Unterhaltsreinigung Bürogebäude" />
-      </Field>
+      {kundeId && (
+        <AnsprechpartnerPicker
+          kundeId={kundeId}
+          value={ansprechpartnerId}
+          onChange={setAnsprechpartnerId}
+        />
+      )}
+
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <Field label="Titel *">
+            <Input value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="z. B. Unterhaltsreinigung Bürogebäude" />
+          </Field>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOptionen({ ...optionen, wiederkehrend: !optionen.wiederkehrend })}
+          className={`inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition ${
+            optionen.wiederkehrend
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border bg-background text-muted-foreground hover:bg-muted"
+          }`}
+          title="Als Dauerauftrag kennzeichnen"
+        >
+          <Repeat className="h-3.5 w-3.5" />
+          Dauerauftrag
+        </button>
+      </div>
 
       <div>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

@@ -78,11 +78,6 @@ export function OptionenBlock({ value, onChange }: Props) {
         </div>
       )}
 
-      <Row
-        checked={value.wiederkehrend}
-        onChange={(v) => set("wiederkehrend", v)}
-        label="Als Dauerauftrag / wiederkehrend kennzeichnen"
-      />
     </div>
   );
 }
