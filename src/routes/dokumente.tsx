@@ -45,10 +45,7 @@ function Page() {
         title="Dokumente"
         subtitle="Quittungen, Rechnungen und steuerrelevante Belege zentral ablegen."
         actions={
-          <Button className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Upload className="h-4 w-4" />
-            Dokument hochladen
-          </Button>
+          <PrimaryAction icon={Upload} label="Dokument hochladen" />
         }
       />
 
