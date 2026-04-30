@@ -13,6 +13,8 @@ import {
   type PositionDraft,
 } from "./PositionenEditor";
 import { OptionenBlock, defaultOptionen, type OptionenState } from "./OptionenBlock";
+import { AnsprechpartnerPicker } from "./AnsprechpartnerPicker";
+import { Repeat } from "lucide-react";
 
 interface Props {
   onClose: () => void;
@@ -34,6 +36,7 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
   const [gueltigBis, setGueltigBis] = useState(addDays(todayISO(), 30));
   const [positionen, setPositionen] = useState<PositionDraft[]>([emptyPosition(19)]);
   const [optionen, setOptionen] = useState<OptionenState>(defaultOptionen);
+  const [ansprechpartnerId, setAnsprechpartnerId] = useState<string | undefined>();
 
   const objekteVonKunde = useMemo(
     () => objekteAlle.filter((o) => o.kundeId === kundeId),
@@ -48,6 +51,7 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
     const a = await create.mutateAsync({
       kundeId,
       objektId: objektId || undefined,
+      ansprechpartnerId: ansprechpartnerId || undefined,
       titel,
       positionen: toApiPositionen(positionen),
       rabattGesamt,
