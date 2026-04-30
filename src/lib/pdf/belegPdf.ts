@@ -326,7 +326,7 @@ export async function generateAngebotPdf(angebot: Angebot, kunde: Kunde, firma: 
     defaultOutroAngebot(angebot, opts),
   );
   return new Promise<Blob>((resolve) => {
-    pdfMake.createPdf(doc).getBlob((blob) => resolve(blob));
+    pdfMake.createPdf(doc).getBlob((blob: Blob) => resolve(blob));
   });
 }
 
@@ -352,6 +352,6 @@ export async function generateRechnungPdf(rechnung: Rechnung, kunde: Kunde, firm
     defaultOutroRechnung(rechnung, opts),
   );
   return new Promise<Blob>((resolve) => {
-    pdfMake.createPdf(doc).getBlob((blob) => resolve(blob));
+    pdfMake.createPdf(doc).getBlob((blob: Blob) => resolve(blob));
   });
 }
