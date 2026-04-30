@@ -9,38 +9,278 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RechnungenRouteImport } from './routes/rechnungen'
+import { Route as ObjekteRouteImport } from './routes/objekte'
+import { Route as KundenRouteImport } from './routes/kunden'
+import { Route as EinstellungenRouteImport } from './routes/einstellungen'
+import { Route as DokumenteRouteImport } from './routes/dokumente'
+import { Route as AngeboteRouteImport } from './routes/angebote'
+import { Route as AktivitaetRouteImport } from './routes/aktivitaet'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RechnungenNeuRouteImport } from './routes/rechnungen.neu'
+import { Route as RechnungenIdRouteImport } from './routes/rechnungen.$id'
+import { Route as ObjekteNeuRouteImport } from './routes/objekte.neu'
+import { Route as ObjekteIdRouteImport } from './routes/objekte.$id'
+import { Route as KundenNeuRouteImport } from './routes/kunden.neu'
+import { Route as KundenIdRouteImport } from './routes/kunden.$id'
+import { Route as AngeboteNeuRouteImport } from './routes/angebote.neu'
+import { Route as AngeboteIdRouteImport } from './routes/angebote.$id'
 
+const RechnungenRoute = RechnungenRouteImport.update({
+  id: '/rechnungen',
+  path: '/rechnungen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ObjekteRoute = ObjekteRouteImport.update({
+  id: '/objekte',
+  path: '/objekte',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KundenRoute = KundenRouteImport.update({
+  id: '/kunden',
+  path: '/kunden',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EinstellungenRoute = EinstellungenRouteImport.update({
+  id: '/einstellungen',
+  path: '/einstellungen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DokumenteRoute = DokumenteRouteImport.update({
+  id: '/dokumente',
+  path: '/dokumente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AngeboteRoute = AngeboteRouteImport.update({
+  id: '/angebote',
+  path: '/angebote',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AktivitaetRoute = AktivitaetRouteImport.update({
+  id: '/aktivitaet',
+  path: '/aktivitaet',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RechnungenNeuRoute = RechnungenNeuRouteImport.update({
+  id: '/neu',
+  path: '/neu',
+  getParentRoute: () => RechnungenRoute,
+} as any)
+const RechnungenIdRoute = RechnungenIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => RechnungenRoute,
+} as any)
+const ObjekteNeuRoute = ObjekteNeuRouteImport.update({
+  id: '/neu',
+  path: '/neu',
+  getParentRoute: () => ObjekteRoute,
+} as any)
+const ObjekteIdRoute = ObjekteIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ObjekteRoute,
+} as any)
+const KundenNeuRoute = KundenNeuRouteImport.update({
+  id: '/neu',
+  path: '/neu',
+  getParentRoute: () => KundenRoute,
+} as any)
+const KundenIdRoute = KundenIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => KundenRoute,
+} as any)
+const AngeboteNeuRoute = AngeboteNeuRouteImport.update({
+  id: '/neu',
+  path: '/neu',
+  getParentRoute: () => AngeboteRoute,
+} as any)
+const AngeboteIdRoute = AngeboteIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AngeboteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/aktivitaet': typeof AktivitaetRoute
+  '/angebote': typeof AngeboteRouteWithChildren
+  '/dokumente': typeof DokumenteRoute
+  '/einstellungen': typeof EinstellungenRoute
+  '/kunden': typeof KundenRouteWithChildren
+  '/objekte': typeof ObjekteRouteWithChildren
+  '/rechnungen': typeof RechnungenRouteWithChildren
+  '/angebote/$id': typeof AngeboteIdRoute
+  '/angebote/neu': typeof AngeboteNeuRoute
+  '/kunden/$id': typeof KundenIdRoute
+  '/kunden/neu': typeof KundenNeuRoute
+  '/objekte/$id': typeof ObjekteIdRoute
+  '/objekte/neu': typeof ObjekteNeuRoute
+  '/rechnungen/$id': typeof RechnungenIdRoute
+  '/rechnungen/neu': typeof RechnungenNeuRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/aktivitaet': typeof AktivitaetRoute
+  '/angebote': typeof AngeboteRouteWithChildren
+  '/dokumente': typeof DokumenteRoute
+  '/einstellungen': typeof EinstellungenRoute
+  '/kunden': typeof KundenRouteWithChildren
+  '/objekte': typeof ObjekteRouteWithChildren
+  '/rechnungen': typeof RechnungenRouteWithChildren
+  '/angebote/$id': typeof AngeboteIdRoute
+  '/angebote/neu': typeof AngeboteNeuRoute
+  '/kunden/$id': typeof KundenIdRoute
+  '/kunden/neu': typeof KundenNeuRoute
+  '/objekte/$id': typeof ObjekteIdRoute
+  '/objekte/neu': typeof ObjekteNeuRoute
+  '/rechnungen/$id': typeof RechnungenIdRoute
+  '/rechnungen/neu': typeof RechnungenNeuRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/aktivitaet': typeof AktivitaetRoute
+  '/angebote': typeof AngeboteRouteWithChildren
+  '/dokumente': typeof DokumenteRoute
+  '/einstellungen': typeof EinstellungenRoute
+  '/kunden': typeof KundenRouteWithChildren
+  '/objekte': typeof ObjekteRouteWithChildren
+  '/rechnungen': typeof RechnungenRouteWithChildren
+  '/angebote/$id': typeof AngeboteIdRoute
+  '/angebote/neu': typeof AngeboteNeuRoute
+  '/kunden/$id': typeof KundenIdRoute
+  '/kunden/neu': typeof KundenNeuRoute
+  '/objekte/$id': typeof ObjekteIdRoute
+  '/objekte/neu': typeof ObjekteNeuRoute
+  '/rechnungen/$id': typeof RechnungenIdRoute
+  '/rechnungen/neu': typeof RechnungenNeuRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/aktivitaet'
+    | '/angebote'
+    | '/dokumente'
+    | '/einstellungen'
+    | '/kunden'
+    | '/objekte'
+    | '/rechnungen'
+    | '/angebote/$id'
+    | '/angebote/neu'
+    | '/kunden/$id'
+    | '/kunden/neu'
+    | '/objekte/$id'
+    | '/objekte/neu'
+    | '/rechnungen/$id'
+    | '/rechnungen/neu'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/aktivitaet'
+    | '/angebote'
+    | '/dokumente'
+    | '/einstellungen'
+    | '/kunden'
+    | '/objekte'
+    | '/rechnungen'
+    | '/angebote/$id'
+    | '/angebote/neu'
+    | '/kunden/$id'
+    | '/kunden/neu'
+    | '/objekte/$id'
+    | '/objekte/neu'
+    | '/rechnungen/$id'
+    | '/rechnungen/neu'
+  id:
+    | '__root__'
+    | '/'
+    | '/aktivitaet'
+    | '/angebote'
+    | '/dokumente'
+    | '/einstellungen'
+    | '/kunden'
+    | '/objekte'
+    | '/rechnungen'
+    | '/angebote/$id'
+    | '/angebote/neu'
+    | '/kunden/$id'
+    | '/kunden/neu'
+    | '/objekte/$id'
+    | '/objekte/neu'
+    | '/rechnungen/$id'
+    | '/rechnungen/neu'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AktivitaetRoute: typeof AktivitaetRoute
+  AngeboteRoute: typeof AngeboteRouteWithChildren
+  DokumenteRoute: typeof DokumenteRoute
+  EinstellungenRoute: typeof EinstellungenRoute
+  KundenRoute: typeof KundenRouteWithChildren
+  ObjekteRoute: typeof ObjekteRouteWithChildren
+  RechnungenRoute: typeof RechnungenRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/rechnungen': {
+      id: '/rechnungen'
+      path: '/rechnungen'
+      fullPath: '/rechnungen'
+      preLoaderRoute: typeof RechnungenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/objekte': {
+      id: '/objekte'
+      path: '/objekte'
+      fullPath: '/objekte'
+      preLoaderRoute: typeof ObjekteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kunden': {
+      id: '/kunden'
+      path: '/kunden'
+      fullPath: '/kunden'
+      preLoaderRoute: typeof KundenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/einstellungen': {
+      id: '/einstellungen'
+      path: '/einstellungen'
+      fullPath: '/einstellungen'
+      preLoaderRoute: typeof EinstellungenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dokumente': {
+      id: '/dokumente'
+      path: '/dokumente'
+      fullPath: '/dokumente'
+      preLoaderRoute: typeof DokumenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/angebote': {
+      id: '/angebote'
+      path: '/angebote'
+      fullPath: '/angebote'
+      preLoaderRoute: typeof AngeboteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/aktivitaet': {
+      id: '/aktivitaet'
+      path: '/aktivitaet'
+      fullPath: '/aktivitaet'
+      preLoaderRoute: typeof AktivitaetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +288,128 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rechnungen/neu': {
+      id: '/rechnungen/neu'
+      path: '/neu'
+      fullPath: '/rechnungen/neu'
+      preLoaderRoute: typeof RechnungenNeuRouteImport
+      parentRoute: typeof RechnungenRoute
+    }
+    '/rechnungen/$id': {
+      id: '/rechnungen/$id'
+      path: '/$id'
+      fullPath: '/rechnungen/$id'
+      preLoaderRoute: typeof RechnungenIdRouteImport
+      parentRoute: typeof RechnungenRoute
+    }
+    '/objekte/neu': {
+      id: '/objekte/neu'
+      path: '/neu'
+      fullPath: '/objekte/neu'
+      preLoaderRoute: typeof ObjekteNeuRouteImport
+      parentRoute: typeof ObjekteRoute
+    }
+    '/objekte/$id': {
+      id: '/objekte/$id'
+      path: '/$id'
+      fullPath: '/objekte/$id'
+      preLoaderRoute: typeof ObjekteIdRouteImport
+      parentRoute: typeof ObjekteRoute
+    }
+    '/kunden/neu': {
+      id: '/kunden/neu'
+      path: '/neu'
+      fullPath: '/kunden/neu'
+      preLoaderRoute: typeof KundenNeuRouteImport
+      parentRoute: typeof KundenRoute
+    }
+    '/kunden/$id': {
+      id: '/kunden/$id'
+      path: '/$id'
+      fullPath: '/kunden/$id'
+      preLoaderRoute: typeof KundenIdRouteImport
+      parentRoute: typeof KundenRoute
+    }
+    '/angebote/neu': {
+      id: '/angebote/neu'
+      path: '/neu'
+      fullPath: '/angebote/neu'
+      preLoaderRoute: typeof AngeboteNeuRouteImport
+      parentRoute: typeof AngeboteRoute
+    }
+    '/angebote/$id': {
+      id: '/angebote/$id'
+      path: '/$id'
+      fullPath: '/angebote/$id'
+      preLoaderRoute: typeof AngeboteIdRouteImport
+      parentRoute: typeof AngeboteRoute
+    }
   }
 }
 
+interface AngeboteRouteChildren {
+  AngeboteIdRoute: typeof AngeboteIdRoute
+  AngeboteNeuRoute: typeof AngeboteNeuRoute
+}
+
+const AngeboteRouteChildren: AngeboteRouteChildren = {
+  AngeboteIdRoute: AngeboteIdRoute,
+  AngeboteNeuRoute: AngeboteNeuRoute,
+}
+
+const AngeboteRouteWithChildren = AngeboteRoute._addFileChildren(
+  AngeboteRouteChildren,
+)
+
+interface KundenRouteChildren {
+  KundenIdRoute: typeof KundenIdRoute
+  KundenNeuRoute: typeof KundenNeuRoute
+}
+
+const KundenRouteChildren: KundenRouteChildren = {
+  KundenIdRoute: KundenIdRoute,
+  KundenNeuRoute: KundenNeuRoute,
+}
+
+const KundenRouteWithChildren =
+  KundenRoute._addFileChildren(KundenRouteChildren)
+
+interface ObjekteRouteChildren {
+  ObjekteIdRoute: typeof ObjekteIdRoute
+  ObjekteNeuRoute: typeof ObjekteNeuRoute
+}
+
+const ObjekteRouteChildren: ObjekteRouteChildren = {
+  ObjekteIdRoute: ObjekteIdRoute,
+  ObjekteNeuRoute: ObjekteNeuRoute,
+}
+
+const ObjekteRouteWithChildren =
+  ObjekteRoute._addFileChildren(ObjekteRouteChildren)
+
+interface RechnungenRouteChildren {
+  RechnungenIdRoute: typeof RechnungenIdRoute
+  RechnungenNeuRoute: typeof RechnungenNeuRoute
+}
+
+const RechnungenRouteChildren: RechnungenRouteChildren = {
+  RechnungenIdRoute: RechnungenIdRoute,
+  RechnungenNeuRoute: RechnungenNeuRoute,
+}
+
+const RechnungenRouteWithChildren = RechnungenRoute._addFileChildren(
+  RechnungenRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AktivitaetRoute: AktivitaetRoute,
+  AngeboteRoute: AngeboteRouteWithChildren,
+  DokumenteRoute: DokumenteRoute,
+  EinstellungenRoute: EinstellungenRoute,
+  KundenRoute: KundenRouteWithChildren,
+  ObjekteRoute: ObjekteRouteWithChildren,
+  RechnungenRoute: RechnungenRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
