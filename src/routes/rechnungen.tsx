@@ -156,7 +156,15 @@ function Page() {
       <div className="space-y-2 md:hidden">
         {filtered.map((r) => {
           const b = brutto(r);
-          const offen = b - bezahlt(r);
+          const bez = bezahlt(r);
+          const offen = b - bez;
+          const tageUeber =
+            r.status !== "bezahlt" && r.status !== "storniert" && r.faelligkeitsdatum < heute
+              ? Math.floor((Date.parse(heute) - Date.parse(r.faelligkeitsdatum)) / 86400000)
+              : 0;
+          const letzteZahlung = r.zahlungen.length > 0
+            ? r.zahlungen.reduce((max, z) => (z.datum > max ? z.datum : max), r.zahlungen[0].datum)
+            : null;
           return (
             <MobileListCard
               key={r.id}
@@ -172,7 +180,22 @@ function Page() {
               trailing={
                 <div>
                   <div>{formatEUR(b)}</div>
-                  {offen > 0 && (
+                  {r.status === "bezahlt" && letzteZahlung && (
+                    <div className="text-[10px] font-normal text-success">
+                      ✓ bezahlt {formatDate(letzteZahlung)}
+                    </div>
+                  )}
+                  {r.status === "teilbezahlt" && (
+                    <div className="text-[10px] font-normal text-warning">
+                      {formatEUR(bez)} von {formatEUR(b)}
+                    </div>
+                  )}
+                  {tageUeber > 0 && r.status !== "bezahlt" && (
+                    <div className="text-[10px] font-normal text-destructive">
+                      überfällig seit {tageUeber} {tageUeber === 1 ? "Tag" : "Tagen"}
+                    </div>
+                  )}
+                  {offen > 0 && r.status !== "teilbezahlt" && tageUeber === 0 && (
                     <div className="text-[10px] font-normal text-muted-foreground">
                       offen {formatEUR(offen)}
                     </div>
