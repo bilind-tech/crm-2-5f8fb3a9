@@ -109,6 +109,8 @@ export interface Objekt {
 
 export type Einheit = "stk" | "h" | "m2" | "pauschal" | "tag" | "monat";
 
+export type PositionModus = "einzel" | "pauschal";
+
 export interface Position {
   id: ID;
   beschreibung: string;
@@ -117,6 +119,12 @@ export interface Position {
   einzelpreisNetto: number;
   steuersatz: number; // %
   rabatt: number; // %
+  /** „einzel" = Menge × Einzelpreis (Default). „pauschal" = ein großer Block + ein Festpreis. */
+  modus?: PositionModus;
+  /** Pauschalpreis (netto), nur relevant wenn modus = "pauschal". */
+  pauschalpreisNetto?: number;
+  /** Optionaler Frequenz-Tag der Ausführung (z. B. „Mo–Fr · 5× wöchentlich"). Wird im PDF in Spalte „Ausführung" gerendert. */
+  ausfuehrung?: string;
 }
 
 export type AngebotStatus =
