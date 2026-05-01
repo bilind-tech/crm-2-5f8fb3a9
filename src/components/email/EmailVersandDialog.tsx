@@ -392,9 +392,21 @@ export function EmailVersandDialog({
               {pdfAnhangAktiv ? (
                 <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
                   <span className="flex items-center gap-2">
-                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                    {pdfStatus === "loading" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    ) : pdfStatus === "error" ? (
+                      <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                    ) : (
+                      <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
                     <span className="font-medium">{pdfDateiname}</span>
-                    <span className="text-xs text-muted-foreground">PDF · automatisch</span>
+                    <span className="text-xs text-muted-foreground">
+                      {pdfStatus === "loading"
+                        ? "PDF wird vorbereitet …"
+                        : pdfStatus === "error"
+                          ? "PDF konnte nicht erzeugt werden"
+                          : "PDF · automatisch"}
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -422,14 +434,22 @@ export function EmailVersandDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={send.isPending}>
             Abbrechen
           </Button>
-          <Button onClick={handleSend} disabled={!istValide || send.isPending} className="min-w-[140px]">
+          <Button
+            onClick={handleSend}
+            disabled={!istValide || send.isPending || (pdfAnhangAktiv && pdfStatus === "loading")}
+            className="min-w-[140px]"
+          >
             {send.isPending ? (
               <>
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Wird gesendet …
               </>
+            ) : pdfAnhangAktiv && pdfStatus === "loading" ? (
+              <>
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> PDF wird vorbereitet …
+              </>
             ) : (
               <>
-                <Send className="mr-1.5 h-4 w-4" /> E-Mail senden
+                <Mail className="mr-1.5 h-4 w-4" /> E-Mail senden
               </>
             )}
           </Button>
