@@ -236,6 +236,7 @@ function Page() {
         pdfBlobUrl={pdf.url}
         pdfDateiname={`${r.nummer}.pdf`}
       />
+      {confirmDialog}
     </div>
   );
 }
