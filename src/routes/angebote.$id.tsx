@@ -200,6 +200,16 @@ function Page() {
           )}
         </div>
       </div>
+
+      <EmailVersandDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        kontext="angebot"
+        kunde={kunde}
+        angebot={a}
+        pdfBlobUrl={pdf.url}
+        pdfDateiname={`${a.nummer}.pdf`}
+      />
     </div>
   );
 }
