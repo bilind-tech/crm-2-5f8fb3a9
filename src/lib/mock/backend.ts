@@ -21,6 +21,10 @@ import type {
   BackupEinstellungen,
   Benachrichtigung,
   DashboardKennzahlen,
+  Dauerauftrag,
+  DauerauftragEinstellungen,
+  DauerauftragLauf,
+  DauerauftragSonderposition,
   Dokument,
   EmailSignatur,
   EmailVersand,
@@ -45,12 +49,22 @@ import type {
   UmsatzPunkt,
   Warnung,
   Zahlung,
+  Zahlungseingang,
+  ZahlungsabgleichEinstellungen,
 } from "@/lib/api/types";
 import { ApiError } from "@/lib/api/client";
 import { seed } from "@/lib/mock/seed";
 import { berechneNeueFrist } from "@/lib/mahnung/regeln";
+import {
+  berechneNaechsteLauftermine,
+  isoDate,
+  istPausiert,
+  periodeFuer,
+} from "@/lib/dauerauftrag/termine";
+import { erzeugeRechnungAusLauf } from "@/lib/dauerauftrag/generator";
 
-const STORAGE_KEY = "mcc_mock_db_v6";
+const STORAGE_KEY = "mcc_mock_db_v7";
+const LEGACY_KEYS = ["mcc_mock_db_v6"];
 
 interface DB {
   unlocked: boolean;
