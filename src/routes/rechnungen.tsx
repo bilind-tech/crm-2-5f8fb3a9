@@ -183,13 +183,7 @@ function Page() {
                   <td className="px-4 py-3">{statusBadge(r.status)}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1 text-muted-foreground">
-                      <Link
-                        to="/rechnungen/$id"
-                        params={{ id: r.id }}
-                        className="rounded-md p-1.5 hover:bg-muted hover:text-foreground"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Link>
+                      <PdfViewButton kind="rechnung" beleg={r} />
                       {r.status !== "bezahlt" && r.status !== "storniert" && (
                         <button
                           onClick={() => setZahlungFuer(r)}
