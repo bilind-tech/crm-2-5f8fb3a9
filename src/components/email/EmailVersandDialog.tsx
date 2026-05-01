@@ -64,6 +64,8 @@ interface Props {
   /** Blob-URL des bereits erzeugten PDFs (z.B. aus useAngebotPdf). */
   pdfBlobUrl?: string | null;
   pdfDateiname?: string;
+  /** PDF-Status (loading/ready/error). Wenn "loading", wird Senden deaktiviert mit Hinweis. */
+  pdfStatus?: "idle" | "loading" | "ready" | "error";
   onSent?: () => void;
   /** Wenn gesetzt: Versand wird im Backend als Mahnung dieser Stufe protokolliert. */
   mahnStufe?: 1 | 2 | 3;
