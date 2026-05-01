@@ -14,6 +14,7 @@ import {
   Mail,
   PenLine,
   Server,
+  Repeat,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ import {
   SmtpTab,
 } from "@/components/email/EmailEinstellungen";
 import { MahnwesenTab } from "@/components/mahnung/MahnwesenTab";
+import { DauerauftragTab } from "@/components/einstellungen/DauerauftragTab";
 import type { Firmendaten } from "@/lib/api/types";
 
 export const Route = createFileRoute("/einstellungen")({ component: Page });
@@ -38,6 +40,7 @@ const tabs = [
   { id: "erscheinungsbild", label: "Erscheinungsbild", icon: Palette },
   { id: "nummernkreise", label: "Nummernkreise", icon: Hash },
   { id: "mahnwesen", label: "Mahnwesen", icon: Bell },
+  { id: "dauerauftrag", label: "Daueraufträge", icon: Repeat },
   { id: "vorlagen", label: "Textbausteine & Vorlagen", icon: FileText },
   { id: "drive", label: "Google Drive", icon: Cloud },
   { id: "backup", label: "Backup & Download", icon: Save },
@@ -94,8 +97,9 @@ function Page() {
       {tab === "email-signaturen" && <EmailSignaturenTab />}
       {tab === "smtp" && <SmtpTab />}
       {tab === "mahnwesen" && <MahnwesenTab />}
+      {tab === "dauerauftrag" && <DauerauftragTab />}
 
-      {!["firmendaten", "email-vorlagen", "email-signaturen", "smtp", "mahnwesen"].includes(tab) && (
+      {!["firmendaten", "email-vorlagen", "email-signaturen", "smtp", "mahnwesen", "dauerauftrag"].includes(tab) && (
         <div className="rounded-2xl border border-border bg-card p-12 text-center shadow-sm">
           <p className="text-base font-medium">
             {tabs.find((t) => t.id === tab)?.label} folgt

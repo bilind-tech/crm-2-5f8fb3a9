@@ -8,6 +8,7 @@ import {
   Settings,
   Lock,
   Bell,
+  Repeat,
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,6 +26,8 @@ import {
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/lib/auth";
 import { useMahnZaehler } from "@/hooks/useMahnZaehler";
+import { useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
+import { useRechnungen } from "@/hooks/useApi";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -42,6 +45,14 @@ export function AppSidebar() {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const { lock } = useAuth();
   const mahn = useMahnZaehler();
+  const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
+  const { data: alleRechnungen = [] } = useRechnungen();
+  const offeneEntwuerfe = laeufeErzeugt.filter((l) => {
+    if (!l.rechnungId) return false;
+    const r = alleRechnungen.find((rr) => rr.id === l.rechnungId);
+    return r?.status === "entwurf";
+  }).length;
+  
 
   const uebersicht: NavItem[] = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
@@ -52,6 +63,13 @@ export function AppSidebar() {
   const vertrieb: NavItem[] = [
     { title: "Angebote", url: "/angebote", icon: FileText },
     { title: "Rechnungen", url: "/rechnungen", icon: Receipt },
+    {
+      title: "Daueraufträge",
+      url: "/dauerauftraege",
+      icon: Repeat,
+      badge: offeneEntwuerfe,
+      badgeTone: "primary",
+    },
     {
       title: "Mahnungen",
       url: "/mahnungen",
