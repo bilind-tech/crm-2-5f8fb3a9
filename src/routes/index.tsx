@@ -5,6 +5,9 @@ import {
   useRechnungen,
 } from "@/hooks/useApi";
 import { useMahnZaehler } from "@/hooks/useMahnZaehler";
+import { useDauerauftraege, useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
+import { monatlicheBrutto } from "@/lib/dauerauftrag/termine";
+import { summenRechnung } from "@/lib/mock/backend";
 import { formatEUR, formatDate } from "@/lib/format";
 import {
   Building2,
@@ -14,6 +17,8 @@ import {
   Bell,
   CheckCircle2,
   ArrowRight,
+  Repeat,
+  Inbox,
 } from "lucide-react";
 import {
   Bar,
