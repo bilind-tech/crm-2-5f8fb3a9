@@ -98,7 +98,8 @@ interface DB {
   dauerauftragEinstellungen: DauerauftragEinstellungen;
   zahlungsabgleich: ZahlungsabgleichEinstellungen;
   zaehler: { kunde: number; objekt: number; angebot: number; rechnung: number; dauerauftrag: number };
-}
+  /** Pro Kunde + "YYYY-MM" laufende Nummer für Rechnungen/Angebote mit eigenem Kürzel. */
+  zaehlerProKunde?: Record<string, Record<string, number>>;
 
 let db: DB | null = null;
 
@@ -153,6 +154,26 @@ function nextNumber(praefix: string, n: number): string {
     .replace("{YYYY}", String(year))
     .replace("{####}", String(n).padStart(4, "0"))
     .replace("{###}", String(n).padStart(3, "0"));
+}
+
+/**
+ * Erzeugt eine Belegnummer für einen Kunden mit eigenem Kürzel:
+ * "{KÜRZEL}-{YYYY}-{MM}-{##}". Zähler läuft pro Kunde + Monat.
+ * Fällt auf das globale Schema zurück, wenn der Kunde kein Kürzel hat.
+ */
+function nextCustomerNumber(d: DB, kundeId: string | undefined, fallbackPraefix: string, fallbackZaehler: number): string {
+  const kunde = kundeId ? d.kunden.find((k) => k.id === kundeId) : undefined;
+  const kuerzel = kunde?.kuerzel?.trim().toUpperCase();
+  if (!kuerzel) return nextNumber(fallbackPraefix, fallbackZaehler);
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const periode = `${yyyy}-${mm}`;
+  if (!d.zaehlerProKunde) d.zaehlerProKunde = {};
+  if (!d.zaehlerProKunde[kunde!.id]) d.zaehlerProKunde[kunde!.id] = {};
+  const map = d.zaehlerProKunde[kunde!.id];
+  map[periode] = (map[periode] ?? 0) + 1;
+  return `${kuerzel}-${yyyy}-${mm}-${String(map[periode]).padStart(2, "0")}`;
 }
 
 function logAktivitaet(typ: Aktivitaet["typ"], beschreibung: string, entitaet?: Aktivitaet["entitaet"]) {
