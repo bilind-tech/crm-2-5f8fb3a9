@@ -48,6 +48,9 @@ function dt(iso?: string) {
 }
 
 function summe(p: Position) {
+  if (p.modus === "pauschal") {
+    return (p.pauschalpreisNetto ?? 0) * (1 - p.rabatt / 100);
+  }
   return p.menge * p.einzelpreisNetto * (1 - p.rabatt / 100);
 }
 function totals(positionen: Position[], rabattGesamt: number, steuersatz: number) {
@@ -55,6 +58,34 @@ function totals(positionen: Position[], rabattGesamt: number, steuersatz: number
   const netto = nettoRoh * (1 - rabattGesamt / 100);
   const steuer = netto * (steuersatz / 100);
   return { netto, steuer, brutto: netto + steuer };
+}
+
+/** Wandelt einen Beschreibungstext in pdfmake-Stack: Erste Nicht-Bullet-Zeile fett, Bullets als Liste. */
+function beschreibungBlock(text: string): unknown {
+  const zeilen = text.split("\n");
+  const items: unknown[] = [];
+  const bullets: string[] = [];
+  let titel: string | null = null;
+  for (const z of zeilen) {
+    const t = z.trim();
+    if (!t) continue;
+    const bm = t.match(/^[•\-*]\s+(.*)$/);
+    if (bm) {
+      bullets.push(bm[1]);
+    } else if (!titel && bullets.length === 0) {
+      titel = t;
+    } else {
+      // Zwischenzeile ohne Bullet → als eigene Bullet-freie Zeile
+      bullets.push(t);
+    }
+  }
+  if (titel) items.push({ text: titel, fontSize: 9, bold: true, margin: [0, 0, 0, 2] });
+  if (bullets.length > 0) {
+    items.push({ ul: bullets.map((b) => ({ text: b, fontSize: 9 })), margin: [0, 0, 0, 0] });
+  } else if (!titel) {
+    items.push({ text, fontSize: 9 });
+  }
+  return { stack: items };
 }
 
 function kundeAdresse(k: Kunde) {
