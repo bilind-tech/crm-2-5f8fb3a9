@@ -35,6 +35,7 @@ function Page() {
   const update = useUpdateDauerauftrag(id);
   const del = useDeleteDauerauftrag();
   const [showBeendeBestaetigung, setShowBeendeBestaetigung] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   if (!da) return <p className="text-sm text-muted-foreground">Lade …</p>;
 
@@ -201,16 +202,23 @@ function Page() {
               <Button
                 variant="outline"
                 className="justify-start text-destructive hover:text-destructive"
-                onClick={() => {
-                  if (confirm(`Dauerauftrag ${da.nummer} dauerhaft löschen? Bereits erzeugte Rechnungen bleiben erhalten.`)) {
-                    del.mutate(da.id, {
-                      onSuccess: () => {
-                        toast.success("Gelöscht");
-                        navigate({ to: "/dauerauftraege" });
-                      },
-                    });
-                  }
-                }}
+                onClick={() =>
+                  confirm(
+                    {
+                      title: "Dauerauftrag löschen?",
+                      description: `Dauerauftrag ${da.nummer} dauerhaft entfernen. Bereits erzeugte Rechnungen bleiben erhalten.`,
+                      variant: "destructive",
+                      confirmLabel: "Löschen",
+                    },
+                    () =>
+                      del.mutate(da.id, {
+                        onSuccess: () => {
+                          toast.success("Gelöscht");
+                          navigate({ to: "/dauerauftraege" });
+                        },
+                      }),
+                  )
+                }
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Löschen
               </Button>
