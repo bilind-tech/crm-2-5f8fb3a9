@@ -248,6 +248,8 @@ function Page() {
           rechnung={zahlungFuer}
         />
       )}
+
+      {confirmDialog}
     </div>
   );
 }
