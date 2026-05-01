@@ -63,6 +63,9 @@ interface DB {
   benachrichtigungen: Benachrichtigung[];
   positionsvorlagen: Positionsvorlage[];
   textvorlagen: Textvorlage[];
+  emailVorlagen: EmailVorlage[];
+  emailSignaturen: EmailSignatur[];
+  emailVersand: EmailVersand[];
   firmendaten: Firmendaten;
   smtp: SmtpEinstellungen;
   nummernkreise: Nummernkreise;
