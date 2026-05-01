@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Repeat, Pause, Inbox, Eye, ChevronRight } from "lucide-react";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
@@ -23,6 +23,7 @@ function Layout() {
 
 function Liste() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const { data: alle = [] } = useDauerauftraege();
   const { data: kunden = [] } = useKunden();
   const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
@@ -85,7 +86,7 @@ function Liste() {
           return (
             <MobileListCard
               key={da.id}
-              onClick={undefined}
+              onClick={() => navigate({ to: "/dauerauftraege/$id", params: { id: da.id } })}
               title={da.bezeichnung}
               subtitle={kundeName(da.kundeId)}
               meta={
