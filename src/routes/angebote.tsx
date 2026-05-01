@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { Search, Eye, Send, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,7 @@ function summe(a: Angebot) {
 
 function Page() {
   const { data: alle = [] } = useAngebote();
+  const navigate = useNavigate();
   const del = useDeleteAngebot();
   const send = useSendeAngebot("");
   const [filter, setFilter] = useState<string>("alle");
@@ -126,14 +127,26 @@ function Page() {
           </thead>
           <tbody>
             {filtered.map((a) => (
-              <tr key={a.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+              <tr
+                key={a.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate({ to: "/angebote/$id", params: { id: a.id } })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate({ to: "/angebote/$id", params: { id: a.id } });
+                  }
+                }}
+                className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/40 focus:bg-muted/40 focus:outline-none"
+              >
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{a.nummer}</td>
                 <td className="px-4 py-3 font-medium">{a.titel}</td>
                 <td className="px-4 py-3 text-muted-foreground">—</td>
                 <td className="px-4 py-3 text-muted-foreground">{formatDate(a.gueltigBis)}</td>
                 <td className="px-4 py-3 text-right font-semibold">{formatEUR(summe(a))}</td>
                 <td className="px-4 py-3">{statusBadge(a.status)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1 text-muted-foreground">
                     <Link
                       to="/angebote/$id"
@@ -159,13 +172,7 @@ function Page() {
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
-                    <Link
-                      to="/angebote/$id"
-                      params={{ id: a.id }}
-                      className="rounded-md p-1.5 hover:bg-muted hover:text-foreground"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
+                    <ChevronRight className="h-4 w-4" />
                   </div>
                 </td>
               </tr>

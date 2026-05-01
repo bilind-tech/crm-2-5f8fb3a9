@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { Eye, CheckCircle2, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,7 @@ function bezahlt(r: Rechnung) {
 
 function Page() {
   const { data: alle = [] } = useRechnungen();
+  const navigate = useNavigate();
   const del = useDeleteRechnung();
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
@@ -156,7 +157,19 @@ function Page() {
               const b = brutto(r);
               const offen = b - bezahlt(r);
               return (
-                <tr key={r.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <tr
+                  key={r.id}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate({ to: "/rechnungen/$id", params: { id: r.id } })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigate({ to: "/rechnungen/$id", params: { id: r.id } });
+                    }
+                  }}
+                  className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/40 focus:bg-muted/40 focus:outline-none"
+                >
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{r.nummer}</td>
                   <td className="px-4 py-3 font-medium">{r.titel}</td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(r.rechnungsdatum)}</td>
@@ -164,7 +177,7 @@ function Page() {
                   <td className="px-4 py-3 text-right font-semibold">{formatEUR(b)}</td>
                   <td className="px-4 py-3 text-right font-semibold">{formatEUR(offen)}</td>
                   <td className="px-4 py-3">{statusBadge(r.status)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1 text-muted-foreground">
                       <Link
                         to="/rechnungen/$id"
@@ -184,13 +197,7 @@ function Page() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                      <Link
-                        to="/rechnungen/$id"
-                        params={{ id: r.id }}
-                        className="rounded-md p-1.5 hover:bg-muted hover:text-foreground"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
+                      <ChevronRight className="h-4 w-4" />
                     </div>
                   </td>
                 </tr>
