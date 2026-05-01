@@ -27,6 +27,8 @@ function Page() {
   const [emailOpen, setEmailOpen] = useState(false);
   const { data: quellAngebot } = useAngebot(r?.quellAngebotId ?? "");
   const { data: kunde } = useKunde(r?.kundeId ?? "");
+  const delZahlung = useDeleteZahlung(id);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   if (!r) return <LoadingPlaceholder />;
   const s = summenRechnung(r.positionen, r.rabattGesamt);
