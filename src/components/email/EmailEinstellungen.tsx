@@ -2,7 +2,7 @@
 // E-Mail-Einstellungen-Tab: Vorlagen, Signaturen, SMTP.
 // Eingebettet in src/routes/einstellungen.tsx via Subkomponenten.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Star, Check, AlertCircle, Loader2, Eye, Code2 } from "lucide-react";
 
