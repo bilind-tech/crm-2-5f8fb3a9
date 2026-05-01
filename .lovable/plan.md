@@ -1,255 +1,334 @@
+# Phase D — Wiederkehrende Rechnungen & Zahlungsabgleich
 
-# Phase C — Mahnwesen (Frontend + Mock-Backend)
+## Warum diese Phase
 
-## Was Mahnwesen ist — kurz
+Du hast jetzt sauber: Angebot → Rechnung → Teilzahlung → Mahnung. Aber dein Geschäft ist **wiederkehrend**: Büroreinigung Müller GmbH = jeden Monat dieselbe Rechnung. Heute musst du jeden Monat manuell:
+1. neue Rechnung anlegen, Kunde + Objekt + Positionen kopieren
+2. PDF erzeugen, per Mail rausschicken
+3. später Eingang am Konto manuell mit der Rechnung verknüpfen
 
-Wenn ein Kunde nicht zahlt, schreibst du ihm in **mehreren Stufen**: erst freundlich erinnern, dann bestimmter mahnen, schließlich letzte Aufforderung. Jede Stufe hat ein Datum, eine Frist, optional eine Mahngebühr — und alles muss nachvollziehbar sein.
-
-Heute hast du **eine** Mahnvorlage und einen einzelnen Button "Mahnung senden" auf der Rechnungs-Detailseite. Das reicht weder rechtlich noch praktisch.
-
----
-
-## Die 5 Ziele
-
-1. **3 saubere Mahnstufen** statt einer pauschalen Mahnung
-2. **Auto-Erkennung:** Rechnungen werden ohne Klick "überfällig", sobald die Fälligkeit überschritten ist; die fällige Mahnstufe wird vorgeschlagen
-3. **Mahn-Cockpit** (`/mahnungen`) — eine zentrale Liste "diese Rechnungen sind dran", sortiert nach Dringlichkeit
-4. **Mahn-Historie** pro Rechnung — wer wann mit welcher Stufe und Frist angeschrieben wurde, lückenlos
-5. **Mahngebühren** konfigurierbar pro Stufe (z.B. 0 € / 5 € / 10 €), korrekt im Mahnschreiben angezeigt
+Phase D macht aus diesem Workflow **einen Klick beim Anlegen, danach läuft es**. Plus: wenn Geld kommt, schlägt das System dir vor, welche Rechnung gemeint war.
 
 ---
 
-## Konzept: Die 3 Stufen (Defaults — alles konfigurierbar)
+## Die 4 Ziele
 
-| # | Bezeichnung | Trigger | Ton | Mahngebühr | Neue Frist |
-|---|---|---|---|---|---|
-| 1 | Zahlungserinnerung | 3 Tage nach Fälligkeit | freundlich | 0 € | +7 Tage |
-| 2 | 1. Mahnung | 10 Tage nach Stufe 1 | bestimmt | 5 € | +7 Tage |
-| 3 | Letzte Mahnung | 10 Tage nach Stufe 2 | letzte Aufforderung, Inkasso-Hinweis | 10 € | +7 Tage |
-
-Nach Stufe 3: Rechnung wird als **"Inkasso-reif"** markiert — keine weitere automatische Mahnung. Du entscheidest manuell (Inkasso, Anwalt, abschreiben).
-
-**Wichtige Regel:** Eine Stufe wird erst "fällig vorgeschlagen", wenn die in der vorigen Stufe gesetzte **neue Frist** abgelaufen ist. Das vermeidet, dass jemand am Tag nach der Erinnerung schon die 1. Mahnung bekommt.
+1. **Daueraufträge (Reinigungsverträge):** wiederkehrender Vertrag mit Kunde + Objekt + Positionen + Frequenz (monatlich, quartalsweise, jährlich) als eigene Entität
+2. **Auto-Generator:** Beim Stichtag wird automatisch ein **Rechnungsentwurf** erzeugt — du bestätigst nur noch (oder lässt voll automatisch versenden)
+3. **Zahlungsabgleich-Light:** Liste manuell eingegebener / importierter Banktransaktionen → das System schlägt pro Transaktion die wahrscheinlichste offene Rechnung vor (Match-Score nach Betrag + Verwendungszweck + Kundenname)
+4. **Verbrauchs-/Sonderpositionen:** pro Lauf können einmalige Zusatzpositionen (z.B. Fensterreinigung extra im April) ergänzt werden, ohne den Dauerauftrag zu ändern
 
 ---
 
-## Die UI im Detail
+## Teil 1 — Daueraufträge
 
-### 1. Neues Mahn-Cockpit `/mahnungen`
+### Konzept
 
-Die wichtigste neue Seite. Reduziert das Problem "wo sind meine offenen Posten?" auf einen Klick.
+Ein **Dauerauftrag** ist die Vorlage für eine wiederkehrende Rechnung: er sagt *was, an wen, wie oft, ab wann, bis wann*. Er ist **keine Rechnung**, sondern erzeugt periodisch welche.
+
+```text
+Dauerauftrag DA-2026-003 · Müller GmbH · Bürogebäude Nord
+├─ monatlich, jeweils zum 1. des Monats
+├─ Laufzeit: ab 01.01.2026, unbefristet
+├─ Positionen: Unterhaltsreinigung 850 €, Treppenhaus 120 €
+├─ Versand: automatisch per Mail an buchhaltung@mueller.de
+└─ Erzeugte Rechnungen: 4 (Jan–Apr) · nächste: 01.05.2026
+```
+
+### Neue Route `/dauerauftraege`
+
+Liste aller Daueraufträge als Cards:
+
+```text
+┌───────────────────────────────────────────────────────┐
+│ Daueraufträge                          [+ Neu anlegen]│
+│                                                       │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐               │
+│ │ Aktiv    │ │ Pausiert │ │ Nächster │               │
+│ │   12     │ │    2     │ │  Lauf:   │               │
+│ │ 8.450 €/M│ │          │ │ in 3 Tg. │               │
+│ └──────────┘ └──────────┘ └──────────┘               │
+│                                                       │
+│ ▌ Müller GmbH · Bürogebäude Nord                     │
+│   monatlich · 970 € netto · nächste am 01.05.        │
+│   ●─●─●─● 4 Rechnungen erzeugt              [Öffnen] │
+│                                                       │
+│ ▌ Schmidt KG · Praxis Süd                            │
+│   monatlich · 420 € netto · pausiert bis 30.06.      │
+└───────────────────────────────────────────────────────┘
+```
+
+### Detail-/Anlegen-Seite `/dauerauftraege/$id` und `/dauerauftraege/neu`
+
+Ein einziger Wizard-ähnlicher Flow auf einer Seite:
+
+1. **Kunde + Objekt** (Pflicht, Auswahl wie bei Rechnung-Neu)
+2. **Frequenz**: monatlich · quartalsweise · halbjährlich · jährlich
+3. **Stichtag**: am Monatsersten / am Letzten / am X. (Spinner 1–28) / am Tag X des Quartals
+4. **Laufzeit**: von Datum, bis Datum (oder unbefristet)
+5. **Positionen**: identisch zum Rechnungs-Editor, mit Positionsvorlagen
+6. **Rechnungstext-Token**: Betreff/Text mit `{{lauf.monat}}`, `{{lauf.zeitraum}}` (z.B. "April 2026", "Q2 2026")
+7. **Automatisierungs-Modus**:
+   - **Entwurf erstellen** (Standard, sicher) — Rechnung landet im Posteingang `/dauerauftraege/posteingang`, du klickst "Versenden"
+   - **Vollautomatisch** — Rechnung wird sofort als versendet markiert, PDF erzeugt, E-Mail rausgeschickt, Drive-Upload
+8. **Vorschau-Block unten:** "Nächste 6 Läufe würden am 01.05., 01.06., 01.07., … erzeugt"
+
+Auf der Detailseite zusätzlich:
+- **Liste erzeugter Rechnungen** (chronologisch, klickbar zur Rechnung)
+- **Aktionen**: Pausieren bis Datum · Beenden zum Datum · Sofort-Lauf jetzt auslösen (für Tests)
+- **FlowBar** wie bei Angebot/Rechnung: Aktiv → Pausiert → Beendet
+
+### Posteingang `/dauerauftraege/posteingang`
+
+Die Inbox für nicht-automatische Daueraufträge: alle erzeugten **Entwürfe**, die auf Bestätigung warten. Eine Checkbox-Liste mit:
+
+```text
+☐ RE-2026-042 · Müller GmbH · April 2026 · 970 € · [Vorschau]
+☐ RE-2026-043 · Schmidt KG · April 2026 · 420 € · [Vorschau]
+
+[ Auswahl versenden (2) ]   [ Alle versenden ]
+```
+
+Ein Klick → PDFs werden erzeugt, Mails versendet, Drive-Upload, Status `versendet`. Dieselbe Engine wie der manuelle Rechnungs-Versand.
+
+### Sidebar
+
+Neuer Eintrag **"Daueraufträge"** unter "Rechnungen", mit Badge = Anzahl Entwürfe im Posteingang.
+
+### Dashboard-Widget
+
+Kachel **"Wiederkehrender Umsatz"**: Summe aller aktiven Daueraufträge pro Monat (MRR-light) + "nächste Läufe in 7 Tagen: X Rechnungen, Y €".
+
+### Logik (Auto-Generator)
+
+Reine Funktion `berechneNaechsteLauftermine(da: Dauerauftrag, ab: Date, n: number): Date[]` → liefert die nächsten N Stichtage.
+
+Beim App-Start und alle 60s im Frontend (im Mock-Modus) prüft `pruefeFaelligeLaeufe()`:
+- für jeden aktiven Dauerauftrag: gibt es einen Lauf, der heute oder früher fällig wäre und noch nicht erzeugt wurde?
+- wenn ja → Rechnungsentwurf erzeugen (`status: entwurf` oder bei Vollautomatik direkt versenden)
+- Eintrag in `Aktivitaet`: "Dauerauftrag XY hat Rechnung RE-… erzeugt"
+
+Beim Pi-Switch wandert das in einen täglichen Cron um 02:00.
+
+**Wichtige Regeln:**
+- **Idempotent:** ein Stichtag erzeugt genau eine Rechnung — Doppelklick oder Neustart erzeugt nichts doppelt (DB-Constraint via `(dauerauftragId, periode)`).
+- Pausierung übersteuert: Läufe in der Pause werden **übersprungen**, nicht nachgeholt
+- Beendigung zum Datum: letzter Lauf ist der letzte Stichtag ≤ Enddatum
+
+---
+
+## Teil 2 — Sonderpositionen pro Lauf
+
+Auf der Dauerauftrag-Detailseite eine kleine Sektion **"Geplante Sonderpositionen"**:
+
+```text
+Geplante Zusätze
+▸ April 2026: + Fensterreinigung 280 €              [×]
+▸ Juni 2026:  + Grundreinigung 1.200 €              [×]
+[ + Sonderposition für nächsten Lauf ]
+```
+
+Wird der Lauf erzeugt, werden diese Positionen einmalig in die Rechnung gehängt und aus der Vorhabensliste entfernt. Saubere Trennung zwischen "ändert den Vertrag" vs. "nur dieses eine Mal".
+
+---
+
+## Teil 3 — Zahlungsabgleich (Light)
+
+### Konzept
+
+Du tippst (später: importierst) Banktransaktionen ein → das System matched sie gegen offene Rechnungen.
+
+Heute: Du erfasst Zahlungen über `ZahlungErfassenDialog` direkt auf der Rechnung. Das bleibt. Phase D fügt **den umgekehrten Weg** hinzu: "Hier ist eine Bank-Bewegung — welche Rechnung ist das?"
+
+### Neue Route `/zahlungseingaenge`
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ Mahnwesen                                                   │
+│ Zahlungseingänge          [+ Eingang erfassen] [Import CSV] │
 │                                                             │
-│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
-│ │ Erinnerg.│ │ 1. Mahng.│ │ Letzte M.│ │ Inkasso  │       │
-│ │   3      │ │    2     │ │    1     │ │    1     │       │
-│ │ 1.240 €  │ │  890 €   │ │ 1.200 €  │ │  900 €   │       │
-│ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐                     │
+│ │Unzugeord.│ │ Zugeordn.│ │ Heute    │                     │
+│ │   4      │ │   18     │ │  890 €   │                     │
+│ └──────────┘ └──────────┘ └──────────┘                     │
 │                                                             │
-│ Filter: [ Alle ▾ ]  [ ↓ Dringlichkeit ]                    │
+│ 28.04.  +850,00 €  "Müller GmbH RE 2025-014"               │
+│         ▸ Vorschlag: RE-2025-014 Müller (850 € offen) 96%  │
+│         [ Zuordnen ]  [ Andere wählen ▾ ]  [ Ignorieren ]  │
 │                                                             │
-│ ┌─────────────────────────────────────────────────────┐    │
-│ │ ▌ RE-2025-014 · Müller GmbH                        │    │
-│ │   850 € offen · 12 Tage überfällig                 │    │
-│ │   FlowBar: ●─●─○─○ (1. Mahnung empfohlen)          │    │
-│ │   [Mahnung vorbereiten]  [Verschieben ▾]           │    │
-│ ├─────────────────────────────────────────────────────┤    │
-│ │ ▌ RE-2025-009 · Schmidt KG                         │    │
-│ │   1.200 € offen · 38 Tage · letzte Mahnung am 15.4 │    │
-│ │   FlowBar: ●─●─●─○                                 │    │
-│ │   [Inkasso-Vorgang starten]                        │    │
-│ └─────────────────────────────────────────────────────┘    │
+│ 28.04.  +1.200,00 € "ueberweisung schmidt apr"             │
+│         ▸ Vorschlag: RE-2025-009 Schmidt (1.200 € offen) 88%│
+│         [ Zuordnen ]  [ Andere wählen ▾ ]                  │
+│                                                             │
+│ 27.04.  +50,00 €    "rest mueller"                         │
+│         ⚠ Mehrere Treffer · [ Manuell wählen ]             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- **4 KPI-Karten** = 4 Stufen mit Anzahl + Summe (klickbar = filtert die Liste)
-- Sortierung default: dringendste oben (Tage seit Fälligkeit · Summe als Tiebreaker)
-- Zeile = klickbar zur Rechnungs-Detailseite, Primary-Button öffnet direkt den Versand-Dialog mit vorausgewählter Stufe
-- "Verschieben" = Mahnstufe um X Tage pausieren (z.B. wenn Kunde Zahlung mündlich zugesagt hat)
-- Mobil: Karten stapeln sich, Aktions-Button volle Breite
+### Match-Score (reine Funktion `bewerteMatch(tx, rechnung)`)
 
-### 2. Sidebar-Eintrag "Mahnungen" mit Live-Badge
+Punkte (0–100):
+- **Betrag exakt = offen** → +50, **Betrag exakt = brutto** → +40, **Teilbetrag möglich** → +20
+- **Rechnungsnummer im Verwendungszweck** (Regex auf Präfix) → +30
+- **Kundenname-Token** (Substring oder Levenshtein ≤ 2) im Verwendungszweck → +15
+- **IBAN des Kunden** im Sender (falls hinterlegt) → +10
+- **Kunde hat nur eine offene Rechnung** → +5
+- Score ≥ 80 = "starker Vorschlag" (grün), 50–79 = "Vorschlag" (gelb), <50 = "manuell wählen"
 
-Neuer Menüpunkt unter "Rechnungen" mit roter Badge-Zahl = Anzahl der Rechnungen, bei denen mindestens eine Stufe **fällig** (nicht versendet) ist. Sofort sichtbar, ohne irgendwo reinzuklicken.
+Top-3-Vorschläge pro Transaktion, der beste vorausgewählt.
 
-### 3. Rechnungs-Detailseite — Mahn-Sektion neu
+### Aktionen
+- **Zuordnen** → erzeugt einen `Zahlung`-Eintrag auf der Rechnung über die existierende Phase-B-Engine, Status der Rechnung aktualisiert sich automatisch (teilbezahlt/bezahlt), eine Mahnung in Vorbereitung wird ggf. zurückgesetzt
+- **Aufteilen**: eine Bank-Transaktion auf 2 Rechnungen splitten (z.B. Sammelüberweisung)
+- **Ignorieren**: markiert als "kein CRM-Bezug" (z.B. private Erstattung) — verschwindet aus der Hauptliste, bleibt in `Archiv`-Filter
+- **Rückgängig**: Zuordnung lösen → Zahlung wird zurückgenommen, Transaktion wieder offen
 
-Ersetzt den heutigen einzelnen "Mahnung senden"-Button:
+### Manuelle Eingabe & CSV-Import
 
-```text
-┌───────────────────────────────────────────────┐
-│ MAHNVERFAHREN                                 │
-│                                               │
-│ Stufenfortschritt: ●─●─○─○                   │
-│                                               │
-│ ✓ Zahlungserinnerung · 03.04.2026 · Frist 10.4│
-│ ✓ 1. Mahnung         · 14.04.2026 · Frist 21.4│
-│ ▸ Letzte Mahnung empfohlen seit 22.04.        │
-│                                               │
-│ [ Letzte Mahnung versenden (10 € Gebühr) ]   │
-│ Stufe ändern ▾    Mahnverfahren pausieren    │
-└───────────────────────────────────────────────┘
-```
+- **Dialog "Eingang erfassen"**: Datum, Betrag, Verwendungszweck, optional IBAN/Sender — minimal
+- **CSV-Import** (CAMT.053 oder generisch): drag&drop, Spalten-Mapping-Schritt (Datum/Betrag/Zweck), Vorschau-Tabelle, Import-Button. **Phase-D scope:** nur das generische Format (Datum, Betrag, Zweck als 3 Spalten); CAMT echt erst auf dem Pi mit `camt`-Parser.
 
-- Pro versendeter Stufe: Datum, Frist, Gebühr, Klick öffnet die zugehörige E-Mail in der Versand-Historie
-- **Primary-Action** = nächste empfohlene Stufe (oder "Inkasso starten" nach Stufe 3)
-- "Stufe ändern" = Dropdown, falls du eine Stufe überspringen oder wiederholen willst
-- "Pausieren" = z.B. "Kunde hat versprochen bis 30.4. zu zahlen" — bis dahin keine Vorschläge
+### Dashboard
 
-### 4. Versand-Dialog erweitert
-
-`EmailVersandDialog` bekommt im Mahn-Kontext ein zusätzliches Feld oben:
-
-- Dropdown "Mahnstufe" (vorausgewählt: empfohlene Stufe)
-- Wechsel der Stufe → Vorlage tauscht automatisch, Mahngebühr-Hinweis aktualisiert sich, neue Frist wird neu berechnet
-- Info-Box unter dem Editor: "Mahngebühr 5 € · neue Frist: 21.04.2026" — beides als Platzhalter `{{mahnung.gebuehr}}` und `{{mahnung.neueFrist}}` automatisch im Body verwendbar
-- Beim Versand wird zusätzlich zur E-Mail ein **MahnVorgang**-Eintrag angelegt und mit der `EmailVersand`-ID verknüpft
-
-### 5. Einstellungen → neuer Tab "Mahnwesen"
-
-In `src/routes/einstellungen.tsx` als zusätzlicher Tab neben "E-Mail":
-
-- 3 Stufen-Cards (Bezeichnung, Tage nach Vorgänger, Gebühr in €, Frist in Tagen, zugeordnete E-Mail-Vorlage)
-- Master-Schalter: "Auto-Vorschlag aktiviert" (wenn aus: nur manuelle Mahnungen)
-- Reset-Button "Auf Standard zurücksetzen"
-
-### 6. Rechnungsliste-Verbesserung
-
-In der existierenden `/rechnungen`-Tabelle: kleine Spalte "Mahnstufe" (●●○ Mini-Indikator) — auf einen Blick sichtbar, ohne in die Detailseite zu müssen.
-
-### 7. Dashboard-Kachel
-
-Auf `/` neue KPI-Karte "Mahnungen offen" (Anzahl + Summe) mit Link aufs Cockpit.
+Bestehende KPI "Ausstehend" bekommt darunter eine Zeile **"4 Eingänge unzugeordnet — jetzt zuordnen"** als Link.
 
 ---
 
-## Die intelligente Logik (Auto-Status)
+## Datenmodell
 
-Beim Laden jeder Rechnungsabfrage läuft `bestimmeAktuelleStufe(rechnung, config)` — eine **reine Funktion**, kein gespeicherter Zustand:
-
-1. Wenn voll bezahlt oder storniert → Mahnkette beendet (Historie bleibt sichtbar)
-2. Berechne `tageSeitFaelligkeit`
-3. Prüfe Mahn-Historie: was war die letzte versendete Stufe? Wann war ihre Frist?
-4. Ist Frist abgelaufen → nächste Stufe wird **empfohlen**
-5. Bei Teilzahlung: Mahnstufe pausiert nicht, aber "Offen-Betrag" wird neu berechnet — sonst würde ein Kunde mit 1 € Restzahlung nie wieder gemahnt
-6. Pausierung (`pausiertBis`-Datum) übersteuert alles bis zum Datum
-
-**Status `ueberfaellig`** wird automatisch gesetzt, sobald `faelligkeitsdatum < heute && offen > 0 && status === "versendet"`. Beim Backend-Switch wandert das in einen Cron-Job auf dem Pi.
-
----
-
-## Datenmodell (neu)
-
-**Erweiterung `Rechnung`:**
 ```ts
-mahnungen: MahnVorgang[];   // versendete Mahnungen, chronologisch
-mahnPausiertBis?: ISODate;  // optional, "nicht vor diesem Datum mahnen"
-```
+// Daueraufträge
+export type DauerauftragFrequenz = "monatlich" | "quartalsweise" | "halbjaehrlich" | "jaehrlich";
+export type DauerauftragModus = "entwurf" | "vollautomatisch";
+export type DauerauftragStatus = "aktiv" | "pausiert" | "beendet";
 
-**Neuer Typ:**
-```ts
-interface MahnVorgang {
+export interface Dauerauftrag {
   id: ID;
+  nummer: string;                    // "DA-2026-003"
+  kundeId: ID;
+  objektId?: ID;
+  bezeichnung: string;               // "Unterhaltsreinigung Bürogebäude Nord"
+  frequenz: DauerauftragFrequenz;
+  stichtag: { typ: "monatstag" | "monatsletzter" | "quartalstag"; wert?: number };
+  laufzeitVon: ISODate;
+  laufzeitBis?: ISODate;             // optional = unbefristet
+  positionen: Position[];
+  betreffVorlage: string;            // "Reinigung {{lauf.zeitraum}}"
+  textVorlage: string;
+  modus: DauerauftragModus;
+  emailEmpfaenger?: string[];        // für Vollautomatik
+  status: DauerauftragStatus;
+  pausiertBis?: ISODate;
+  letzteAusfuehrung?: ISODate;
+  erstelltAm: ISODateTime;
+  geaendertAm: ISODateTime;
+}
+
+export interface DauerauftragLauf {
+  id: ID;
+  dauerauftragId: ID;
+  periode: string;                   // "2026-04" — eindeutig pro DA
+  geplantFuer: ISODate;
+  ausgefuehrtAm?: ISODateTime;
+  rechnungId?: ID;
+  status: "geplant" | "erzeugt" | "uebersprungen" | "fehler";
+  fehlerGrund?: string;
+}
+
+export interface DauerauftragSonderposition {
+  id: ID;
+  dauerauftragId: ID;
+  fuerPeriode: string;               // "2026-04"
+  position: Position;
+  verbrauchtAm?: ISODateTime;
+}
+
+// Zahlungseingänge
+export type ZahlungseingangStatus = "offen" | "zugeordnet" | "ignoriert" | "teilweise";
+
+export interface Zahlungseingang {
+  id: ID;
+  buchungsdatum: ISODate;
+  betrag: number;                    // immer positiv
+  waehrung: "EUR";
+  verwendungszweck: string;
+  senderName?: string;
+  senderIban?: string;
+  status: ZahlungseingangStatus;
+  zuordnungen: ZahlungseingangZuordnung[];
+  importQuelle: "manuell" | "csv";
+  importiertAm: ISODateTime;
+}
+
+export interface ZahlungseingangZuordnung {
   rechnungId: ID;
-  stufe: 1 | 2 | 3;
-  versendetAm: ISODateTime;
-  neueFrist: ISODate;
-  gebuehr: number;            // EUR, in Mahnschreiben angezeigt
-  emailVersandId?: ID;        // Verknüpfung zu EmailVersand für Audit
-}
-
-interface MahnStufeConfig {
-  stufe: 1 | 2 | 3;
-  bezeichnung: string;
-  tageNachVorgaenger: number; // Stufe 1: Tage nach Fälligkeit
-  gebuehr: number;
-  fristTage: number;
-  emailVorlageId?: ID;
-}
-
-interface MahnEinstellungen {
-  autoVorschlagAktiv: boolean;
-  stufen: MahnStufeConfig[];   // genau 3
+  zahlungId: ID;                     // FK auf erzeugte Zahlung
+  betrag: number;                    // bei Split: anteilig
 }
 ```
 
-**Globale Einstellungen** bekommen `mahnung: MahnEinstellungen` im DB-Mock.
+Globale Einstellungen werden ergänzt um `dauerauftrag: { defaultModus, defaultStichtag }` und `zahlungsabgleich: { autoZuordnenAbScore: 95 }` (optional: alles ≥95 wird ohne Klick zugeordnet).
 
 ---
 
-## Mahngebühr — Designentscheidung
-
-Die Mahngebühr wird **nicht** als zusätzliche Position in die Rechnung eingefügt (das würde die ursprüngliche Rechnung manipulieren — buchhalterisch heikel). Stattdessen:
-
-- Gebühr ist **Eigenschaft des MahnVorgangs**
-- Erscheint im Mahn-E-Mail-Body via Platzhalter `{{mahnung.gebuehr}}` und im Gesamtsatz `{{mahnung.gesamtForderung}}` (= offen + Gebühr)
-- Im Mahn-Cockpit und Detail-Sektion wird sie separat ausgewiesen
-- Spätere echte Buchung im Backend kann das als separate Forderung führen
-
----
-
-## Neue Platzhalter (für E-Mail-Vorlagen)
-
-Ergänzung in `src/lib/email/placeholders.ts`:
-
-- `{{mahnung.stufe}}` — "Zahlungserinnerung" / "1. Mahnung" / "Letzte Mahnung"
-- `{{mahnung.gebuehr}}` — formatierter EUR-Betrag
-- `{{mahnung.neueFrist}}` — formatiertes Datum
-- `{{mahnung.gesamtForderung}}` — offen + Gebühr formatiert
-- `{{mahnung.tageUeberfaellig}}` — Zahl
-
----
-
-## Geänderte und neue Dateien
+## Komponenten / Dateien (geplant)
 
 **Neu:**
-- `src/routes/mahnungen.tsx` — Cockpit-Seite
-- `src/components/mahnung/MahnCockpit.tsx` — KPIs + Liste
-- `src/components/mahnung/MahnSektion.tsx` — Block für Detailseite
-- `src/components/mahnung/MahnHistorieListe.tsx` — versendete Stufen
-- `src/components/mahnung/MahnStufenIndikator.tsx` — ●●○ Mini-FlowBar
-- `src/components/mahnung/MahnEinstellungen.tsx` — Settings-Tab
-- `src/components/mahnung/MahnPausierenDialog.tsx`
-- `src/lib/mahnung/regeln.ts` — `bestimmeAktuelleStufe()`, `mahnenEmpfohlen()`, Helper
-- `src/lib/mahnung/defaults.ts` — Standard-3-Stufen-Config
+- `src/routes/dauerauftraege.tsx` (Liste + KPIs)
+- `src/routes/dauerauftraege.neu.tsx`
+- `src/routes/dauerauftraege.$id.tsx`
+- `src/routes/dauerauftraege.posteingang.tsx`
+- `src/routes/zahlungseingaenge.tsx`
+- `src/lib/dauerauftrag/termine.ts` (reine Funktion: nächste Läufe)
+- `src/lib/dauerauftrag/generator.ts` (Lauf → Rechnungsentwurf)
+- `src/lib/zahlung/match.ts` (Score-Engine)
+- `src/lib/zahlung/csv-import.ts` (Parser + Mapping)
+- `src/components/dauerauftrag/DauerauftragForm.tsx`
+- `src/components/dauerauftrag/SonderpositionDialog.tsx`
+- `src/components/dauerauftrag/LaufVorschau.tsx`
+- `src/components/zahlung/ZahlungseingangCard.tsx`
+- `src/components/zahlung/ZuordnungsDialog.tsx`
+- `src/components/zahlung/CsvImportDialog.tsx`
+- `src/hooks/useDauerauftraege.ts`, `useZahlungseingaenge.ts`
 
-**Erweitert:**
-- `src/lib/api/types.ts` — neue Typen + Erweiterung `Rechnung`
-- `src/lib/mock/seed.ts` — 3 Mahn-Standardvorlagen, MahnEinstellungen, 3-4 realistisch überfällige Beispiel-Rechnungen mit teils existierender Mahn-Historie
-- `src/lib/mock/backend.ts` — DB-Migration auf `v6`, Endpoints: `getMahnEinstellungen`, `updateMahnEinstellungen`, `mahnungVersenden(rechnungId, stufe)` (legt MahnVorgang an + ruft sendEmail intern auf), `mahnungPausieren`
-- `src/hooks/useApi.ts` — `useMahnEinstellungen`, `useUpdateMahnEinstellungen`, `useMahnungVersenden`, `useMahnUebersicht` (aggregiert für Cockpit + Sidebar-Badge)
-- `src/lib/email/placeholders.ts` — neuer `mahnung`-Block im PlaceholderContext
-- `src/components/email/EmailVersandDialog.tsx` — Stufen-Dropdown bei `kontext === "mahnung"`, ruft `useMahnungVersenden` statt nur `useSendEmail`
-- `src/routes/rechnungen.$id.tsx` — neue MahnSektion ersetzt heutigen Mahnung-Button
-- `src/routes/rechnungen.tsx` — Mahnstufen-Spalte, KPI "Überfällig" wird klickbar zum Cockpit
-- `src/routes/einstellungen.tsx` — neuer Tab "Mahnwesen"
-- `src/components/layout/AppSidebar.tsx` — neuer Menüpunkt mit Badge
-- `src/routes/index.tsx` (Dashboard) — Kachel "Mahnungen offen"
-- `src/lib/flow/flows.ts` — `rechnungFlow` zeigt Mahnstufen, falls überfällig, als zusätzliche Schritte (oder dezentes Sub-Element unter "Versendet")
-
----
-
-## Was Phase C NICHT macht
-
-- Echter E-Mail-Versand (Mock simuliert weiter mit 1.2s Delay + 10% Fail)
-- Echte Inkasso-API-Anbindung — "Inkasso-reif" ist nur Markierung + manueller Workflow
-- Verzugszinsen-Berechnung (nach §288 BGB) — kann in Phase F nachgereicht werden, falls gewünscht
-- SMS- oder Briefpost-Mahnungen
-- PDF-Anlage Mahnung als separates Dokument (die Original-Rechnung wird angehängt, das reicht in der Praxis)
+**Geändert:**
+- `src/lib/api/types.ts` — neue Typen
+- `src/lib/mock/backend.ts` + `seed.ts` — DB v7, Endpunkte, Seed-Daten (3–4 Daueraufträge, ~10 Zahlungseingänge)
+- `src/lib/mock/scheduler.ts` (neu) — 60s-Tick im Frontend für Lauf-Prüfung
+- `src/hooks/useApi.ts` — neue Hooks
+- `src/components/layout/AppSidebar.tsx` — 2 neue Einträge mit Badges
+- `src/routes/index.tsx` — Dashboard-Widgets "Wiederkehrender Umsatz" + "Eingänge unzugeordnet"
+- `src/routes/rechnungen.$id.tsx` — Hinweisbadge "aus Dauerauftrag DA-…" wenn aus Lauf entstanden
+- `src/lib/email/placeholders.ts` — `{{lauf.monat}}`, `{{lauf.zeitraum}}`, `{{lauf.von}}`, `{{lauf.bis}}`
 
 ---
 
-## Reihenfolge der Umsetzung
+## Was Phase D NICHT tut (bewusst)
 
-1. **Datenmodell + Defaults** (`types.ts`, `defaults.ts`, DB-Migration `v6`)
-2. **Regel-Engine** (`regeln.ts` mit Unit-tauglicher reiner Funktion)
-3. **Mock-Backend-Endpoints** + **Hooks** + neue **Platzhalter**
-4. **Seed-Daten:** 3 Standardvorlagen (Erinnerung / 1. Mahnung / Letzte) + 3-4 überfällige Beispiel-Rechnungen mit teils schon laufender Mahnkette
-5. **Einstellungs-Tab "Mahnwesen"**
-6. **Mahn-Sektion** auf Rechnungs-Detailseite + Versand-Dialog-Erweiterung
-7. **Mahn-Cockpit** `/mahnungen` + Sidebar-Badge + Dashboard-Kachel + Tabellen-Spalte
+- Keine echte Bank-API-Anbindung (FinTS/HBCI) — kommt später, eigene Phase
+- Keine SEPA-Lastschrift-Erzeugung — eigener Workflow
+- Keine Dauerauftrag-Versionierung (Preisänderung mitten im Jahr) — Phase E falls nötig; jetzt: Dauerauftrag bearbeiten gilt ab nächstem Lauf
+- CAMT.053-Parser nur als generisches CSV — echtes XML auf dem Pi
 
-Sag "los Phase C" — dann baue ich das in einem Rutsch durch.
+---
+
+## Reihenfolge der Umsetzung (3 Schritte, je 1 "weiter")
+
+**Schritt 1 — Daten + Logik (Backend-Mock, reine Funktionen):**
+- Typen, DB v7, Seed
+- `termine.ts`, `generator.ts`, `match.ts`, CSV-Parser
+- API-Endpunkte im Mock + Hooks
+- Scheduler-Tick (60s)
+
+**Schritt 2 — UI Daueraufträge:**
+- Liste, Neu/Detail, Posteingang
+- Sidebar-Eintrag + Badge
+- Dashboard-Widget "Wiederkehrender Umsatz"
+- Hinweis-Badge auf Rechnung-Detail
+
+**Schritt 3 — UI Zahlungseingänge:**
+- Liste mit Vorschlägen, Zuordnen/Aufteilen/Ignorieren
+- Eingang-Erfassen-Dialog + CSV-Import-Dialog
+- Dashboard-Hinweis bei unzugeordneten Eingängen
+- Verknüpfung zur Mahn-Engine: Zahlung kommt → Mahn-Empfehlung wird neu berechnet
+
+Sag **"los Phase D"** und ich starte mit Schritt 1.
