@@ -66,6 +66,7 @@ function Page() {
   const [filter, setFilter] = useState<string>("alle");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [emailFuer, setEmailFuer] = useState<Angebot | null>(null);
 
   const counts = useMemo(
     () => ({
