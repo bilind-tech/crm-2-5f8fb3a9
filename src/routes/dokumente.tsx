@@ -41,7 +41,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Dokumente"
         title="Dokumente"
         subtitle="Quittungen, Rechnungen und steuerrelevante Belege zentral ablegen."
         actions={

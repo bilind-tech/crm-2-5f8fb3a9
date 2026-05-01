@@ -9,6 +9,8 @@ import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
 import { RechnungForm } from "@/components/forms/RechnungForm";
+import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
+import { useConfirm } from "@/hooks/useConfirm";
 import type { Rechnung } from "@/lib/api/types";
 
 export const Route = createFileRoute("/rechnungen")({ component: Page });
@@ -57,6 +59,8 @@ function Page() {
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [zahlungFuer, setZahlungFuer] = useState<Rechnung | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const heute = new Date().toISOString().slice(0, 10);
   const monat = heute.slice(0, 7);
@@ -92,7 +96,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Rechnungen"
         title="Rechnungen"
         subtitle="Rechnungen erstellen, Zahlungen erfassen, Mahnungen senden."
         actions={
@@ -139,6 +142,7 @@ function Page() {
       />
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -186,13 +190,27 @@ function Page() {
                       >
                         <Eye className="h-4 w-4" />
                       </Link>
-                      <button className="rounded-md p-1.5 text-success hover:bg-success/10" title="Bezahlt markieren">
-                        <CheckCircle2 className="h-4 w-4" />
-                      </button>
+                      {r.status !== "bezahlt" && r.status !== "storniert" && (
+                        <button
+                          onClick={() => setZahlungFuer(r)}
+                          className="rounded-md p-1.5 text-success hover:bg-success/10"
+                          title="Zahlung erfassen"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
-                        onClick={() => {
-                          if (confirm(`Rechnung ${r.nummer} löschen?`)) del.mutate(r.id);
-                        }}
+                        onClick={() =>
+                          confirm(
+                            {
+                              title: "Rechnung löschen?",
+                              description: `Rechnung ${r.nummer} dauerhaft entfernen. Erfasste Zahlungen gehen verloren.`,
+                              variant: "destructive",
+                              confirmLabel: "Löschen",
+                            },
+                            () => del.mutate(r.id),
+                          )
+                        }
                         className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -212,6 +230,7 @@ function Page() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <SlideOver
@@ -222,6 +241,16 @@ function Page() {
       >
         <RechnungForm onClose={() => setOpen(false)} />
       </SlideOver>
+
+      {zahlungFuer && (
+        <ZahlungErfassenDialog
+          open={!!zahlungFuer}
+          onOpenChange={(o) => !o && setZahlungFuer(null)}
+          rechnung={zahlungFuer}
+        />
+      )}
+
+      {confirmDialog}
     </div>
   );
 }

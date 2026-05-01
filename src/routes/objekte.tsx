@@ -39,7 +39,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Objekte"
         title="Objekte"
         subtitle="Reinigungsobjekte deiner Kunden mit Frequenz und Zugang."
         actions={
@@ -68,6 +67,7 @@ function Page() {
       />
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -113,6 +113,7 @@ function Page() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <SlideOver open={open} onOpenChange={setOpen} title="Neues Objekt">

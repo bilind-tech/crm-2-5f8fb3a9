@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Pause, Play, PlayCircle, Square, FileText, Trash2, Repeat } from "lucide-react";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/dauerauftrag/termine";
 import { summenRechnung } from "@/lib/mock/backend";
 import { formatEUR, formatDate } from "@/lib/format";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/dauerauftraege/$id")({ component: Page });
 
@@ -34,8 +36,9 @@ function Page() {
   const update = useUpdateDauerauftrag(id);
   const del = useDeleteDauerauftrag();
   const [showBeendeBestaetigung, setShowBeendeBestaetigung] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
-  if (!da) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (!da) return <LoadingPlaceholder />;
 
   const s = summenRechnung(da.positionen, da.rabattGesamt);
   const heute = new Date();
@@ -98,8 +101,8 @@ function Page() {
               {naechste.length === 0 && (
                 <li className="py-3 text-sm text-muted-foreground">Keine weiteren Läufe geplant.</li>
               )}
-              {naechste.map((d, i) => (
-                <li key={i} className="flex items-center justify-between py-2.5 text-sm">
+              {naechste.map((d) => (
+                <li key={d.toISOString()} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
                     <p className="font-medium">{periodeBezeichnung(da, d)}</p>
                     <p className="text-xs text-muted-foreground">Stichtag {formatDate(d.toISOString().slice(0, 10))}</p>
@@ -200,16 +203,23 @@ function Page() {
               <Button
                 variant="outline"
                 className="justify-start text-destructive hover:text-destructive"
-                onClick={() => {
-                  if (confirm(`Dauerauftrag ${da.nummer} dauerhaft löschen? Bereits erzeugte Rechnungen bleiben erhalten.`)) {
-                    del.mutate(da.id, {
-                      onSuccess: () => {
-                        toast.success("Gelöscht");
-                        navigate({ to: "/dauerauftraege" });
-                      },
-                    });
-                  }
-                }}
+                onClick={() =>
+                  confirm(
+                    {
+                      title: "Dauerauftrag löschen?",
+                      description: `Dauerauftrag ${da.nummer} dauerhaft entfernen. Bereits erzeugte Rechnungen bleiben erhalten.`,
+                      variant: "destructive",
+                      confirmLabel: "Löschen",
+                    },
+                    () =>
+                      del.mutate(da.id, {
+                        onSuccess: () => {
+                          toast.success("Gelöscht");
+                          navigate({ to: "/dauerauftraege" });
+                        },
+                      }),
+                  )
+                }
               >
                 <Trash2 className="mr-1.5 h-4 w-4" /> Löschen
               </Button>
@@ -245,6 +255,7 @@ function Page() {
           </div>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

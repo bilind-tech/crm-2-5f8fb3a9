@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useState } from "react";
 import { Download, Send, FileCheck2, ThumbsUp, ThumbsDown } from "lucide-react";
 import {
@@ -33,7 +34,7 @@ function Page() {
   const { data: alleRechnungen = [] } = useRechnungen();
   const [emailOpen, setEmailOpen] = useState(false);
 
-  if (!a) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (!a) return <LoadingPlaceholder />;
 
   const folgeRechnung = alleRechnungen.find((r) => r.quellAngebotId === a.id);
   const hatRechnung = !!folgeRechnung;
@@ -97,10 +98,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb={[
-          { label: "Angebote", to: "/angebote" },
-          { label: a.nummer },
-        ]}
         title={a.titel}
         subtitle={
           <>

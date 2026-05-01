@@ -3,6 +3,7 @@
 // Eingebettet in src/routes/einstellungen.tsx via Subkomponenten.
 
 import { useEffect, useState } from "react";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Star, Check, AlertCircle, Loader2, Eye, Code2 } from "lucide-react";
 
@@ -41,6 +42,7 @@ import {
 import type { EmailVorlage, EmailSignatur, EmailKontext } from "@/lib/api/types";
 import { ALLE_PLATZHALTER } from "@/lib/email/placeholders";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/hooks/useConfirm";
 
 // =============================================================================
 // VORLAGEN-TAB
@@ -53,6 +55,7 @@ export function EmailVorlagenTab() {
   const del = useDeleteEmailVorlage();
   const [editing, setEditing] = useState<EmailVorlage | null>(null);
   const [creating, setCreating] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   return (
     <div className="space-y-4">
@@ -111,10 +114,20 @@ export function EmailVorlagenTab() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      if (confirm(`Vorlage „${v.name}" löschen?`))
-                        del.mutate(v.id, { onSuccess: () => toast.success("Vorlage gelöscht") });
-                    }}
+                    onClick={() =>
+                      confirm(
+                        {
+                          title: "Vorlage löschen?",
+                          description: `„${v.name}" dauerhaft entfernen.`,
+                          variant: "destructive",
+                          confirmLabel: "Löschen",
+                        },
+                        () =>
+                          del.mutate(v.id, {
+                            onSuccess: () => toast.success("Vorlage gelöscht"),
+                          }),
+                      )
+                    }
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
@@ -157,6 +170,7 @@ export function EmailVorlagenTab() {
           }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -292,6 +306,7 @@ export function EmailSignaturenTab() {
   const del = useDeleteEmailSignatur();
   const [editing, setEditing] = useState<EmailSignatur | null>(null);
   const [creating, setCreating] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   return (
     <div className="space-y-4">
@@ -345,10 +360,20 @@ export function EmailSignaturenTab() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      if (confirm(`Signatur „${s.name}" löschen?`))
-                        del.mutate(s.id, { onSuccess: () => toast.success("Signatur gelöscht") });
-                    }}
+                    onClick={() =>
+                      confirm(
+                        {
+                          title: "Signatur löschen?",
+                          description: `„${s.name}" dauerhaft entfernen.`,
+                          variant: "destructive",
+                          confirmLabel: "Löschen",
+                        },
+                        () =>
+                          del.mutate(s.id, {
+                            onSuccess: () => toast.success("Signatur gelöscht"),
+                          }),
+                      )
+                    }
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
@@ -381,6 +406,7 @@ export function EmailSignaturenTab() {
           }}
         />
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -508,7 +534,7 @@ export function SmtpTab() {
     }
   }, [smtp]);
 
-  if (!smtp) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (!smtp) return <LoadingPlaceholder />;
 
   const handleSpeichern = () => {
     const payload: Record<string, unknown> = {

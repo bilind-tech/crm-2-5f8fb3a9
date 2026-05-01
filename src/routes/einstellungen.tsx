@@ -58,7 +58,6 @@ function Page() {
   return (
     <div className="space-y-6 pb-24">
       <PageHeader
-        breadcrumb="Einstellungen"
         title="Einstellungen"
         subtitle="Verwalte Stammdaten, Erscheinungsbild und Vorlagen deines CRM."
       />

@@ -1,12 +1,6 @@
-type Crumb = { label: string; to?: string };
-
 interface Props {
   title: string;
   subtitle?: React.ReactNode;
-  /** @deprecated wird nicht mehr angezeigt — Prop bleibt für Rückwärtskompatibilität */
-  breadcrumb?: string | Crumb[];
-  /** @deprecated wird nicht mehr angezeigt */
-  hint?: string;
   actions?: React.ReactNode;
 }
 
@@ -30,7 +24,7 @@ interface KpiProps {
   label: string;
   value: React.ReactNode;
   sublabel?: React.ReactNode;
-  tone?: "default" | "success" | "danger" | "primary";
+  tone?: "default" | "success" | "danger" | "warning" | "primary";
   icon?: React.ComponentType<{ className?: string }>;
 }
 
@@ -40,6 +34,8 @@ export function KpiCard({ label, value, sublabel, tone = "default", icon: Icon }
       ? "text-success"
       : tone === "danger"
       ? "text-destructive"
+      : tone === "warning"
+      ? "text-warning"
       : tone === "primary"
       ? "text-primary"
       : "text-foreground";
@@ -48,6 +44,8 @@ export function KpiCard({ label, value, sublabel, tone = "default", icon: Icon }
       ? "bg-success"
       : tone === "danger"
       ? "bg-destructive"
+      : tone === "warning"
+      ? "bg-warning"
       : tone === "primary"
       ? "bg-primary"
       : "bg-muted-foreground/30";
@@ -56,6 +54,8 @@ export function KpiCard({ label, value, sublabel, tone = "default", icon: Icon }
       ? "bg-success/10 text-success"
       : tone === "danger"
       ? "bg-destructive/10 text-destructive"
+      : tone === "warning"
+      ? "bg-warning/10 text-warning"
       : tone === "primary"
       ? "bg-primary/10 text-primary"
       : "bg-muted text-muted-foreground";

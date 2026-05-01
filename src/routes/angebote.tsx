@@ -3,13 +3,14 @@ import { useState, useMemo } from "react";
 import { Search, Eye, Send, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAngebote, useDeleteAngebot, useSendeAngebot } from "@/hooks/useApi";
+import { useAngebote, useDeleteAngebot } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { SlideOver } from "@/components/ui/slide-over";
 import { AngebotForm } from "@/components/forms/AngebotForm";
 import type { Angebot } from "@/lib/api/types";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/angebote")({ component: Page });
 
@@ -49,7 +50,8 @@ function Page() {
   const { data: alle = [] } = useAngebote();
   const navigate = useNavigate();
   const del = useDeleteAngebot();
-  const send = useSendeAngebot("");
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  
   const [filter, setFilter] = useState<string>("alle");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -82,10 +84,8 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Angebote"
         title="Angebote"
         subtitle="Angebote erstellen, versenden und nachverfolgen."
-        hint="Aus Angeboten lassen sich per Klick Rechnungen generieren."
         actions={
           <PrimaryAction onClick={() => setOpen(true)} label="Neues Angebot" />
         }
@@ -113,6 +113,7 @@ function Page() {
       />
 
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -156,17 +157,26 @@ function Page() {
                     >
                       <Eye className="h-4 w-4" />
                     </Link>
-                    <button
-                      onClick={() => send.mutate()}
+                    <Link
+                      to="/angebote/$id"
+                      params={{ id: a.id }}
                       className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
                       title="Senden"
                     >
                       <Send className="h-4 w-4" />
-                    </button>
+                    </Link>
                     <button
-                      onClick={() => {
-                        if (confirm(`Angebot ${a.nummer} löschen?`)) del.mutate(a.id);
-                      }}
+                      onClick={() =>
+                        confirm(
+                          {
+                            title: "Angebot löschen?",
+                            description: `Angebot ${a.nummer} dauerhaft entfernen.`,
+                            variant: "destructive",
+                            confirmLabel: "Löschen",
+                          },
+                          () => del.mutate(a.id),
+                        )
+                      }
                       className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
                       title="Löschen"
                     >
@@ -186,6 +196,7 @@ function Page() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <SlideOver
@@ -196,6 +207,8 @@ function Page() {
       >
         <AngebotForm onClose={() => setOpen(false)} />
       </SlideOver>
+
+      {confirmDialog}
     </div>
   );
 }

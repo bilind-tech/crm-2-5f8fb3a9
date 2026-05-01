@@ -27,6 +27,7 @@ import { CsvImportDialog } from "@/components/zahlung/CsvImportDialog";
 import { ManuellerEingangDialog } from "@/components/zahlung/ManuellerEingangDialog";
 import { ZuordnenDialog } from "@/components/zahlung/ZuordnenDialog";
 import type { Zahlungseingang, ZahlungseingangStatus } from "@/lib/api/types";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/zahlungseingaenge")({ component: Page });
 
@@ -51,6 +52,7 @@ function Page() {
   const loesche = useDeleteZahlungseingang();
   const ignoriere = useIgnoriereZahlungseingang();
   const loeseZuordnung = useLoeseZuordnung();
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const liste = useMemo(() => {
     return alle.filter((z) => filter === "alle" || z.status === filter);
@@ -64,7 +66,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Vertrieb & Abrechnung / Zahlungseingänge"
         title="Zahlungseingänge"
         subtitle="Bank-Umsätze importieren, prüfen und Rechnungen zuordnen."
         actions={
@@ -106,7 +107,7 @@ function Page() {
           value={teilweise}
           sublabel="Rest offen"
           icon={Wand2}
-          tone={teilweise > 0 ? "danger" : "default"}
+          tone={teilweise > 0 ? "warning" : "default"}
         />
         <KpiCard
           label="Eingänge"
@@ -186,13 +187,20 @@ function Page() {
                     onSuccess: () => toast.success("Zuordnung gelöst"),
                   })
                 }
-                onLoeschen={() => {
-                  if (confirm("Eingang wirklich löschen? Verknüpfte Zahlungen werden entfernt.")) {
-                    loesche.mutate(z.id, {
-                      onSuccess: () => toast.success("Eingang gelöscht"),
-                    });
-                  }
-                }}
+                onLoeschen={() =>
+                  confirm(
+                    {
+                      title: "Eingang löschen?",
+                      description: "Verknüpfte Zahlungen auf der Rechnung werden ebenfalls entfernt.",
+                      variant: "destructive",
+                      confirmLabel: "Löschen",
+                    },
+                    () =>
+                      loesche.mutate(z.id, {
+                        onSuccess: () => toast.success("Eingang gelöscht"),
+                      }),
+                  )
+                }
               />
             ))}
           </ul>
@@ -206,6 +214,7 @@ function Page() {
         open={!!aktiv}
         onOpenChange={(v) => !v && setAktiv(null)}
       />
+      {confirmDialog}
     </div>
   );
 }
