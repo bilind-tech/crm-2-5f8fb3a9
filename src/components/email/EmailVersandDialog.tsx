@@ -37,6 +37,7 @@ import {
   useEmailSignaturen,
   useEmailVorlagen,
   useFirmendaten,
+  useMahnEinstellungen,
   useSendEmail,
 } from "@/hooks/useApi";
 import {
@@ -84,10 +85,13 @@ export function EmailVersandDialog({
   pdfBlobUrl,
   pdfDateiname,
   onSent,
+  mahnStufe,
+  vorbelegteVorlageId,
 }: Props) {
   const { data: vorlagen = [] } = useEmailVorlagen();
   const { data: signaturen = [] } = useEmailSignaturen();
   const { data: firma } = useFirmendaten();
+  const { data: mahnEinstellungen } = useMahnEinstellungen();
   const send = useSendEmail();
 
   const passendeVorlagen = useMemo(
