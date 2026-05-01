@@ -70,15 +70,12 @@ export function DokumentUploader({ compact, kundeId, objektId }: Props) {
     return (
       <>
         {hidden}
-        <button
-          type="button"
+        <PrimaryAction
+          icon={Upload}
+          label={busy ? "Wird hochgeladen…" : "Dokument hochladen"}
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:opacity-90 disabled:opacity-60"
-        >
-          <Upload className="h-4 w-4" />
-          {busy ? "Wird hochgeladen…" : "Dokument hochladen"}
-        </button>
+        />
       </>
     );
   }
