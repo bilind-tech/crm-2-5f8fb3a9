@@ -86,6 +86,7 @@ export function EmailVersandDialog({
   rechnung,
   pdfBlobUrl,
   pdfDateiname,
+  pdfStatus = "ready",
   onSent,
   mahnStufe,
   vorbelegteVorlageId,
