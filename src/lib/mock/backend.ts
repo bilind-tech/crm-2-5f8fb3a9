@@ -1044,7 +1044,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     if (belegTyp) liste = liste.filter((v) => v.belegTyp === belegTyp);
     result = liste.sort((a, b) => (b.versendetAm ?? "").localeCompare(a.versendetAm ?? ""));
   } else if (m === "POST" && match(path, "/email/versand")) {
-    const v = body as Partial<EmailVersand>;
+    const v = body as Partial<EmailVersand> & { mahnStufe?: MahnStufe };
     // Mock: 90% Erfolg, 10% zufälliger Fehler — Spinner bleibt sichtbar
     await new Promise((r) => setTimeout(r, 1200));
     const erfolgreich = Math.random() > 0.1;
@@ -1075,7 +1075,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     };
     d.emailVersand.unshift(eintrag);
 
-    // Bei Erfolg: Beleg-Status hochziehen
+    // Bei Erfolg: Beleg-Status hochziehen + ggf. MahnVorgang anlegen
     if (erfolgreich && eintrag.belegId) {
       if (eintrag.belegTyp === "angebot") {
         const a = d.angebote.find((x) => x.id === eintrag.belegId);
@@ -1085,17 +1085,41 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
         }
       } else if (eintrag.belegTyp === "rechnung") {
         const r = d.rechnungen.find((x) => x.id === eintrag.belegId);
-        if (r && r.status === "entwurf") {
-          r.status = "versendet";
-          r.versendetAm = now();
+        if (r) {
+          if (r.status === "entwurf") {
+            r.status = "versendet";
+            r.versendetAm = now();
+          }
+          // Mahnung? → MahnVorgang anlegen
+          if (v.mahnStufe) {
+            const stufeConfig = d.mahnung.stufen.find((s) => s.stufe === v.mahnStufe);
+            if (stufeConfig) {
+              const vorgang: MahnVorgang = {
+                id: uuid(),
+                rechnungId: r.id,
+                stufe: v.mahnStufe,
+                versendetAm: now(),
+                neueFrist: berechneNeueFrist(stufeConfig),
+                gebuehr: stufeConfig.gebuehr,
+                emailVersandId: eintrag.id,
+              };
+              if (!r.mahnungen) r.mahnungen = [];
+              r.mahnungen.push(vorgang);
+              // Pause aufheben (sie wurde durch aktive Mahnung übersteuert)
+              r.mahnPausiertBis = undefined;
+            }
+          }
         }
       }
     }
 
     if (erfolgreich) {
+      const istMahnung = !!v.mahnStufe;
       logAktivitaet(
         eintrag.belegTyp === "rechnung" ? "rechnung_versendet" : "angebot_versendet",
-        `E-Mail an ${eintrag.empfaenger.join(", ")} versendet · ${eintrag.betreff}`,
+        istMahnung
+          ? `Mahnung Stufe ${v.mahnStufe} an ${eintrag.empfaenger.join(", ")} versendet · ${eintrag.betreff}`
+          : `E-Mail an ${eintrag.empfaenger.join(", ")} versendet · ${eintrag.betreff}`,
         eintrag.belegId ? { typ: eintrag.belegTyp, id: eintrag.belegId } : undefined,
       );
     }
@@ -1105,6 +1129,45 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
       throw new ApiError(eintrag.fehlerGrund ?? "Versand fehlgeschlagen", 502, eintrag);
     }
     result = eintrag;
+  }
+
+  // ---- Mahnwesen ----
+  else if (m === "GET" && match(path, "/einstellungen/mahnung")) {
+    result = d.mahnung;
+  } else if (m === "PATCH" && match(path, "/einstellungen/mahnung")) {
+    Object.assign(d.mahnung, body);
+    logAktivitaet("einstellung_geaendert", "Mahn-Einstellungen aktualisiert");
+    persist();
+    result = d.mahnung;
+  } else if (matchRoute(m, path, "POST", "/rechnungen/:id/mahnung-pausieren")) {
+    const id = match(path, "/rechnungen/:id/mahnung-pausieren")!.id;
+    const r = d.rechnungen.find((x) => x.id === id);
+    if (!r) throw new ApiError("Rechnung nicht gefunden", 404);
+    const { bis } = (body as { bis?: string }) ?? {};
+    r.mahnPausiertBis = bis;
+    logAktivitaet(
+      "einstellung_geaendert",
+      bis
+        ? `Mahnverfahren für ${r.nummer} pausiert bis ${bis}`
+        : `Mahn-Pause für ${r.nummer} aufgehoben`,
+      { typ: "rechnung", id: r.id },
+    );
+    persist();
+    result = r;
+  } else if (matchRoute(m, path, "POST", "/rechnungen/:id/inkasso-markieren")) {
+    const id = match(path, "/rechnungen/:id/inkasso-markieren")!.id;
+    const r = d.rechnungen.find((x) => x.id === id);
+    if (!r) throw new ApiError("Rechnung nicht gefunden", 404);
+    r.inkassoMarkiert = !r.inkassoMarkiert;
+    logAktivitaet(
+      "einstellung_geaendert",
+      r.inkassoMarkiert
+        ? `${r.nummer} für Inkasso-Übergabe markiert`
+        : `Inkasso-Markierung von ${r.nummer} entfernt`,
+      { typ: "rechnung", id: r.id },
+    );
+    persist();
+    result = r;
   }
 
   // ---- Backup ----
