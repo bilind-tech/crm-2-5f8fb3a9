@@ -81,18 +81,26 @@ function Page() {
           </thead>
           <tbody>
             {filtered.map((o) => (
-              <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+              <tr
+                key={o.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate({ to: "/objekte/$id", params: { id: o.id } })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate({ to: "/objekte/$id", params: { id: o.id } });
+                  }
+                }}
+                className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/40 focus:bg-muted/40 focus:outline-none"
+              >
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{o.nummer}</td>
-                <td className="px-4 py-3 font-medium">
-                  <Link to="/objekte/$id" params={{ id: o.id }} className="hover:text-primary">{o.name}</Link>
-                </td>
+                <td className="px-4 py-3 font-medium">{o.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{o.ort ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground capitalize">{o.frequenz.replace("_", " ")}</td>
                 <td className="px-4 py-3 text-right">{o.qmZuReinigen ?? "—"}</td>
                 <td className="px-4 py-3 text-right">
-                  <Link to="/objekte/$id" params={{ id: o.id }} className="inline-flex rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-                    <ChevronRight className="h-4 w-4" />
-                  </Link>
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
                 </td>
               </tr>
             ))}
