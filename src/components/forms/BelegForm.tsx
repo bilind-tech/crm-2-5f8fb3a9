@@ -242,15 +242,17 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
                   value={r.menge}
                   onChange={(e) => updateRow(i, { menge: Number(e.target.value) || 0 })}
                 />
-                <select
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                <Select
                   value={r.einheit}
-                  onChange={(e) => updateRow(i, { einheit: e.target.value as Einheit })}
+                  onValueChange={(v) => updateRow(i, { einheit: v as Einheit })}
                 >
-                  {EINHEITEN.map((e) => (
-                    <option key={e.value} value={e.value}>{e.label}</option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EINHEITEN.map((u) => (
+                      <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input
                   className="h-9 text-right"
                   type="number"
