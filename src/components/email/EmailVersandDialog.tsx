@@ -11,7 +11,7 @@
 //   />
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Paperclip, X, Loader2, AlertCircle, Code2, Eye, Pencil } from "lucide-react";
+import { Send, Mail, Paperclip, X, Loader2, AlertCircle, Code2, Eye, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 import {
