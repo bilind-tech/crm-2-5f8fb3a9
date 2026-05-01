@@ -12,6 +12,7 @@ export const Route = createFileRoute("/objekte")({ component: Page });
 
 function Page() {
   const { data: alle = [] } = useObjekte();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
