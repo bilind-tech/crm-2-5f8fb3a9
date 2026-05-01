@@ -84,10 +84,8 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Angebote"
         title="Angebote"
         subtitle="Angebote erstellen, versenden und nachverfolgen."
-        hint="Aus Angeboten lassen sich per Klick Rechnungen generieren."
         actions={
           <PrimaryAction onClick={() => setOpen(true)} label="Neues Angebot" />
         }

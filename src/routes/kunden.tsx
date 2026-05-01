@@ -46,7 +46,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Kunden"
         title="Kunden"
         subtitle="Stammdaten deiner Kunden zentral verwalten."
         actions={

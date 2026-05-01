@@ -66,7 +66,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Vertrieb & Abrechnung / Zahlungseingänge"
         title="Zahlungseingänge"
         subtitle="Bank-Umsätze importieren, prüfen und Rechnungen zuordnen."
         actions={

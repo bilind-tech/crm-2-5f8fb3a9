@@ -39,7 +39,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Objekte"
         title="Objekte"
         subtitle="Reinigungsobjekte deiner Kunden mit Frequenz und Zugang."
         actions={

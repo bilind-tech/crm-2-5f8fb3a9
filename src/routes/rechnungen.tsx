@@ -96,7 +96,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb="Rechnungen"
         title="Rechnungen"
         subtitle="Rechnungen erstellen, Zahlungen erfassen, Mahnungen senden."
         actions={
