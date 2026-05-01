@@ -1,12 +1,6 @@
-type Crumb = { label: string; to?: string };
-
 interface Props {
   title: string;
   subtitle?: React.ReactNode;
-  /** @deprecated wird nicht mehr angezeigt — Prop bleibt für Rückwärtskompatibilität */
-  breadcrumb?: string | Crumb[];
-  /** @deprecated wird nicht mehr angezeigt */
-  hint?: string;
   actions?: React.ReactNode;
 }
 
