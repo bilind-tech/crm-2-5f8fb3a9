@@ -28,6 +28,9 @@ import type {
   Firmendaten,
   ID,
   Kunde,
+  MahnEinstellungen,
+  MahnStufe,
+  MahnVorgang,
   Notiz,
   Nummernkreise,
   Objekt,
@@ -45,8 +48,9 @@ import type {
 } from "@/lib/api/types";
 import { ApiError } from "@/lib/api/client";
 import { seed } from "@/lib/mock/seed";
+import { berechneNeueFrist } from "@/lib/mahnung/regeln";
 
-const STORAGE_KEY = "mcc_mock_db_v5";
+const STORAGE_KEY = "mcc_mock_db_v6";
 
 interface DB {
   unlocked: boolean;
