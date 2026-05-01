@@ -52,6 +52,7 @@ function Page() {
   const loesche = useDeleteZahlungseingang();
   const ignoriere = useIgnoriereZahlungseingang();
   const loeseZuordnung = useLoeseZuordnung();
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const liste = useMemo(() => {
     return alle.filter((z) => filter === "alle" || z.status === filter);
@@ -187,13 +188,20 @@ function Page() {
                     onSuccess: () => toast.success("Zuordnung gelöst"),
                   })
                 }
-                onLoeschen={() => {
-                  if (confirm("Eingang wirklich löschen? Verknüpfte Zahlungen werden entfernt.")) {
-                    loesche.mutate(z.id, {
-                      onSuccess: () => toast.success("Eingang gelöscht"),
-                    });
-                  }
-                }}
+                onLoeschen={() =>
+                  confirm(
+                    {
+                      title: "Eingang löschen?",
+                      description: "Verknüpfte Zahlungen auf der Rechnung werden ebenfalls entfernt.",
+                      variant: "destructive",
+                      confirmLabel: "Löschen",
+                    },
+                    () =>
+                      loesche.mutate(z.id, {
+                        onSuccess: () => toast.success("Eingang gelöscht"),
+                      }),
+                  )
+                }
               />
             ))}
           </ul>
