@@ -1,156 +1,146 @@
-## Phase B — E-Mail-Versand (Frontend-Only, Pi-Backend folgt später)
 
-Ziel: Vollständiger E-Mail-Workflow im UI mit Vorschau, Vorlagen, Signaturen, Teilzahlung der Empfänger-Liste, PDF-Anhang, Status-Anzeige, Versand-Historie. Kein echter SMTP-Versand jetzt — der wird später im Pi-Backend (nodemailer + Strato) ergänzt. Im Frontend simulieren wir den Versand mit dem Mock-Backend, damit alle UI-Zustände (Spinner, Erfolg, Fehler) sichtbar sind.
+# Phase C — Mahnwesen (Frontend + Mock)
 
----
+## Was Mahnwesen heißt — kurz
 
-### 1. Datenmodell (im Mock-Backend / `src/lib/api/types.ts`)
+Wenn ein Kunde eine Rechnung nicht zahlt, erinnerst du ihn nacheinander höflicher → bestimmter → letzter. Heute hast du **eine** Mahn-Vorlage und einen Button „Mahnung senden". Das reicht nicht: du brauchst Stufen, automatische Erkennung wer dran ist, und Übersicht, damit nichts durchrutscht.
 
-**EmailVorlage**
-- `id`, `name` (z. B. „Angebot Standard")
-- `betreff` (mit `{{platzhalter}}`)
-- `koerperHtml` (HTML, vom User gepflegt)
-- `koerperText` (automatisch aus HTML abgeleitet als Plain-Text-Fallback)
-- `kontext`: `"angebot" | "rechnung" | "mahnung" | "allgemein"`
-- `istStandard` (boolean — pro Kontext genau eine)
-- `erstelltAm`, `aktualisiertAm`
+## Ziel von Phase C
 
-**EmailSignatur**
-- `id`, `name` (z. B. „Geschäftsführung", „Buchhaltung")
-- `html` (HTML mit eingebettetem `<img>` für Logo/Bild — Bild später als Base64/CID, jetzt als Platzhalter-URL)
-- `istStandard` (boolean)
-
-**EmailVersand** (Historie)
-- `id`, `belegId` (Angebot/Rechnung), `belegTyp`
-- `empfaenger[]`, `cc[]`, `bcc[]`
-- `betreff`, `koerperHtml`
-- `vorlageId`, `signaturId`
-- `anhaenge[]` (`{ name, sizeBytes }`)
-- `status`: `"queued" | "sending" | "sent" | "failed"`
-- `versendetAm`, `fehlerGrund`
-- `messageId` (später vom SMTP)
-
-**SmtpEinstellung** (verschlüsselt im Pi gespeichert — Frontend zeigt nur „verbunden / nicht verbunden")
-- Felder: `host`, `port`, `username`, `passwortGesetzt: boolean` (NIE das Passwort zurückliefern), `absenderName`, `absenderEmail`, `tls`
+1. **3 Mahnstufen** statt einer (Erinnerung → 1. Mahnung → 2. Mahnung)
+2. **Automatik:** Rechnungen werden selbst „überfällig", wenn Fälligkeitsdatum überschritten — ohne dass du klickst
+3. **Mahn-Dashboard:** eine Seite, die dir zeigt „diese 7 Rechnungen sind dran" mit jeweils der passenden Stufe
+4. **Historie pro Rechnung:** wann wurde welche Stufe versendet, mit welcher Frist
+5. **Mahngebühren** optional pro Stufe (z.B. 5 € ab Stufe 2)
 
 ---
 
-### 2. Platzhalter-System (`src/lib/email/placeholders.ts`)
+## Konzept: Die 3 Stufen
 
-Reine Frontend-Funktion `replacePlaceholders(text, context)`:
-- `{{kunde.firmenname}}`, `{{kunde.vorname}}`, `{{kunde.nachname}}`, `{{kunde.anrede}}`
-- `{{angebot.nummer}}`, `{{angebot.datum}}`, `{{angebot.gueltigBis}}`, `{{angebot.summe}}`
-- `{{rechnung.nummer}}`, `{{rechnung.datum}}`, `{{rechnung.faellig}}`, `{{rechnung.summe}}`, `{{rechnung.offen}}`
-- `{{firma.name}}`, `{{firma.telefon}}`
+| Stufe | Wann fällig | Ton | Mahngebühr (Default) | Neue Frist |
+|---|---|---|---|---|
+| **0 · Zahlungserinnerung** | 3 Tage nach Fälligkeit | freundlich | 0 € | +7 Tage |
+| **1 · 1. Mahnung** | 10 Tage nach Erinnerung | bestimmt | 5 € | +7 Tage |
+| **2 · 2. Mahnung (letzte)** | 10 Tage nach 1. Mahnung | letzte Aufforderung | 10 € | +7 Tage |
 
-Wird sowohl im Betreff als auch im HTML-Body ausgeführt, BEVOR der Vorschau-Dialog rendert. Unbekannte Platzhalter werden rot/gelb markiert (UI-Hinweis).
+Alle Werte (Tage, Gebühren, Texte) **konfigurierbar in Einstellungen**.
 
----
-
-### 3. UI-Komponenten
-
-**`src/components/email/EmailVersandDialog.tsx`** (Hauptdialog — modal, mittig, schlicht `bg-background`, KEIN Gradient, KEIN Sparkle-Icon)
-
-Aufbau:
-- **Empfänger-Block**: An / CC / BCC als Chip-Inputs. Vorausgefüllt mit Kunden-E-Mail aus Beleg, frei änder-/erweiterbar.
-- **Vorlagen-Dropdown**: Lädt passende Vorlagen für den Beleg-Typ. Wechseln befüllt Betreff + Body neu (mit Bestätigung wenn schon editiert).
-- **Signatur-Dropdown**: Wählt Signatur, wird unten an HTML angehängt.
-- **Betreff-Feld** (einzeiliger Input mit Platzhalter-Highlight).
-- **Body-Editor**: Tabs „Visuell" (rich-text via `react-simple-wysiwyg` oder `tiptap` minimal) + „HTML" (rohes Code-Edit mit `<textarea>` und Monospace-Font). Beide bleiben synchron.
-- **Anhänge-Liste**: PDF des Belegs ist standardmäßig dran (mit Dateiname + Größe). „×"-Button zum Entfernen. „+ Datei anhängen" für später (Stub).
-- **Vorschau-Bereich** (rechte Spalte oder Tab): Rendert finalen Body in einem `<iframe sandbox>` mit aufgelösten Platzhaltern und angehängter Signatur. Zeigt genau, was beim Empfänger ankommt.
-- **Footer**: „Abbrechen" + Primary-Button „Jetzt senden".
-
-**Versand-State-Machine** (im Dialog):
-- `idle` → Button aktiv „Jetzt senden"
-- `sending` → Button disabled, Spinner + Text „Wird versendet …"
-- `sent` → grünes Banner „E-Mail erfolgreich versendet an [empfänger]" mit Häkchen, nach 2 s auto-close
-- `failed` → rotes Banner mit `fehlerGrund`, Button wird zu „Erneut senden"
-
-**`src/components/email/EmailVersandHistorie.tsx`**
-- Tabelle/Liste auf Beleg-Detailseite: „Wann · An · Status (Chip) · Betreff · 👁 Vorschau"
-- Klick auf Zeile öffnet Read-only-Vorschau mit dem damaligen Body
-- Status-Chip: grün=sent, grau=queued, blau=sending, rot=failed
-- Zählt in den `FlowBar` ein (Status „Versendet" wird aktiv, sobald ≥1 erfolgreicher Versand existiert)
+Nach Stufe 2: Rechnung bekommt Status „Inkasso-Übergabe vorgeschlagen" — keine weitere automatische Mahnung. Du entscheidest manuell.
 
 ---
 
-### 4. Einstellungen-Seite — neue Abschnitte
+## Was die UI macht
 
-In `src/routes/einstellungen.tsx` zwei neue Karten:
+### 1. Mahn-Dashboard (neue Seite `/mahnungen`)
 
-**E-Mail-Vorlagen**
-- Liste aller Vorlagen, gruppiert nach Kontext
-- „+ Neue Vorlage" → Dialog mit Name, Kontext-Auswahl, Betreff, HTML-Editor, „Als Standard für Kontext setzen"-Checkbox
-- Bearbeiten / Duplizieren / Löschen pro Vorlage
-- Live-Vorschau-Tab mit Beispieldaten
+Zentrale Übersicht — die wichtigste neue Seite:
 
-**E-Mail-Signaturen**
-- Liste aller Signaturen
-- Editor (HTML), Bild-Upload-Stub („Bild kommt später vom Pi"), Standard-Marker
-- Vorschau-Rendering im sicheren iframe
+```text
+┌────────────────────────────────────────────────────┐
+│ Mahnwesen                                          │
+│                                                    │
+│ Heute fällig: 7 Rechnungen · Summe offen: 4.230 € │
+│                                                    │
+│ ▸ Erinnerung (3)         ▸ 1. Mahnung (2)         │
+│ ▸ 2. Mahnung (1)         ▸ Inkasso-reif (1)       │
+│                                                    │
+│ ┌──────────────────────────────────────────────┐  │
+│ │ RE-2025-014 · Müller GmbH                    │  │
+│ │ 850 € · 12 Tage überfällig · → Erinnerung   │  │
+│ │ [Mahnung vorbereiten]                        │  │
+│ ├──────────────────────────────────────────────┤  │
+│ │ RE-2025-009 · Schmidt KG                     │  │
+│ │ 1.200 € · 25 Tage · letzte Mahnung verschickt│  │
+│ │ → für Inkasso vorschlagen                    │  │
+│ └──────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────┘
+```
 
-**SMTP-Verbindung** (separate Karte)
-- Status-Anzeige: grüner Punkt „Verbunden mit Strato (smtp.strato.de:465)" oder grauer „Nicht eingerichtet"
-- Felder: Host, Port, Benutzername, Absender-Name, Absender-Adresse, TLS-Toggle
-- Passwort-Feld: `<input type="password">`, Platzhalter „••••••••" wenn schon gesetzt. Wert wird beim Submit ans Backend geschickt und NIE wieder zurückgeladen. UI-Text: „Passwort wird verschlüsselt im Backend gespeichert und nicht angezeigt."
-- Button „Verbindung testen" (jetzt Mock — später ruft Pi-Endpoint auf)
+Filter nach Stufe, Sortierung nach „am dringendsten zuerst".
 
----
+Sidebar-Eintrag „Mahnungen" mit Badge-Zahl (Anzahl überfällige Rechnungen) — fällt sofort ins Auge.
 
-### 5. Integration in bestehende Detailseiten
+### 2. Rechnungs-Detailseite — erweiterte Mahn-Sektion
 
-**`src/routes/angebote.$id.tsx`**: Primary-Action-Button „Per E-Mail versenden" öffnet `EmailVersandDialog` mit Kontext „angebot", lädt Standard-Vorlage „Angebot Standard". Nach Erfolg: Status → `versendet`, Eintrag in `EmailVersandHistorie`.
+Statt einem einzigen Button:
+- Zeigt nächste fällige Stufe als Primary-Button („1. Mahnung versenden")
+- Mahn-Historie kompakt: „Erinnerung am 12.04. · 1. Mahnung am 22.04."
+- Manuell überspringen oder Stufe wiederholen möglich (Dropdown)
 
-**`src/routes/rechnungen.$id.tsx`**: Gleiches Muster, Kontext „rechnung". Bei überfälligen Rechnungen zusätzlicher Button „Mahnung senden" (Kontext „mahnung").
+### 3. Versand-Dialog (Erweiterung)
 
-**Beide Seiten**: Unter dem `FlowBar` neue Sektion „E-Mail-Versand" mit `EmailVersandHistorie`.
+Beim Mahnungs-Versand:
+- Dropdown „Stufe" oben (vorausgewählt: nächste fällige)
+- Vorlage wechselt automatisch mit Stufe
+- Mahngebühr-Hinweis sichtbar („+ 5 € Mahngebühr")
+- Neue Frist-Datum vorausgefüllt
 
----
+### 4. Einstellungen → neuer Tab „Mahnwesen"
 
-### 6. Mock-Backend-Verhalten (`src/lib/mock/backend.ts`)
-
-`sendEmail()` simuliert:
-- 1.2 s Delay (Spinner sichtbar)
-- 90 % Erfolg, 10 % Zufalls-Fehler („SMTP-Verbindung fehlgeschlagen", „Empfänger ungültig") — damit Fehler-UI testbar ist
-- Speichert `EmailVersand`-Eintrag, aktualisiert Beleg-Status
-
-Vorlagen + Signaturen + SMTP-Settings werden im Mock-Backend persistiert (in-memory Map mit localStorage-Spiegel), damit nichts verloren geht beim Reload.
-
----
-
-### 7. Memory-Updates
-
-Neuer Eintrag `mem://features/email-versand.md`:
-- Versand-Workflow (Vorschau → Senden → Status)
-- Datenmodell (Vorlagen, Signaturen, Historie, SMTP)
-- Platzhalter-Syntax `{{...}}`
-- HTML-Body + automatischer Plain-Text-Fallback
-- PDF-Anhang automatisch, im Dialog entfernbar
-- SMTP-Passwort: nur einmal eingebbar, verschlüsselt im Backend, NIE im UI lesbar
-- Pi-Backend-TODO: nodemailer + Strato + AES-Verschlüsselung der SMTP-Credentials + DKIM/SPF-Doku
-
-Index aktualisieren.
+- 3 Stufen konfigurieren: Bezeichnung, Tage, Gebühr, Frist
+- Auto-Vorschlag an/aus (wenn aus: Mahnungen rein manuell)
+- Pro Stufe eigene E-Mail-Vorlage zuordnen
 
 ---
 
-### 8. Aus dem Plan ausgeklammert (kommt später im Backend)
+## Logik-Regeln (für die Automatik)
 
-- Tatsächlicher SMTP-Versand via nodemailer
-- AES-Verschlüsselung des SMTP-Passworts auf dem Pi
-- Bounce-/Delivery-Tracking
-- Datei-Upload für Signatur-Bilder (Base64 → CID-Embedding)
-- Mahnungs-Eskalation (1./2./3. Mahnung mit Fristen)
+- Status `versendet` + Fälligkeit überschritten → wird automatisch `ueberfaellig`
+- Wenn Zahlung erfasst (auch teilweise) → Mahnstufe pausiert bis nächste Fälligkeit der Restsumme
+- Wenn voll bezahlt → Mahnkette beendet, alle Mahnungen bleiben in Historie
+- Storniert → Mahnkette beendet
+- „Tage seit Fälligkeit" wird live berechnet, nicht gespeichert
 
 ---
 
-### Reihenfolge der Umsetzung (in einem Rutsch)
+## Sichtbare Änderungen — Liste
 
-1. Datentypen + Mock-Backend-Endpoints
-2. Platzhalter-Engine
-3. `EmailVersandDialog` mit allen Sub-Komponenten
-4. `EmailVersandHistorie` + Integration in Beleg-Seiten
-5. Einstellungen: Vorlagen + Signaturen + SMTP-Karten
-6. Memory-Files + Index
+**Neue Dateien**
+- `src/routes/mahnungen.tsx` — Dashboard
+- `src/components/mahnung/MahnDashboard.tsx`
+- `src/components/mahnung/MahnHistorie.tsx`
+- `src/components/mahnung/MahnStufenEinstellungen.tsx`
+- `src/lib/mahnung/regeln.ts` — Berechnet aktuelle Stufe pro Rechnung
 
-Sag **„los, Phase B"** und ich baue alles. Wenn du noch was umstellen willst (z. B. Editor-Bibliothek, Reihenfolge, Mock-Fehlerquote), sag's jetzt.
+**Erweiterte Dateien**
+- `types.ts` — neue Felder: `mahnungen[]` auf Rechnung, `MahnStufe`-Konfig
+- `seed.ts` — 3 Standard-Vorlagen, Standard-Stufen-Config, Beispiel-überfällige Rechnungen
+- `backend.ts` — Endpoints für Mahnstufen-Config, Mahnungs-Versand mit Stufe
+- `useApi.ts` — Hooks für Mahn-Daten
+- `EmailVersandDialog.tsx` — Stufen-Auswahl
+- `rechnungen.$id.tsx` — Mahn-Sektion neu
+- `einstellungen.tsx` — Tab „Mahnwesen"
+- `AppSidebar.tsx` — neuer Eintrag mit Badge
+- `index.tsx` (Dashboard) — Kachel „Mahnungen offen"
+
+---
+
+## Technische Details
+
+- **Stufenermittlung** (`bestimmeAktuelleStufe(rechnung, config)`): rein berechnet aus `faelligkeitsdatum`, Mahn-Historie und Konfiguration. Keine doppelte Datenhaltung.
+- **MahnVorgang**-Datenmodell: `{ id, rechnungId, stufe: 0|1|2, versendetAm, neueFrist, gebuehr, emailVersandId }` — referenziert `EmailVersand` aus Phase B für Audit-Trail.
+- **Backend-Mock** simuliert „heute = Datum X" mittels existierender `now()`-Helper, sodass Beispieldaten realistisch überfällig wirken.
+- **Mahngebühr** wird **nicht** in Rechnungs-Positionen geschrieben (Original bleibt unverändert), sondern nur im Mahn-Brief-Text als zusätzlicher Betrag angezeigt — sauberer für Buchhaltung.
+- **Keine Cron-Jobs nötig im Frontend**: Auto-Status-Update läuft beim App-Öffnen / Query-Refresh über `regeln.ts`. Echte Cron kommt im Backend (Pi).
+
+---
+
+## Was NICHT in Phase C ist
+
+- Echter E-Mail-Versand (kommt im Backend)
+- Inkasso-API-Anbindung (manuell, Status-Markierung reicht)
+- Verzugszinsen-Berechnung (kann in Phase F nachgereicht werden, falls gewünscht)
+- SMS-Mahnungen
+
+---
+
+## Reihenfolge der Umsetzung
+
+1. Datenmodell + Mock-Backend + Regeln-Engine
+2. Einstellungs-Tab „Mahnwesen" mit 3 Stufen
+3. 3 Standard-Vorlagen in Seed
+4. Mahn-Dashboard `/mahnungen` + Sidebar-Badge
+5. Rechnungs-Detailseite Mahn-Sektion + Historie
+6. Versand-Dialog Stufen-Erweiterung
+
+Wenn der Plan passt, schreibe „los Phase C" und ich baue alles in einem Rutsch.
