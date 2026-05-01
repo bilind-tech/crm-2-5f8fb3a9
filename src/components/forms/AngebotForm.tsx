@@ -74,6 +74,7 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
         eigenesIntro: optionen.eigenesIntroAktiv ? optionen.eigenesIntro : undefined,
         eigenesOutro: optionen.eigenesOutroAktiv ? optionen.eigenesOutro : undefined,
         wiederkehrend: optionen.wiederkehrend,
+        wiederkehrendDetails: optionen.wiederkehrend ? optionen.wiederkehrendDetails : undefined,
       },
     });
     toast.success("Angebot angelegt", { description: `${a.nummer} • erfolgreich gespeichert.` });
