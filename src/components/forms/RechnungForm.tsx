@@ -86,6 +86,7 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
         eigenesIntro: optionen.eigenesIntroAktiv ? optionen.eigenesIntro : undefined,
         eigenesOutro: optionen.eigenesOutroAktiv ? optionen.eigenesOutro : undefined,
         wiederkehrend: optionen.wiederkehrend,
+        wiederkehrendDetails: optionen.wiederkehrend ? optionen.wiederkehrendDetails : undefined,
       },
     });
     toast.success("Rechnung angelegt", { description: `${r.nummer} • erfolgreich gespeichert.` });
