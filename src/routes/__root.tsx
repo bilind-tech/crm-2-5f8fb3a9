@@ -49,7 +49,7 @@ function RootComponent() {
       <ThemeProvider>
         <AuthProvider>
           <Shell />
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-center" />
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
