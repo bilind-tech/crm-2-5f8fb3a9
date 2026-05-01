@@ -1,9 +1,10 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Repeat, Pause, Inbox, Eye, ChevronRight } from "lucide-react";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { SlideOver } from "@/components/ui/slide-over";
+import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { DauerauftragForm } from "@/components/forms/DauerauftragForm";
 import { useDauerauftraege, useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
 import { useKunden } from "@/hooks/useApi";
@@ -22,6 +23,7 @@ function Layout() {
 
 function Liste() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const { data: alle = [] } = useDauerauftraege();
   const { data: kunden = [] } = useKunden();
   const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
@@ -76,7 +78,47 @@ function Liste() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      {/* Mobil: Card-View */}
+      <div className="space-y-2 md:hidden">
+        {alle.map((da) => {
+          const s = summenRechnung(da.positionen, da.rabattGesamt);
+          const naechste = berechneNaechsteLauftermine(da, heute, 1)[0];
+          return (
+            <MobileListCard
+              key={da.id}
+              onClick={() => navigate({ to: "/dauerauftraege/$id", params: { id: da.id } })}
+              title={da.bezeichnung}
+              subtitle={kundeName(da.kundeId)}
+              meta={
+                <>
+                  <span className="font-mono">{da.nummer}</span>
+                  <span>· {da.frequenz}</span>
+                  {naechste && <span>· nächst. {formatDate(naechste.toISOString().slice(0, 10))}</span>}
+                </>
+              }
+              trailing={formatEUR(s.brutto)}
+              badge={<StatusBadge status={da.status} modus={da.modus} />}
+              actions={
+                <Link
+                  to="/dauerauftraege/$id"
+                  params={{ id: da.id }}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  <Eye className="h-3.5 w-3.5" /> Öffnen
+                </Link>
+              }
+            />
+          );
+        })}
+        {alle.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            Noch keine Daueraufträge — <button onClick={() => setOpen(true)} className="text-primary hover:underline">jetzt anlegen</button>.
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: Tabelle */}
+      <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

@@ -13,6 +13,18 @@ html, body {
   font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Mobil: Toaster mittig oben halten und Breite cappen */
+@media (max-width: 640px) {
+  [data-sonner-toaster] {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: calc(100vw - 1.5rem) !important;
+    max-width: 24rem;
+  }
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -266,12 +278,11 @@ h1, h2, h3, h4, h5, h6 {
   to   { opacity: 0; }
 }
 .quick-create-dialog {
-  /* Radix-Defaults (slide/zoom) komplett deaktivieren */
+  /* Radix-Slide/Zoom deaktivieren — Positionierung von Radix beibehalten */
   animation: none !important;
-  transform: translate(-50%, -50%) !important;
 }
 .quick-create-dialog[data-state="open"] {
-  animation: quickCreateFadeIn 110ms ease-out !important;
+  animation: quickCreateFadeIn 120ms ease-out !important;
 }
 .quick-create-dialog[data-state="closed"] {
   animation: quickCreateFadeOut 90ms ease-in !important;
