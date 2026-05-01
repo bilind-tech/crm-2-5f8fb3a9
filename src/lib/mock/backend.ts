@@ -43,7 +43,7 @@ import type {
 import { ApiError } from "@/lib/api/client";
 import { seed } from "@/lib/mock/seed";
 
-const STORAGE_KEY = "mcc_mock_db_v3";
+const STORAGE_KEY = "mcc_mock_db_v4";
 
 interface DB {
   unlocked: boolean;
