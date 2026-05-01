@@ -494,7 +494,7 @@ export function SmtpTab() {
   });
 
   // Synchronisiere wenn Daten ankommen
-  useState(() => {
+  useEffect(() => {
     if (smtp) {
       setForm((f) => ({
         server: smtp.server,
@@ -506,7 +506,7 @@ export function SmtpTab() {
         passwort: f.passwort,
       }));
     }
-  });
+  }, [smtp]);
 
   if (!smtp) return <p className="text-sm text-muted-foreground">Lade …</p>;
 
