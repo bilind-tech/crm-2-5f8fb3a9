@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +11,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SmartInput, smartValue } from "@/components/ui/smart-input";
 import { useCreateKunde } from "@/hooks/useApi";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import type { Kunde } from "@/lib/api/types";
+
+const PHONE_PREFIX = "+49 ";
+const WEB_PREFIX = "https://";
+
+function vorschlagKuerzel(name: string): string {
+  if (!name.trim()) return "";
+  const woerter = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (woerter.length === 0) return "";
+  if (woerter.length === 1) return woerter[0].slice(0, 4).toUpperCase();
+  return woerter
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+}
+
+function sanitizeKuerzel(v: string): string {
+  return v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+}
 
 interface Props {
   onClose: () => void;
@@ -25,6 +50,8 @@ interface FormState {
   typ: "firma" | "privat";
   status: "aktiv" | "interessent" | "inaktiv";
   firmenname: string;
+  kuerzel: string;
+  kuerzelManuell: boolean;
   anrede: "" | "herr" | "frau" | "divers" | "keine";
   vorname: string;
   nachname: string;
@@ -49,6 +76,8 @@ const initial: FormState = {
   typ: "firma",
   status: "aktiv",
   firmenname: "",
+  kuerzel: "",
+  kuerzelManuell: false,
   anrede: "",
   vorname: "",
   nachname: "",
