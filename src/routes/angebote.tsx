@@ -5,7 +5,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAngebote, useDeleteAngebot, useKunde } from "@/hooks/useApi";
+import { useAngebote, useDeleteAngebot, useKunde, useUpdateAngebot } from "@/hooks/useApi";
+import { toast } from "sonner";
 import { useAngebotPdf } from "@/hooks/useBelegPdf";
 import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { formatEUR, formatDate } from "@/lib/format";
