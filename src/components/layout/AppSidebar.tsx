@@ -9,7 +9,6 @@ import {
   Lock,
   Bell,
   Repeat,
-  Wallet,
 } from "lucide-react";
 import {
   Sidebar,
@@ -28,7 +27,6 @@ import logo from "@/assets/logo.png";
 import { useAuth } from "@/lib/auth";
 import { useMahnZaehler } from "@/hooks/useMahnZaehler";
 import { useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
-import { useZahlungseingaenge } from "@/hooks/useZahlungseingaenge";
 import { useRechnungen } from "@/hooks/useApi";
 import { cn } from "@/lib/utils";
 
@@ -70,13 +68,6 @@ export function AppSidebar() {
       url: "/dauerauftraege",
       icon: Repeat,
       badge: offeneEntwuerfe,
-      badgeTone: "primary",
-    },
-    {
-      title: "Zahlungseingänge",
-      url: "/zahlungseingaenge",
-      icon: Wallet,
-      badge: zeOffen.length,
       badgeTone: "primary",
     },
     {
