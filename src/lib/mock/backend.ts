@@ -775,6 +775,20 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     logAktivitaet("dokument_hochgeladen", `Dokument ${neu.titel} hochgeladen`, { typ: "dokument", id: neu.id });
     persist();
     result = neu;
+  } else if (matchRoute(m, path, "PATCH", "/dokumente/:id")) {
+    const id = match(path, "/dokumente/:id")!.id;
+    const dok = d.dokumente.find((x) => x.id === id);
+    if (!dok) throw new ApiError("Dokument nicht gefunden", 404);
+    const patch = body as Partial<Dokument>;
+    Object.assign(dok, patch);
+    // Wenn als erledigt markiert: alle ungelesenen "überfällig"-Benachrichtigungen entfernen
+    if (patch.erledigtAm) {
+      d.benachrichtigungen = d.benachrichtigungen.filter(
+        (b) => !(b.link?.params?.dokumentId === id && !b.gelesen),
+      );
+    }
+    persist();
+    result = dok;
   } else if (matchRoute(m, path, "DELETE", "/dokumente/:id")) {
     const id = match(path, "/dokumente/:id")!.id;
     d.dokumente = d.dokumente.filter((x) => x.id !== id);
