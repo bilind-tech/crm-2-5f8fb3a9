@@ -228,7 +228,45 @@ export function MahnSektion({ rechnung }: Props) {
         )}
       </div>
 
-      {/* E-Mail-Dialog mit mahnStufe */}
+      {/* Confirm-Dialog: einfacher Direkt-Versand über Backend */}
+      <Dialog open={confirmStufe !== null} onOpenChange={(o) => !o && setConfirmStufe(null)}>
+        <DialogContent className="bg-background sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmStufe ? stufenLabel(confirmStufe, einstellungen) : "Mahnung"} senden?
+            </DialogTitle>
+            <DialogDescription>
+              Die E-Mail wird automatisch mit der hinterlegten Vorlage versendet
+              und die Mahnung in der Rechnung erfasst.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              onClick={() => {
+                if (confirmStufe) {
+                  oeffneEigeneVorlage(confirmStufe);
+                  setConfirmStufe(null);
+                }
+              }}
+            >
+              Mit eigener Vorlage senden …
+            </button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setConfirmStufe(null)}>
+                Abbrechen
+              </Button>
+              <Button onClick={handleConfirmVersand} disabled={versenden.isPending}>
+                <Send className="mr-1.5 h-4 w-4" />
+                {versenden.isPending ? "Sende …" : "Senden"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Power-User-Pfad: E-Mail-Editor mit eigener Vorlage */}
       <EmailVersandDialog
         open={emailOpen}
         onOpenChange={setEmailOpen}
