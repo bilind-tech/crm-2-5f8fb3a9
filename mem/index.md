@@ -32,4 +32,5 @@ Teilzahlungen sind Kernfeature: mehrere Zahlungen pro Rechnung, Status leitet si
 - [PDF-Editor](mem://features/pdf-editor) — Eigene Route `/{angebote|rechnungen}/:id/bearbeiten`, links Live-Preview mit Click-to-Edit-Hotspots, rechts Tab-Editor, Autosave
 - [Steuer-Modul](mem://features/steuern) — GmbH Sankt Augustin, Sätze, Hebesätze, Termine, Berechnungsformeln, MVP-Umfang
 - [Kürzel-Eindeutigkeit](mem://features/kuerzel-eindeutigkeit) — Kunden-Kürzel systemweit unique, Backend 409 + Live-Check via /kunden/kuerzel-frei, Submit blockiert bei Konflikt
+- [Backend Step 1 Hardening](mem://features/backend-step1-hardening) — Konstantzeit-Login, Cookie-Refresh, Setup-Token-TTL 24h, Owner-Check Sessions, Patch-Semantik, 10 Vitest grün
 - [Stundenzettel-Iframe](mem://features/stundenzettel-iframe) — CSP/X-Frame-Options, LAN-aus-Cloud, Mixed-Content, Lösungen
