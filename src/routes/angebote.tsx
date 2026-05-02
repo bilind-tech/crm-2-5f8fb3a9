@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAngebote, useDeleteAngebot, useKunde, useUpdateAngebot } from "@/hooks/useApi";
+import { useAngebote, useDeleteAngebot, useKunde, useUpdateAngebot, useRechnungen } from "@/hooks/useApi";
 import { toast } from "sonner";
 import { useAngebotPdf } from "@/hooks/useBelegPdf";
 import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
@@ -15,6 +15,8 @@ import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { SlideOver } from "@/components/ui/slide-over";
 import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { AngebotForm } from "@/components/forms/AngebotForm";
+import { FlowBar } from "@/components/flow/FlowBar";
+import { angebotFlow } from "@/lib/flow/flows";
 import type { Angebot } from "@/lib/api/types";
 import { useConfirm } from "@/hooks/useConfirm";
 
