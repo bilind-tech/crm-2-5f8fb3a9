@@ -64,7 +64,7 @@ describe("Recovery-Code Flow", () => {
     const r = await app.inject({
       method: "POST",
       url: "/auth/setup",
-      payload: { username: "owner", password: "Pa55wort!sicher#1", setupToken },
+      payload: { password: "Pa55wort!sicher#1", setupToken },
     });
     expect(r.statusCode).toBe(200);
     const body = r.json();
@@ -81,7 +81,6 @@ describe("Recovery-Code Flow", () => {
       url: "/auth/recovery/verwenden",
       headers: { "x-forwarded-for": "10.1.1.1" },
       payload: {
-        username: "owner",
         recoveryCode: firstRecovery,
         neuesPasswort: "NeuesPa55w0rt!neu",
       },
@@ -99,7 +98,6 @@ describe("Recovery-Code Flow", () => {
       url: "/auth/recovery/verwenden",
       headers: { "x-forwarded-for": "10.1.1.2" },
       payload: {
-        username: "owner",
         recoveryCode: firstRecovery,
         neuesPasswort: "AndererPa55w0rt!x",
       },
@@ -113,7 +111,7 @@ describe("Recovery-Code Flow", () => {
       method: "POST",
       url: "/auth/login",
       headers: { "x-forwarded-for": "10.1.1.3" },
-      payload: { username: "owner", password: "NeuesPa55w0rt!neu" },
+      payload: { password: "NeuesPa55w0rt!neu" },
     });
     expect(r.statusCode).toBe(200);
     sess = getCookie(r)!;
@@ -139,7 +137,6 @@ describe("Recovery-Code Flow", () => {
       url: "/auth/recovery/verwenden",
       headers: { "x-forwarded-for": "10.1.1.4" },
       payload: {
-        username: "owner",
         recoveryCode: body.recoveryCode,
         neuesPasswort: "WiederNeuPa55!a",
       },

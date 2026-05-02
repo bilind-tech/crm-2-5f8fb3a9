@@ -101,7 +101,6 @@ function useCountdown(targetIso: string | null): string {
 
 function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   const { login, loading } = useAuth();
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [fehler, setFehler] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState<string | null>(null);
@@ -111,7 +110,7 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
     setFehler(null);
     setLockedUntil(null);
     try {
-      await login({ username, password });
+      await login({ password });
     } catch (err) {
       if (err instanceof PiApiError && err.status === 423) {
         const b = err.body as { lockedUntil?: string };
@@ -125,19 +124,18 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   const countdown = useCountdown(lockedUntil);
   const istNochGesperrt = lockedUntil ? new Date(lockedUntil).getTime() > Date.now() : false;
 
-  // Wenn Countdown abgelaufen, Lock zurücksetzen
   useEffect(() => {
     if (lockedUntil && !istNochGesperrt) setLockedUntil(null);
   }, [lockedUntil, istNochGesperrt]);
 
   if (lockedUntil && istNochGesperrt) {
     return (
-      <Wrapper sub="Konto vorübergehend gesperrt.">
+      <Wrapper sub="Vorübergehend gesperrt.">
         <div className="space-y-3 text-sm">
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive">
             <div className="mb-1 flex items-center gap-2 font-semibold">
               <ShieldAlert className="h-4 w-4" />
-              Konto gesperrt
+              Anmeldung gesperrt
             </div>
             <p>
               Zu viele Fehlversuche. Erneut möglich in{" "}
@@ -156,22 +154,17 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   }
 
   return (
-    <Wrapper sub="Bitte mit Benutzer und Passwort anmelden.">
+    <Wrapper sub="Bitte Passwort eingeben.">
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="username">Benutzername</Label>
-          <Input
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoFocus
-            autoComplete="username"
-            required
-          />
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="pw">Passwort</Label>
-          <PasswordInput id="pw" value={password} onChange={setPassword} autoComplete="current-password" />
+          <PasswordInput
+            id="pw"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+            autoFocus
+          />
         </div>
         {fehler && (
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{fehler}</p>
@@ -292,7 +285,6 @@ function RecoveryAnzeige({
 
 function SetupForm() {
   const { setup, loading } = useAuth();
-  const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
   const [setupToken, setSetupToken] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -306,7 +298,7 @@ function SetupForm() {
     e.preventDefault();
     setFehler(null);
     try {
-      const res = await setup({ username, password, setupToken });
+      const res = await setup({ password, setupToken });
       setRecoveryCode(res.recoveryCode);
     } catch (err) {
       if (err instanceof PiApiError) {
@@ -327,11 +319,10 @@ function SetupForm() {
     return (
       <RecoveryAnzeige
         code={recoveryCode}
-        titel="Account angelegt"
+        titel="Passwort gesetzt"
         hinweis="Mit diesem Code kannst du dein Passwort zurücksetzen, falls du es vergisst."
         onWeiter={() => {
           setRecoveryCode(null);
-          // Reload damit URL-Token-Param weg ist und App im logged-in-Modus startet
           window.location.assign("/");
         }}
       />
@@ -339,7 +330,7 @@ function SetupForm() {
   }
 
   return (
-    <Wrapper sub="Ersteinrichtung des Pi-Backends — Owner-Account anlegen.">
+    <Wrapper sub="Ersteinrichtung — Passwort festlegen.">
       <form onSubmit={submit} className="space-y-4">
         <div className="rounded-md border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
           <div className="mb-1 flex items-center gap-1.5 font-semibold">
@@ -348,16 +339,6 @@ function SetupForm() {
           </div>
           Steht im Backend-Log beim ersten Start oder in
           <code className="mx-1">data/keys/setup.token</code>.
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="setup-user">Benutzername</Label>
-          <Input
-            id="setup-user"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            required
-          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="setup-pw">Passwort (min. 12 Zeichen)</Label>
@@ -378,7 +359,7 @@ function SetupForm() {
         )}
         <Button type="submit" className="w-full" disabled={loading}>
           <UserPlus className="mr-2 h-4 w-4" />
-          {loading ? "Einrichten …" : "Account einrichten"}
+          {loading ? "Einrichten …" : "Passwort festlegen"}
         </Button>
       </form>
     </Wrapper>
@@ -386,7 +367,6 @@ function SetupForm() {
 }
 
 function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
-  const [username, setUsername] = useState("");
   const [code, setCode] = useState("");
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -399,7 +379,6 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
     setLoading(true);
     try {
       const res = await piApi.post<{ recoveryCode: string }>("/auth/recovery/verwenden", {
-        username,
         recoveryCode: code,
         neuesPasswort: pw,
       });
@@ -407,7 +386,7 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
     } catch (err) {
       if (err instanceof PiApiError) {
         if (err.status === 422) setFehler("Passwort: min. 12 Zeichen, 1 Ziffer + 1 Sonderzeichen.");
-        else if (err.status === 401) setFehler("Recovery-Code oder Benutzer ungültig.");
+        else if (err.status === 401) setFehler("Recovery-Code ungültig.");
         else if (err.status === 429) setFehler("Zu viele Versuche, bitte warten.");
         else setFehler(err.message);
       } else setFehler(err instanceof Error ? err.message : "Fehler");
@@ -421,7 +400,7 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
       <RecoveryAnzeige
         code={neuerCode}
         titel="Passwort zurückgesetzt"
-        hinweis="Dein altes Recovery-Code ist verbraucht. Hier ist ein neuer Code für die Zukunft."
+        hinweis="Dein alter Recovery-Code ist verbraucht. Hier ist ein neuer Code für die Zukunft."
         onWeiter={onZurueck}
       />
     );
@@ -430,10 +409,6 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
   return (
     <Wrapper sub="Passwort mit Recovery-Code zurücksetzen.">
       <form onSubmit={submit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="rec-user">Benutzername</Label>
-          <Input id="rec-user" value={username} onChange={(e) => setUsername(e.target.value)} required />
-        </div>
         <div className="space-y-2">
           <Label htmlFor="rec-code">Recovery-Code</Label>
           <Input
