@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { getDatabase } from "../db/index.js";
 import { euroToCt, zahlungRowToApi, type ApiZahlung, type DbZahlung } from "./mappers.js";
 import { recomputeRechnungStatus } from "./status.js";
+import { emitBelegMutated } from "./events.js";
 
 export interface ZahlungInput {
   datum?: string;
@@ -32,6 +33,7 @@ export function addZahlung(rechnungId: string, data: ZahlungInput): ApiZahlung |
   });
   tx();
   recomputeRechnungStatus(rechnungId);
+  emitBelegMutated("rechnung", rechnungId);
 
   const row = db
     .prepare(
@@ -49,5 +51,6 @@ export function deleteZahlung(rechnungId: string, zahlungId: string): boolean {
     .run(zahlungId, rechnungId);
   if (result.changes === 0) return false;
   recomputeRechnungStatus(rechnungId);
+  emitBelegMutated("rechnung", rechnungId);
   return true;
 }
