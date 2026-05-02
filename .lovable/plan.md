@@ -1,31 +1,33 @@
 ## Problem
 
-Auf der Kundendetailseite öffnet der Button „Neues Objekt" das `ObjektForm` im `kompakt`-Modus. Aktuell fragt dieser Modus **nur** die Bezeichnung ab — Adresse muss man nachträglich auf der Objekt-Detailseite ergänzen. Das ist umständlich, weil Objekte praktisch immer eine Adresse haben.
+Auf den Seiten **Rechnungen** und **Angebote** wird die Aktions-Spalte (mit E-Mail-, Bezahlt-, Lösch-Button etc.) bei mittlerer Bildschirmbreite (Desktop-Tabelle ab `md`, also 768–1100 px) zusammengedrückt oder ganz abgeschnitten. Ursache:
+
+- Die Tabelle nutzt `w-full` → sie passt sich der Container-Breite an, statt eine echte Mindestbreite zu beanspruchen.
+- Es gibt zwar einen `overflow-x-auto`-Wrapper, aber ohne `min-w` an der Tabelle wird nichts horizontal scrollbar — stattdessen quetschen Zellen, FlowBar/Badges/Aktions-Buttons werden überlappt oder sind unklickbar.
+- Die Aktions-Zelle ist `text-right` ohne `whitespace-nowrap` → die Buttons brechen um oder werden abgeschnitten.
 
 ## Lösung
 
-Im `kompakt`-Modus von `ObjektForm` zusätzlich Adressfelder anbieten — optional, damit die Schnell-Anlage trotzdem schnell bleibt.
+### `src/routes/rechnungen.tsx` (Desktop-Tabelle ab Zeile 268)
 
-### Änderungen in `src/components/forms/ObjektForm.tsx`
+1. **Tabelle bekommt Mindestbreite**, damit bei zu engem Viewport sauber horizontal gescrollt werden kann statt zu quetschen:
+   - `<table className="w-full text-sm">` → `<table className="w-full min-w-[1100px] text-sm">`
+2. **Aktions-Spalte schützen**:
+   - `<th>` und `<td>` der Aktionsspalte bekommen `whitespace-nowrap`
+   - Inneres `<div>` der Aktionen bekommt `whitespace-nowrap` und `gap-1.5`, damit Buttons nicht umbrechen
+3. **Scroll-Container deutlich machen**: Der Wrapper `<div className="overflow-x-auto">` bleibt — durch `min-w-[1100px]` wird er jetzt aber tatsächlich scrollbar, sobald der Bildschirm < 1100 px ist. Damit bleibt die E-Mail-Action immer erreichbar.
 
-1. **Kompakter Block erweitern** (Zeilen 73–95):
-   - Bezeichnung bleibt als Pflichtfeld oben.
-   - Darunter Adressfelder hinzufügen — gleiches Layout wie der Voll-Modus:
-     - „Straße & Hausnummer" (volle Breite)
-     - „PLZ" (1 Spalte) + „Ort" (2 Spalten) im `sm:grid-cols-3`-Grid
-   - Alle Adressfelder bleiben **optional** (kein Toast-Error wenn leer).
-   - Hinweistext „Adresse später ergänzen…" entfernen, da nicht mehr nötig.
+### `src/routes/angebote.tsx` (Desktop-Tabelle, gleiche Struktur ab Zeile ~250)
 
-2. **`submit()` anpassen** (Zeilen 45–67):
-   - Im `isKompakt`-Zweig die Adressfelder mit übergeben (`strasse`, `plz`, `ort` jeweils `|| undefined`), genau wie im Voll-Modus.
-   - Restliche Defaults (`typ: "buero"`, `frequenz: "auf_abruf"`, `reinigungstage: []`, `status: "aktiv"`) bleiben gleich.
+Analog:
+1. `min-w-[1000px]` auf die Tabelle (Angebote haben eine Spalte weniger als Rechnungen).
+2. `whitespace-nowrap` auf Aktions-`<th>`/`<td>` und das innere Buttons-`<div>`.
 
-### Nicht geändert
+### Optional (klein, nicht zwingend)
 
-- Voll-Modus (`/objekte/neu`) bleibt unverändert.
-- Kein neues State, keine API-/Backend-Änderung nötig — `useCreateObjekt` akzeptiert die Felder bereits.
-- Objektnummer bleibt im kompakten Modus weiterhin automatisch (kein Feld).
+- Kein Funktions- oder Datenmodell-Change.
+- Mobile-Karten-Layout (`md:hidden`) bleibt unverändert — dort gibt es das Problem nicht.
 
 ## Ergebnis
 
-Beim Klick auf „Neues Objekt" auf der Kundendetailseite erscheint zusätzlich zur Bezeichnung ein Adressblock (Straße, PLZ, Ort). Adresse ist optional, sodass der schnelle Flow erhalten bleibt, aber direkt mit erfasst werden kann.
+Bei jeder Bildschirmbreite ab `md` ist die Aktions-Spalte vollständig sichtbar — bei kleineren Desktop-Größen scrollt die Tabelle horizontal innerhalb ihres Containers, statt Buttons unsichtbar zu quetschen. E-Mail-, Bezahlt- und Lösch-Button bleiben immer klickbar.
