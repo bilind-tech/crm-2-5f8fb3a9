@@ -134,9 +134,18 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
         </DialogHeader>
 
         <Tabs defaultValue="stamm" className="mt-2">
-          <TabsList className="h-10 w-full justify-start gap-1 rounded-full bg-muted p-1">
-            <TabsTrigger value="stamm" className="rounded-full px-5">Stammdaten</TabsTrigger>
-            <TabsTrigger value="beleg" className="rounded-full px-5">Belegnummern</TabsTrigger>
+      <DialogContent className="bg-background w-[calc(100vw-1rem)] max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+        <DialogHeader>
+          <DialogTitle>Kunde bearbeiten</DialogTitle>
+          <DialogDescription>
+            Stammdaten und Belegnummern dieses Kunden anpassen.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="stamm" className="mt-2">
+          <TabsList className="no-scrollbar flex h-10 w-full justify-start gap-1 overflow-x-auto rounded-full bg-muted p-1">
+            <TabsTrigger value="stamm" className="shrink-0 rounded-full px-3 sm:px-5">Stammdaten</TabsTrigger>
+            <TabsTrigger value="beleg" className="shrink-0 rounded-full px-3 sm:px-5">Belegnummern</TabsTrigger>
           </TabsList>
 
           <TabsContent value="stamm" className="mt-5 space-y-4">
