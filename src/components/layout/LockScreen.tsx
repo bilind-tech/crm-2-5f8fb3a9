@@ -367,7 +367,6 @@ function SetupForm() {
 }
 
 function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
-  const [username, setUsername] = useState("");
   const [code, setCode] = useState("");
   const [pw, setPw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -380,7 +379,6 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
     setLoading(true);
     try {
       const res = await piApi.post<{ recoveryCode: string }>("/auth/recovery/verwenden", {
-        username,
         recoveryCode: code,
         neuesPasswort: pw,
       });
@@ -388,7 +386,7 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
     } catch (err) {
       if (err instanceof PiApiError) {
         if (err.status === 422) setFehler("Passwort: min. 12 Zeichen, 1 Ziffer + 1 Sonderzeichen.");
-        else if (err.status === 401) setFehler("Recovery-Code oder Benutzer ungültig.");
+        else if (err.status === 401) setFehler("Recovery-Code ungültig.");
         else if (err.status === 429) setFehler("Zu viele Versuche, bitte warten.");
         else setFehler(err.message);
       } else setFehler(err instanceof Error ? err.message : "Fehler");
@@ -402,7 +400,7 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
       <RecoveryAnzeige
         code={neuerCode}
         titel="Passwort zurückgesetzt"
-        hinweis="Dein altes Recovery-Code ist verbraucht. Hier ist ein neuer Code für die Zukunft."
+        hinweis="Dein alter Recovery-Code ist verbraucht. Hier ist ein neuer Code für die Zukunft."
         onWeiter={onZurueck}
       />
     );
@@ -411,10 +409,6 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
   return (
     <Wrapper sub="Passwort mit Recovery-Code zurücksetzen.">
       <form onSubmit={submit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="rec-user">Benutzername</Label>
-          <Input id="rec-user" value={username} onChange={(e) => setUsername(e.target.value)} required />
-        </div>
         <div className="space-y-2">
           <Label htmlFor="rec-code">Recovery-Code</Label>
           <Input
