@@ -93,6 +93,23 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
     });
   }
 
+  // -------- Mahnung — flach intern, nested für UI --------
+  app.get("/einstellungen/mahnung", async () => {
+    const flach = MahnungSchema.parse(getSetting("mahnung") ?? {});
+    return flachZuUi(flach);
+  });
+  app.patch("/einstellungen/mahnung", async (req, reply) => {
+    const patch = uiPatchZuFlach((req.body ?? {}) as Record<string, unknown>);
+    const r = patchArea("mahnung", patch);
+    if (!r.ok) {
+      reply.status(r.status);
+      return { error: r.error, issues: r.issues };
+    }
+    audit({ userId: req.user?.id, action: "settings.mahnung.patch", ip: req.ip });
+    emit("einstellung:geaendert", { key: "mahnung", userId: req.user?.id ?? null });
+    return flachZuUi(r.value as z.infer<typeof MahnungSchema>);
+  });
+
   // SMTP — Passwort separat verschlüsselt
   app.get("/einstellungen/smtp", async () => {
     const base = loadArea("smtp");
