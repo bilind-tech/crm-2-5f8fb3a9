@@ -43,7 +43,9 @@ export function MahnSektion({ rechnung }: Props) {
   const pdf = useRechnungPdf(rechnung);
   const pausieren = useMahnungPausieren(rechnung.id);
   const inkasso = useInkassoMarkieren(rechnung.id);
+  const versenden = useMahnungVersenden(rechnung.id);
 
+  const [confirmStufe, setConfirmStufe] = useState<MahnStufe | null>(null);
   const [emailOpen, setEmailOpen] = useState(false);
   const [stufeFuerVersand, setStufeFuerVersand] = useState<MahnStufe>(1);
   const [pauseOpen, setPauseOpen] = useState(false);
@@ -61,9 +63,22 @@ export function MahnSektion({ rechnung }: Props) {
   const mahngebuehrenSumme = mahnungen.reduce((acc, m) => acc + m.gebuehr, 0);
   const gesamtForderung = z.offenEUR + mahngebuehrenSumme;
 
-  const oeffneMahnungVersand = (stufe: MahnStufe) => {
+  const oeffneVersandConfirm = (stufe: MahnStufe) => setConfirmStufe(stufe);
+
+  const oeffneEigeneVorlage = (stufe: MahnStufe) => {
     setStufeFuerVersand(stufe);
     setEmailOpen(true);
+  };
+
+  const handleConfirmVersand = () => {
+    if (!confirmStufe) return;
+    versenden.mutate(confirmStufe, {
+      onSuccess: () => {
+        toast.success(`${stufenLabel(confirmStufe, einstellungen)} versendet`);
+        setConfirmStufe(null);
+      },
+      onError: () => toast.error("Versand fehlgeschlagen"),
+    });
   };
 
   const handlePausieren = () => {
