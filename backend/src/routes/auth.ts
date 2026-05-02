@@ -1,4 +1,4 @@
-// /auth/* Routen.
+// /auth/* — Single-User-Modus: nur Passwort, kein Username, keine Rollen.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
@@ -29,7 +29,7 @@ import {
 } from "../auth/middleware.js";
 import {
   findeBenutzer,
-  findeBenutzerByUsername,
+  findeEinzigenBenutzer,
   rotiereRecovery,
   setzeNeuesPasswort,
 } from "../auth/users-repo.js";
@@ -40,6 +40,9 @@ import {
   verifyRecoveryCode,
 } from "../auth/recovery.js";
 
+const SINGLE_USERNAME = "owner";
+const SINGLE_KEY = "single-user"; // konstanter Lockout-Key (kein Username im UI)
+
 const PasswortPolicy = z
   .string()
   .min(12, "Mindestens 12 Zeichen")
@@ -48,12 +51,10 @@ const PasswortPolicy = z
   .refine((s) => /[^A-Za-z0-9]/.test(s), "Mindestens ein Sonderzeichen");
 
 const LoginSchema = z.object({
-  username: z.string().trim().min(1).max(120),
   password: z.string().min(1).max(500),
 });
 
 const SetupSchema = z.object({
-  username: z.string().trim().min(3).max(120),
   password: PasswortPolicy,
   setupToken: z.string().trim().min(1).max(200),
 });
@@ -64,7 +65,6 @@ const ChangePwSchema = z.object({
 });
 
 const RecoveryUseSchema = z.object({
-  username: z.string().trim().min(1).max(120),
   recoveryCode: z.string().trim().min(1).max(64),
   neuesPasswort: PasswortPolicy,
 });
@@ -84,7 +84,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       return { error: "unauthenticated" };
     }
     const u = findeBenutzer(sess.userId);
-    if (!u || u.aktiv !== 1) {
+    if (!u) {
       deleteSession(sess.token);
       clearSessionCookie(reply);
       reply.status(401);
@@ -92,7 +92,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
     if (sess.refreshed) setSessionCookie(reply, sess.token);
     return {
-      user: { id: sess.userId, username: sess.username, rolle: u.rolle },
+      user: { id: sess.userId, username: sess.username },
       expiresAt: sess.expiresAt,
     };
   });
@@ -117,17 +117,17 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const recHash = await hashRecoveryCode(recoveryCode);
     getDatabase()
       .prepare(
-        `INSERT INTO app_user (id, username, password_hash, rolle, recovery_hash, aktiv, created_at, updated_at)
-         VALUES (?, ?, ?, 'owner', ?, 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO app_user (id, username, password_hash, recovery_hash, created_at, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
       )
-      .run(id, parsed.data.username, hash, recHash);
+      .run(id, SINGLE_USERNAME, hash, recHash);
     markSetupComplete();
 
     const sess = createSession(id, req.headers["user-agent"], req.ip);
     setSessionCookie(reply, sess.token);
     audit({ userId: id, action: "auth.setup", ip: req.ip });
     return {
-      user: { id, username: parsed.data.username, rolle: "owner" as const },
+      user: { id, username: SINGLE_USERNAME },
       expiresAt: sess.expiresAt,
       recoveryCode,
     };
@@ -142,22 +142,22 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         reply.status(422);
         return { error: "validation" };
       }
-      const { username, password } = parsed.data;
+      const { password } = parsed.data;
 
-      const lock = getStatus(req.ip, username);
+      const lock = getStatus(req.ip, SINGLE_KEY);
       if (lock.locked) {
         reply.status(423);
         return { error: "locked", lockedUntil: lock.lockedUntil };
       }
 
-      const user = findeBenutzerByUsername(username);
+      const user = findeEinzigenBenutzer();
       const hashToCheck = user?.password_hash ?? (await getDummyHash());
       const passwordOk = await verifyPassword(hashToCheck, password);
-      const ok = !!user && user.aktiv === 1 && passwordOk;
+      const ok = !!user && passwordOk;
 
       if (!ok) {
-        const status = recordFailure(req.ip, username);
-        audit({ action: "auth.login.fail", detail: { username }, ip: req.ip });
+        const status = recordFailure(req.ip, SINGLE_KEY);
+        audit({ action: "auth.login.fail", ip: req.ip });
         if (status.locked) {
           reply.status(423);
           return { error: "locked", lockedUntil: status.lockedUntil };
@@ -165,13 +165,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         reply.status(401);
         return { error: "invalid-credentials" };
       }
-      recordSuccess(req.ip, username);
+      recordSuccess(req.ip, SINGLE_KEY);
       const sess = createSession(user!.id, req.headers["user-agent"], req.ip);
       setSessionCookie(reply, sess.token);
       audit({ userId: user!.id, action: "auth.login", ip: req.ip });
       emit("auth:login", { userId: user!.id, username: user!.username, ip: req.ip });
       return {
-        user: { id: user!.id, username: user!.username, rolle: user!.rolle },
+        user: { id: user!.id, username: user!.username },
         expiresAt: sess.expiresAt,
       };
     },
@@ -243,7 +243,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     "/auth/sessions/:token",
     { preHandler: requireAuth },
     async (req, reply) => {
-      // /auth/sessions liefert vollen Token unter `_t` — Frontend nutzt diesen.
       const ok = deleteSessionForUser(req.params.token, req.user!.id);
       if (!ok) {
         reply.status(404);
@@ -265,11 +264,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         reply.status(422);
         return { error: "validation", issues: parsed.error.issues };
       }
-      const u = findeBenutzerByUsername(parsed.data.username);
-      // Konstantzeit: dummy verify wenn User fehlt
-      if (!u || !u.recovery_hash || u.recovery_used_at !== null || u.aktiv !== 1) {
+      const u = findeEinzigenBenutzer();
+      if (!u || !u.recovery_hash || u.recovery_used_at !== null) {
         await verifyRecoveryCode(await getDummyHash(), parsed.data.recoveryCode);
-        audit({ action: "auth.recovery.fail", detail: { username: parsed.data.username }, ip: req.ip });
+        audit({ action: "auth.recovery.fail", ip: req.ip });
         reply.status(401);
         return { error: "invalid-recovery" };
       }
@@ -281,9 +279,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       }
       await setzeNeuesPasswort(u.id, parsed.data.neuesPasswort);
       markRecoveryConsumed(u.id);
-      // Alle bestehenden Sessions invalidieren
       deleteAllSessionsForUser(u.id);
-      // Neuen Recovery-Code ausgeben
       const neuerCode = await rotiereRecovery(u.id);
       audit({ userId: u.id, action: "auth.recovery.success", ip: req.ip });
       return { ok: true, recoveryCode: neuerCode };
