@@ -21,7 +21,7 @@ import {
   useMahnStatus,
   useMahnLauf,
 } from "@/hooks/useApi";
-import { useAngebotPdf, useRechnungPdf } from "@/hooks/useBelegPdf";
+import { useRechnungPdf } from "@/hooks/useBelegPdf";
 import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import {
   berechneNaechsteSchritte,
@@ -248,5 +248,3 @@ function RechnungEmailLauncher({
     />
   );
 }
-// useAngebotPdf bleibt importiert für mögliche Erweiterungen — derzeit nur RechnungPdf verwendet.
-void useAngebotPdf;
