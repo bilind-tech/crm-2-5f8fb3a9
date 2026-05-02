@@ -19,9 +19,16 @@ import {
 import {
   useEmailVorlagen,
   useMahnEinstellungen,
+  useMahnJetztPruefen,
+  useMahnStatus,
   useUpdateMahnEinstellungen,
 } from "@/hooks/useApi";
-import type { MahnEinstellungen, MahnStufe, MahnStufeConfig } from "@/lib/api/types";
+import type {
+  MahnEinstellungen,
+  MahnModus,
+  MahnStufe,
+  MahnStufeConfig,
+} from "@/lib/api/types";
 
 export function MahnwesenTab() {
   const { data, isLoading } = useMahnEinstellungen();
