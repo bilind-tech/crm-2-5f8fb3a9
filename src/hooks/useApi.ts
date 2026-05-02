@@ -906,8 +906,11 @@ export const useUpdateLauf = (id: string | null) =>
 export const useRollbackUpdate = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (version: string) =>
-      api.post<UpdateLauf>(`/system/update/rollback/${encodeURIComponent(version)}`),
+    mutationFn: ({ version, passwort }: { version: string; passwort: string }) =>
+      api.post<UpdateLauf>(
+        `/system/update/rollback/${encodeURIComponent(version)}`,
+        { passwort },
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.einstellungen.systemInfo });
       qc.invalidateQueries({ queryKey: qk.einstellungen.updateHistorie });
