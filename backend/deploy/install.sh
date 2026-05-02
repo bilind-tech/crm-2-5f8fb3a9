@@ -170,6 +170,53 @@ install_logrotate() {
   ok "logrotate installiert"
 }
 
+bootstrap_release() {
+  [[ -z "$BOOTSTRAP_ZIP" ]] && return
+  if [[ ! -f "$BOOTSTRAP_ZIP" ]]; then
+    err "Bootstrap-ZIP nicht gefunden: $BOOTSTRAP_ZIP"
+    exit 3
+  fi
+  local target="$APP_DIR/releases/initial"
+  if [[ -d "$target" ]]; then
+    ok "Release 'initial' bereits vorhanden — überspringe Bootstrap"
+  else
+    log "Entpacke $BOOTSTRAP_ZIP nach $target"
+    if [[ $CHECK_ONLY -eq 1 ]]; then
+      warn "[--check] Bootstrap würde entpackt"
+      return
+    fi
+    command -v unzip >/dev/null || apt-get install -y unzip
+    mkdir -p "$target"
+    unzip -q "$BOOTSTRAP_ZIP" -d "$target"
+    chown -R "$APP_USER:$APP_GROUP" "$target"
+    ok "Release entpackt"
+  fi
+  if [[ ! -L "$APP_DIR/current" ]]; then
+    [[ $CHECK_ONLY -eq 0 ]] && ln -sfn "$target" "$APP_DIR/current"
+    ok "Symlink current → $target gesetzt"
+  fi
+}
+
+install_backend_deps() {
+  local be_dir="$APP_DIR/current/backend"
+  [[ ! -f "$be_dir/package.json" ]] && return
+  if [[ -d "$be_dir/node_modules" ]]; then
+    ok "Backend-Dependencies vorhanden"
+    return
+  fi
+  log "Installiere Backend-Dependencies (npm ci --omit=dev)"
+  if [[ $CHECK_ONLY -eq 1 ]]; then
+    warn "[--check] npm ci würde laufen"
+    return
+  fi
+  if [[ -f "$be_dir/package-lock.json" ]]; then
+    sudo -u "$APP_USER" bash -c "cd '$be_dir' && npm ci --omit=dev"
+  else
+    sudo -u "$APP_USER" bash -c "cd '$be_dir' && npm install --omit=dev --no-audit --no-fund"
+  fi
+  ok "Backend-Dependencies installiert"
+}
+
 start_service() {
   if [[ $CHECK_ONLY -eq 1 ]]; then
     return
@@ -181,28 +228,34 @@ start_service() {
     log "Starte Service $SERVICE_NAME"
     systemctl start "$SERVICE_NAME" || true
   fi
-  sleep 2
-  if systemctl is-active --quiet "$SERVICE_NAME"; then
-    ok "Service läuft"
-  else
-    warn "Service läuft nicht — prüfe: journalctl -u $SERVICE_NAME -n 50"
-  fi
+  log "Healthcheck (max. 30s)"
+  local i
+  for i in $(seq 1 15); do
+    if curl -fsS "http://localhost:8787/health" >/dev/null 2>&1; then
+      ok "Service läuft — http://$(hostname).local:8787"
+      return
+    fi
+    sleep 2
+  done
+  warn "Service antwortet nicht auf /health — prüfe: journalctl -u $SERVICE_NAME -n 80"
 }
 
 main() {
   require_root
-  log "MyCleanCenter Setup startet (CHECK_ONLY=$CHECK_ONLY)"
+  log "MyCleanCenter Setup startet (CHECK_ONLY=$CHECK_ONLY${BOOTSTRAP_ZIP:+, BOOTSTRAP=$BOOTSTRAP_ZIP})"
   ensure_user
   ensure_dirs
   ensure_node
   install_systemd_unit
   install_sudoers
   install_logrotate
+  bootstrap_release
+  install_backend_deps
   if [[ -d "$APP_DIR/current" || -L "$APP_DIR/current" ]]; then
     start_service
   else
     warn "Kein Code unter $APP_DIR/current — Setup-Wizard kommt nach erstem Code-Deploy."
-    warn "Lade die erste CRM-Version per Web-UI hoch oder per scp."
+    warn "Lade die erste CRM-Version per Web-UI hoch, per scp, oder nutze --bootstrap=<release.zip>."
   fi
   log "Fertig."
 }
