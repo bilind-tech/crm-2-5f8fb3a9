@@ -53,6 +53,7 @@ import { StundenzettelTab } from "@/components/einstellungen/StundenzettelTab";
 import { BackendVerbindungTab } from "@/components/einstellungen/BackendVerbindungTab";
 import type { Firmendaten } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/einstellungen")({ component: Page });
 
@@ -74,6 +75,15 @@ type TabId =
   | "sicherheit"
   | "backend"
   | "verlauf";
+
+// Tabs, die nur für Owner sichtbar sind:
+const OWNER_ONLY: ReadonlyArray<TabId> = [
+  "drive",
+  "backup",
+  "system-update",
+  "sicherheit",
+  "steuern",
+];
 
 const tabs: { id: TabId; label: string; icon: typeof Building2; gruppe: string }[] = [
   { id: "firmendaten", label: "Firmendaten", icon: Building2, gruppe: "Stammdaten" },
@@ -102,11 +112,19 @@ const tabs: { id: TabId; label: string; icon: typeof Building2; gruppe: string }
 const gruppen = Array.from(new Set(tabs.map((t) => t.gruppe)));
 
 function Page() {
+  const { istOwner } = useAuth();
+  const sichtbareTabs = tabs.filter((t) => istOwner || !OWNER_ONLY.includes(t.id));
+  const sichtbareGruppen = Array.from(new Set(sichtbareTabs.map((t) => t.gruppe)));
   const [tab, setTab] = useState<TabId>("firmendaten");
   const { data: firma } = useFirmendaten();
   const update = useUpdateFirmendaten();
 
-  const aktiverTab = tabs.find((t) => t.id === tab)!;
+  // Falls aktiver Tab durch Rollenwechsel verboten wird, zurück auf "firmendaten"
+  useEffect(() => {
+    if (!sichtbareTabs.find((t) => t.id === tab)) setTab("firmendaten");
+  }, [sichtbareTabs, tab]);
+
+  const aktiverTab = sichtbareTabs.find((t) => t.id === tab) ?? sichtbareTabs[0];
 
   return (
     <div className="space-y-6 pb-24">
@@ -122,12 +140,12 @@ function Page() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {gruppen.map((g) => (
+            {sichtbareGruppen.map((g) => (
               <div key={g}>
                 <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
                   {g}
                 </div>
-                {tabs
+                {sichtbareTabs
                   .filter((t) => t.gruppe === g)
                   .map((t) => (
                     <SelectItem key={t.id} value={t.id}>
@@ -147,13 +165,13 @@ function Page() {
         {/* Desktop: Sub-Sidebar */}
         <nav className="hidden md:block">
           <div className="sticky top-4 space-y-4 rounded-2xl border border-border bg-card p-3 shadow-sm">
-            {gruppen.map((g) => (
+            {sichtbareGruppen.map((g) => (
               <div key={g}>
                 <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {g}
                 </p>
                 <ul className="space-y-0.5">
-                  {tabs
+                  {sichtbareTabs
                     .filter((t) => t.gruppe === g)
                     .map((t) => {
                       const active = t.id === tab;

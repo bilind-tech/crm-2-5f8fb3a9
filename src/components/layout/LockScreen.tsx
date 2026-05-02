@@ -84,6 +84,21 @@ function formatLockedUntil(iso: string): string {
   return d.toLocaleString("de-DE", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 }
 
+function useCountdown(targetIso: string | null): string {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!targetIso) return;
+    const i = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(i);
+  }, [targetIso]);
+  if (!targetIso) return "00:00";
+  const ms = Math.max(0, new Date(targetIso).getTime() - now);
+  const total = Math.ceil(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   const { login, loading } = useAuth();
   const [username, setUsername] = useState("");
@@ -107,7 +122,15 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
     }
   }
 
-  if (lockedUntil) {
+  const countdown = useCountdown(lockedUntil);
+  const istNochGesperrt = lockedUntil ? new Date(lockedUntil).getTime() > Date.now() : false;
+
+  // Wenn Countdown abgelaufen, Lock zurücksetzen
+  useEffect(() => {
+    if (lockedUntil && !istNochGesperrt) setLockedUntil(null);
+  }, [lockedUntil, istNochGesperrt]);
+
+  if (lockedUntil && istNochGesperrt) {
     return (
       <Wrapper sub="Konto vorübergehend gesperrt.">
         <div className="space-y-3 text-sm">
@@ -116,10 +139,16 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
               <ShieldAlert className="h-4 w-4" />
               Konto gesperrt
             </div>
-            Zu viele Fehlversuche. Entsperrt um <strong>{formatLockedUntil(lockedUntil)}</strong>.
+            <p>
+              Zu viele Fehlversuche. Erneut möglich in{" "}
+              <strong className="font-mono text-base">{countdown}</strong>
+            </p>
+            <p className="mt-1 text-xs opacity-80">
+              Entsperrt um {formatLockedUntil(lockedUntil)}
+            </p>
           </div>
-          <Button type="button" variant="secondary" className="w-full" onClick={() => setLockedUntil(null)}>
-            Zurück
+          <Button type="button" variant="secondary" className="w-full" disabled>
+            Anmelden in {countdown}
           </Button>
         </div>
       </Wrapper>
@@ -175,6 +204,40 @@ function RecoveryAnzeige({
 }) {
   const [bestaetigt, setBestaetigt] = useState(false);
   const [kopiert, setKopiert] = useState(false);
+
+  function druckRecovery() {
+    const w = window.open("", "_blank", "width=600,height=600");
+    if (!w) return;
+    const heute = new Date().toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>MyCleanCenter Recovery-Code</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 48px; color: #111; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  .sub { color: #555; margin: 0 0 32px; font-size: 14px; }
+  .box { border: 2px solid #111; border-radius: 12px; padding: 32px; margin: 24px 0; text-align: center; }
+  .code { font-family: ui-monospace, Menlo, monospace; font-size: 26px; letter-spacing: 2px; font-weight: 700; word-break: break-all; }
+  .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #555; margin-bottom: 12px; }
+  .hint { background: #fffbe6; border: 1px solid #d4b400; border-radius: 8px; padding: 12px 16px; font-size: 13px; }
+  .meta { margin-top: 32px; font-size: 12px; color: #555; }
+</style></head><body>
+<h1>MyCleanCenter — Recovery-Code</h1>
+<p class="sub">${titel}</p>
+<div class="box">
+  <div class="label">Recovery-Code</div>
+  <div class="code">${code}</div>
+</div>
+<div class="hint"><strong>Wichtig:</strong> Diesen Code an einem sicheren Ort verwahren (Safe, Passwort-Manager). Mit ihm kann das Passwort ohne Backend-Zugriff zurückgesetzt werden. Nach Verwendung wird automatisch ein neuer Code erzeugt.</div>
+<div class="meta">Erstellt am ${heute}</div>
+<script>setTimeout(function(){window.print();},150);</script>
+</body></html>`);
+    w.document.close();
+  }
+
   return (
     <Wrapper sub={titel}>
       <div className="space-y-4 text-sm">
@@ -205,7 +268,7 @@ function RecoveryAnzeige({
             type="button"
             variant="secondary"
             className="flex-1"
-            onClick={() => window.print()}
+            onClick={druckRecovery}
           >
             Drucken
           </Button>
