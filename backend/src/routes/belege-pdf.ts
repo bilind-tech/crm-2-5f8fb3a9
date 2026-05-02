@@ -28,12 +28,17 @@ export async function belegePdfRoutes(app: FastifyInstance): Promise<void> {
         reply.status(304).header("ETag", etag).send();
         return;
       }
+      const safeAscii = result.dateiname.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "");
       reply
         .status(200)
         .header("Content-Type", "application/pdf")
         .header("Content-Length", String(result.buffer.length))
-        .header("Content-Disposition", `inline; filename="${encodeURIComponent(result.dateiname)}"`)
+        .header(
+          "Content-Disposition",
+          `inline; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(result.dateiname)}`,
+        )
         .header("ETag", etag)
+        .header("X-Pdf-Cache", result.fromCache ? "hit" : "miss")
         .header("Cache-Control", "private, max-age=0, must-revalidate")
         .send(result.buffer);
     }
