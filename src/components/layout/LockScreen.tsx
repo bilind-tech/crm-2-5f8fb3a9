@@ -499,6 +499,7 @@ function MockLockForm() {
 
 export function LockScreen() {
   const { mode } = useAuth();
+  const [zeigeRecovery, setZeigeRecovery] = useState(false);
   if (mode === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
@@ -507,7 +508,10 @@ export function LockScreen() {
     );
   }
   if (mode === "needs-setup") return <SetupForm />;
-  if (mode === "logged-out") return <LoginForm />;
+  if (mode === "logged-out") {
+    if (zeigeRecovery) return <RecoveryForm onZurueck={() => setZeigeRecovery(false)} />;
+    return <LoginForm onRecovery={() => setZeigeRecovery(true)} />;
+  }
   if (mode === "backend-offline") return <BackendOfflineScreen />;
   return <MockLockForm />;
 }
