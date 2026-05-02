@@ -652,7 +652,6 @@ export const useRestoreBackup = () => {
 
 // FormData-Upload geht direkt über piApi (multipart),
 // damit das Backend die Datei streamen kann.
-import { piApi, PiApiError } from "@/lib/api/piClient";
 
 export const useUploadBackup = () =>
   useMutation({
