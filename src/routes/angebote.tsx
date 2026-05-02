@@ -147,6 +147,7 @@ function Page() {
             }
             trailing={formatEUR(summe(a))}
             badge={statusBadge(a.status)}
+            footer={<FlowBar steps={angebotFlow(a, angebotMitRechnung.has(a.id)).steps} size="sm" />}
             actions={
               <>
                 <AngebotAnnahmeButtons angebot={a} />
