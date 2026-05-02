@@ -157,7 +157,7 @@ export function MahnSektion({ rechnung }: Props) {
         <div className="mt-4 flex flex-wrap gap-2">
           {z.empfohleneStufe && !z.istPausiert && (
             <Button
-              onClick={() => oeffneMahnungVersand(z.empfohleneStufe!)}
+              onClick={() => oeffneVersandConfirm(z.empfohleneStufe!)}
               className="rounded-lg"
             >
               <Send className="mr-1.5 h-4 w-4" />
@@ -170,7 +170,7 @@ export function MahnSektion({ rechnung }: Props) {
               aktuell={z.letzteVersendeteStufe}
               vorgeschlagen={z.empfohleneStufe}
               einstellungen={einstellungen}
-              onWaehlen={oeffneMahnungVersand}
+              onWaehlen={oeffneVersandConfirm}
             />
           )}
           {!z.istPausiert ? (
