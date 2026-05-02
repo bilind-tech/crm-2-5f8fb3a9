@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Clock, ExternalLink, RefreshCw, Settings as SettingsIcon, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { getStundenzettelUrl } from "@/lib/stundenzettel/config";
+import { useStundenzettelUrl } from "@/lib/stundenzettel/config";
 
 export const Route = createFileRoute("/stundenzettel")({ component: Page });
 
