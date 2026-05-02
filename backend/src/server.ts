@@ -13,6 +13,8 @@ import { authRoutes } from "./routes/auth.js";
 import { einstellungenRoutes } from "./routes/einstellungen.js";
 import { backupRoutes } from "./routes/backup.js";
 import { stammdatenRoutes } from "./routes/stammdaten.js";
+import { belegeRoutes } from "./routes/belege.js";
+import { startBelegeScheduler } from "./belege/scheduler.js";
 import { purgeExpiredSessions, warmTouchCacheFromDb } from "./auth/sessions.js";
 import { purgeOldAuditEntries } from "./auth/audit.js";
 import { purgeOldLockouts } from "./auth/lockout.js";
@@ -111,12 +113,16 @@ async function main(): Promise<void> {
   await app.register(authRoutes);
   await app.register(einstellungenRoutes);
   await app.register(backupRoutes);
+  await app.register(stammdatenRoutes);
+  await app.register(belegeRoutes);
 
   // Touch-Throttle aus DB warmladen → kein Update-Sturm nach Restart
   const warmed = warmTouchCacheFromDb();
 
   // Backup-Scheduler starten
   startScheduler();
+  // Belege-Scheduler (überfällig-Markierung) starten
+  startBelegeScheduler();
 
   await app.listen({ port: config.port, host: config.host });
   app.log.info(

@@ -24,7 +24,20 @@ export class ApiError extends Error {
   }
 }
 
-const PI_PREFIXES = ["/auth/", "/einstellungen/", "/backup/"];
+const PI_PREFIXES = [
+  "/auth/",
+  "/einstellungen/",
+  "/backup/",
+  // Step 3
+  "/kunden/",
+  "/ansprechpartner/",
+  "/objekte/",
+  "/notizen/",
+  "/search/",
+  // Step 4
+  "/angebote/",
+  "/rechnungen/",
+];
 // Ausnahmen: /einstellungen/* die noch nicht im Pi-Backend leben → Mock
 const MOCK_OVERRIDE_PREFIXES = [
   "/einstellungen/vorlagen",
@@ -32,7 +45,12 @@ const MOCK_OVERRIDE_PREFIXES = [
 
 function isPiPath(p: string): boolean {
   if (MOCK_OVERRIDE_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))) return false;
-  return PI_PREFIXES.some((pref) => p === pref.slice(0, -1) || p.startsWith(pref));
+  // Exakt-Match auf "/search" oder "/kunden" etc., oder startsWith "/search/"
+  return PI_PREFIXES.some((pref) => {
+    const bare = pref.endsWith("/") ? pref.slice(0, -1) : pref;
+    if (p === bare) return true;
+    return p.startsWith(pref.endsWith("/") ? pref : `${pref}/`) || p.startsWith(`${bare}?`);
+  });
 }
 
 async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T> {
