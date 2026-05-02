@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { cn } from "@/lib/utils";
 
-export function BackendStatusIndicator(): JSX.Element {
+export function BackendStatusIndicator() {
   const { status, url, lastError, health } = useBackendStatus();
 
   const dotClass =

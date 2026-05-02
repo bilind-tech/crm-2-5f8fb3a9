@@ -12,11 +12,11 @@ import {
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 import { cn } from "@/lib/utils";
 
-export function BackendVerbindungTab(): JSX.Element {
+export function BackendVerbindungTab() {
   const [draft, setDraft] = useState<string>(getBackendUrl());
   const { status, url, health, lastError, lastCheck, refresh } = useBackendStatus();
 
-  const speichern = (): void => {
+  const speichern = () => {
     setBackendUrl(draft);
     toast.success("Backend-URL gespeichert");
     refresh();
