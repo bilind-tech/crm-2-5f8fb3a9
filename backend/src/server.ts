@@ -151,8 +151,9 @@ async function main(): Promise<void> {
     await app.register(fastifyStatic, {
       root: config.frontendDir,
       prefix: "/",
-      decorateReply: false,
+      decorateReply: true,
       wildcard: false,
+      index: ["index.html"],
     });
     // SPA-Fallback: alle nicht-API/ nicht-Asset-Pfade liefern index.html
     const indexPath = path.join(config.frontendDir, "index.html");
