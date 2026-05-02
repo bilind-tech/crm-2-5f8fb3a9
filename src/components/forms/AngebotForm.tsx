@@ -10,7 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useKunden, useObjekte, useCreateAngebot } from "@/hooks/useApi";
+import { useKunden, useObjekte, useCreateAngebot, useNummernkreise } from "@/hooks/useApi";
+import { vorschauBelegnummer } from "@/lib/belegNummer";
 import { toast } from "sonner";
 import { addDays, todayISO } from "@/lib/format";
 import {
@@ -34,6 +35,7 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
   const navigate = useNavigate();
   const { data: kunden = [] } = useKunden();
   const { data: objekteAlle = [] } = useObjekte();
+  const { data: nummernkreise } = useNummernkreise();
   const create = useCreateAngebot();
 
   const [kundeId, setKundeId] = useState(defaultKundeId ?? "");
@@ -50,6 +52,12 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
     () => objekteAlle.filter((o) => o.kundeId === kundeId),
     [objekteAlle, kundeId]
   );
+
+  const vorschauNummer = useMemo(() => {
+    if (!kundeId || !nummernkreise) return "";
+    const kunde = kunden.find((k) => k.id === kundeId);
+    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.angebotPraefix);
+  }, [kundeId, kunden, nummernkreise]);
 
   async function submit() {
     if (!kundeId) return toast.error("Bitte Kunde wählen");
@@ -148,6 +156,13 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
           Dauerauftrag
         </button>
       </div>
+
+      {vorschauNummer && (
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Belegnummer:{" "}
+          <span className="font-mono font-semibold text-foreground">{vorschauNummer}</span>
+        </p>
+      )}
 
       <div>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

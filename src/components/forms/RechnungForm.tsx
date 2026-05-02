@@ -10,7 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useKunden, useObjekte, useCreateRechnung } from "@/hooks/useApi";
+import { useKunden, useObjekte, useCreateRechnung, useNummernkreise } from "@/hooks/useApi";
+import { vorschauBelegnummer } from "@/lib/belegNummer";
 import { toast } from "sonner";
 import { addDays, todayISO } from "@/lib/format";
 import {
@@ -34,6 +35,7 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
   const navigate = useNavigate();
   const { data: kunden = [] } = useKunden();
   const { data: objekteAlle = [] } = useObjekte();
+  const { data: nummernkreise } = useNummernkreise();
   const create = useCreateRechnung();
 
   const [kundeId, setKundeId] = useState(defaultKundeId ?? "");
@@ -52,6 +54,12 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
     () => objekteAlle.filter((o) => o.kundeId === kundeId),
     [objekteAlle, kundeId]
   );
+
+  const vorschauNummer = useMemo(() => {
+    if (!kundeId || !nummernkreise) return "";
+    const kunde = kunden.find((k) => k.id === kundeId);
+    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.rechnungPraefix);
+  }, [kundeId, kunden, nummernkreise]);
 
   function setFristTage(tage: number) {
     setFrist(tage);
@@ -160,6 +168,13 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
           Dauerauftrag
         </button>
       </div>
+
+      {vorschauNummer && (
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Belegnummer:{" "}
+          <span className="font-mono font-semibold text-foreground">{vorschauNummer}</span>
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Rechnungsdatum">
