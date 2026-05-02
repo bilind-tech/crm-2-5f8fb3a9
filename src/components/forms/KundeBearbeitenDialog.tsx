@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useKundenZaehler, useUpdateKunde } from "@/hooks/useApi";
+import { useKundenZaehler, useUpdateKunde, useKuerzelFrei } from "@/hooks/useApi";
 import type { Kunde } from "@/lib/api/types";
 
 function sanitizeKuerzel(v: string): string {
@@ -91,6 +91,12 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
     return `${k}${mm}${yy}/${nn}`;
   }, [kuerzel, startNummer]);
 
+  const kuerzelFreiQ = useKuerzelFrei(kuerzel, kunde.id);
+  const kuerzelKonflikt =
+    kuerzel.length >= 3 && kuerzelFreiQ.data && !kuerzelFreiQ.data.frei
+      ? kuerzelFreiQ.data.kunde
+      : null;
+
   async function speichern() {
     if (kunde.typ === "firma" && !firmenname.trim()) {
       toast.error("Firmenname ist erforderlich");
@@ -104,23 +110,32 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
       toast.error("Kürzel muss 3–4 Zeichen haben");
       return;
     }
-    await update.mutateAsync({
-      firmenname: firmenname || undefined,
-      vorname: vorname || undefined,
-      nachname: nachname || undefined,
-      email: email || undefined,
-      telefon: telefon || undefined,
-      strasse: strasse || undefined,
-      plz: plz || undefined,
-      ort: ort || undefined,
-      status,
-      notizen: notizen || undefined,
-      kuerzel: kuerzel || undefined,
-      startZaehlerAktuellerMonat:
-        kuerzel && startNummerTouched ? Math.max(1, startNummer || 1) : undefined,
-    });
-    toast.success("Kunde aktualisiert");
-    onOpenChange(false);
+    if (kuerzelKonflikt) {
+      toast.error(`Kürzel «${kuerzel}» ist bereits vergeben (${kuerzelKonflikt.nummer} • ${kuerzelKonflikt.name}).`);
+      return;
+    }
+    try {
+      await update.mutateAsync({
+        firmenname: firmenname || undefined,
+        vorname: vorname || undefined,
+        nachname: nachname || undefined,
+        email: email || undefined,
+        telefon: telefon || undefined,
+        strasse: strasse || undefined,
+        plz: plz || undefined,
+        ort: ort || undefined,
+        status,
+        notizen: notizen || undefined,
+        kuerzel: kuerzel || undefined,
+        startZaehlerAktuellerMonat:
+          kuerzel && startNummerTouched ? Math.max(1, startNummer || 1) : undefined,
+      });
+      toast.success("Kunde aktualisiert");
+      onOpenChange(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+      toast.error(msg);
+    }
   }
 
   return (
@@ -188,9 +203,21 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
                 maxLength={4}
                 className="font-mono uppercase tracking-wider w-40"
               />
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                3–4 Zeichen (A–Z, 0–9). Wird allen neuen Belegen dieses Kunden vorangestellt.
-              </p>
+              <div className="mt-1.5 min-h-[1.25rem] text-xs">
+                {kuerzel.length >= 3 && kuerzelFreiQ.isFetching ? (
+                  <span className="text-muted-foreground">Prüfe Verfügbarkeit…</span>
+                ) : kuerzelKonflikt ? (
+                  <span className="text-destructive">
+                    ✗ Bereits vergeben an {kuerzelKonflikt.nummer} • {kuerzelKonflikt.name}
+                  </span>
+                ) : kuerzel.length >= 3 && kuerzelFreiQ.data?.frei ? (
+                  <span className="text-emerald-600 dark:text-emerald-400">✓ Kürzel frei</span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    3–4 Zeichen (A–Z, 0–9). Wird allen neuen Belegen dieses Kunden vorangestellt.
+                  </span>
+                )}
+              </div>
             </Field>
 
             <Field label={`Nächste Nummer im Monat ${periodeLabel}`}>
@@ -227,7 +254,7 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
 
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-          <Button onClick={speichern} disabled={update.isPending}>
+          <Button onClick={speichern} disabled={update.isPending || !!kuerzelKonflikt}>
             {update.isPending ? "Speichere…" : "Speichern"}
           </Button>
         </div>
