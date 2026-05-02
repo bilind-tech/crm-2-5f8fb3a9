@@ -101,6 +101,8 @@ export function SicherheitTab() {
         )}
       </Section>
 
+      {istOwner && <BenutzerVerwaltung />}
+
       {dialog}
 
       <StickySaveBar
