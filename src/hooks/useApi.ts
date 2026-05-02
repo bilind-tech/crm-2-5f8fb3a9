@@ -855,3 +855,62 @@ export const useAlleSitzungenBeenden = () => {
   });
 };
 
+
+// ---------- System & Updates ----------
+export const useSystemInfo = () =>
+  useQuery({
+    queryKey: qk.einstellungen.systemInfo,
+    queryFn: () => api.get<SystemInfo>("/system/info"),
+  });
+
+export const useUpdateHistorie = () =>
+  useQuery({
+    queryKey: qk.einstellungen.updateHistorie,
+    queryFn: () => api.get<InstallierteVersion[]>("/system/update/historie"),
+  });
+
+export const useValidateUpdate = () =>
+  useMutation({
+    mutationFn: (file: File) =>
+      api.post<UpdatePackageInfo>("/system/update/validate", {
+        fileName: file.name,
+        sizeBytes: file.size,
+      }),
+  });
+
+export const useInstallUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (uploadId: string) =>
+      api.post<UpdateLauf>(`/system/update/install/${uploadId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.systemInfo });
+      qc.invalidateQueries({ queryKey: qk.einstellungen.updateHistorie });
+    },
+  });
+};
+
+/** Polling-Query für laufendes Update — läuft alle 500 ms während status="laeuft". */
+export const useUpdateLauf = (id: string | null) =>
+  useQuery({
+    queryKey: id ? qk.einstellungen.updateLauf(id) : ["system", "update", "lauf", "none"],
+    queryFn: () => api.get<UpdateLauf>(`/system/update/lauf/${id}`),
+    enabled: !!id,
+    refetchInterval: (q) => {
+      const data = q.state.data as UpdateLauf | undefined;
+      if (!data) return 500;
+      return data.status === "laeuft" || data.status === "rollback" ? 500 : false;
+    },
+  });
+
+export const useRollbackUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) =>
+      api.post<UpdateLauf>(`/system/update/rollback/${encodeURIComponent(version)}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.systemInfo });
+      qc.invalidateQueries({ queryKey: qk.einstellungen.updateHistorie });
+    },
+  });
+};
