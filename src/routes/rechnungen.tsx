@@ -123,7 +123,18 @@ function Page() {
         title="Rechnungen"
         subtitle="Rechnungen erstellen, Zahlungen erfassen, Mahnungen senden."
         actions={
-          <PrimaryAction onClick={() => setOpen(true)} label="Neue Rechnung" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              className="rounded-lg"
+              onClick={() => setDaDialog(true)}
+              title="Rechnungen aus Daueraufträgen erzeugen"
+            >
+              <Repeat className="mr-1.5 h-4 w-4" />
+              Aus Dauerauftrag
+            </Button>
+            <PrimaryAction onClick={() => setOpen(true)} label="Neue Rechnung" />
+          </div>
         }
       />
 
