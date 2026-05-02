@@ -68,6 +68,9 @@ export const qk = {
     sitzungen: ["einstellungen", "sitzungen"] as const,
     positionsvorlagen: ["einstellungen", "positionsvorlagen"] as const,
     textvorlagen: ["einstellungen", "textvorlagen"] as const,
+    systemInfo: ["system", "info"] as const,
+    updateHistorie: ["system", "update", "historie"] as const,
+    updateLauf: (id: string) => ["system", "update", "lauf", id] as const,
   },
   email: {
     vorlagen: ["email", "vorlagen"] as const,
@@ -568,10 +571,42 @@ export const useUpdateBackup = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backup }),
   });
 };
-export const useCreateBackup = () =>
-  useMutation({
-    mutationFn: () => api.post<{ erfolg: boolean; nachricht: string; groesseBytes?: number }>("/backup/erstellen"),
+export const useCreateBackup = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<BackupEintrag>("/backup/erstellen"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
   });
+};
+
+export const useRestoreBackup = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (backupId: string) =>
+      api.post<{ erfolg: boolean; restoredFrom: string; restoredAt: string }>(
+        `/backup/${backupId}/restore`,
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
+  });
+};
+
+export const useUploadBackup = () =>
+  useMutation({
+    mutationFn: (file: File) =>
+      api.post<{ uploadId: string; fileName: string; sizeBytes: number; vermutetesDatum?: string; valide: boolean }>(
+        "/backup/upload",
+        { fileName: file.name, sizeBytes: file.size },
+      ),
+  });
+
+export const useRestoreUploadedBackup = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (uploadId: string) =>
+      api.post<{ erfolg: boolean }>(`/backup/upload/${uploadId}/restore`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
+  });
+};
 
 export const usePositionsvorlagen = () =>
   useQuery({ queryKey: qk.einstellungen.positionsvorlagen, queryFn: () => api.get<Positionsvorlage[]>("/einstellungen/positionsvorlagen") });
