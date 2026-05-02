@@ -68,7 +68,7 @@ function Page() {
   const { data: rechnungen = [] } = useRechnungen();
   const { data: dokumente = [] } = useDokumente();
   const { data: einstellungen } = useSteuerEinstellungen();
-  const { posten: manuellePosten, remove: removeManuell } = useManuellePosten();
+  const { posten: manuellePosten, update: updateManuell, remove: removeManuell } = useManuellePosten();
   const { map: bezahltMap, setBezahlt, removeBezahlt } = useBezahltMarkierungen();
 
   const [neuOpen, setNeuOpen] = useState(false);
@@ -129,8 +129,25 @@ function Page() {
   const handleBezahlt = (postenId: string, betrag?: number) => {
     if (postenId.startsWith("auto-")) {
       setBezahlt(postenId, { bezahltAm: todayISO(), tatsaechlicherBetrag: betrag });
+    } else if (postenId.startsWith("man-")) {
+      updateManuell(postenId, {
+        status: "bezahlt",
+        bezahltAm: todayISO(),
+        tatsaechlicherBetrag: betrag,
+      });
     }
-    // Manuelle Posten werden im Dialog selbst aktualisiert
+  };
+
+  const handleWiderrufen = (postenId: string) => {
+    if (postenId.startsWith("auto-")) {
+      removeBezahlt(postenId);
+    } else if (postenId.startsWith("man-")) {
+      updateManuell(postenId, {
+        status: "offen",
+        bezahltAm: undefined,
+        tatsaechlicherBetrag: undefined,
+      });
+    }
   };
 
   return (
