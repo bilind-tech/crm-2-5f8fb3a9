@@ -184,6 +184,27 @@ function now(): string {
   return new Date().toISOString();
 }
 
+/** Mock-Drive-Ordner: "{Kategorie}/{YYYY}/{MM}". */
+function driveOrdner(kategorie: string): string {
+  const j = new Date();
+  return `${kategorie}/${j.getFullYear()}/${String(j.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Simuliert einen erfolgreichen Drive-Upload eines Dokuments nach kurzer Verzögerung. */
+function simuliereDriveSync(dok: Dokument) {
+  if (typeof setTimeout === "undefined") return;
+  setTimeout(() => {
+    dok.drive = {
+      ...(dok.drive ?? {}),
+      fileId: `mock-${dok.id}`,
+      webViewLink: `https://drive.google.com/file/d/mock-${dok.id}/view`,
+      syncedAt: now(),
+      ordner: dok.drive?.ordner ?? driveOrdner("Dokumente"),
+    };
+    persist();
+  }, 1500);
+}
+
 function nextNumber(praefix: string, n: number): string {
   const year = new Date().getFullYear();
   return praefix
@@ -770,8 +791,10 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
       betrag: dok.betrag,
       steuerrelevant: dok.steuerrelevant ?? false,
       hochgeladenAm: now(),
+      drive: { ordner: driveOrdner("Dokumente") },
     };
     d.dokumente.push(neu);
+    simuliereDriveSync(neu);
     logAktivitaet("dokument_hochgeladen", `Dokument ${neu.titel} hochgeladen`, { typ: "dokument", id: neu.id });
     persist();
     result = neu;
@@ -854,8 +877,10 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
         steuerrelevant: dok.steuerrelevant ?? false,
         hochgeladenAm: now(),
         quelle: "handy-scan",
+        drive: { ordner: driveOrdner("Dokumente") },
       };
       d.dokumente.push(neu);
+      simuliereDriveSync(neu);
       session.dokumentIds.push(neu.id);
       erzeugt.push(neu);
     }

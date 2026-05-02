@@ -19,10 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useUpdateDokument, useDeleteDokument } from "@/hooks/useApi";
+import { useUpdateDokument, useDeleteDokument, useKunden, useObjekte } from "@/hooks/useApi";
 import type { Dokument, DokumentTyp } from "@/lib/api/types";
 import { useConfirm } from "@/hooks/useConfirm";
 import { fristStatus, FRIST_LABEL, fristBadgeClass } from "@/lib/dokument/frist";
+import { DriveSyncRow } from "./DriveSyncBadge";
 
 interface Props {
   dokument: Dokument | null;
@@ -44,6 +45,7 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
   const update = useUpdateDokument();
   const del = useDeleteDokument();
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const { data: kunden = [] } = useKunden();
 
   const [titel, setTitel] = useState("");
   const [beschreibung, setBeschreibung] = useState("");
@@ -53,6 +55,9 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
   const [betrag, setBetrag] = useState("");
   const [steuerrelevant, setSteuerrelevant] = useState(false);
   const [erledigt, setErledigt] = useState(false);
+  const [kundeId, setKundeId] = useState<string>("");
+  const [objektId, setObjektId] = useState<string>("");
+  const { data: objekte = [] } = useObjekte(kundeId || undefined);
 
   useEffect(() => {
     if (!dokument) return;
@@ -64,6 +69,8 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
     setBetrag(dokument.betrag != null ? String(dokument.betrag) : "");
     setSteuerrelevant(dokument.steuerrelevant);
     setErledigt(!!dokument.erledigtAm);
+    setKundeId(dokument.kundeId ?? "");
+    setObjektId(dokument.objektId ?? "");
   }, [dokument]);
 
   if (!dokument) return null;
@@ -81,6 +88,8 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
         faelligAm: faelligAm || undefined,
         betrag: betrag ? Number(betrag) : undefined,
         steuerrelevant,
+        kundeId: kundeId || undefined,
+        objektId: objektId || undefined,
         erledigtAm: erledigt
           ? dokument.erledigtAm ?? new Date().toISOString()
           : undefined,
@@ -112,10 +121,14 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg bg-background">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-background">
           <DialogHeader>
             <DialogTitle>Dokument bearbeiten</DialogTitle>
           </DialogHeader>
+
+          <div className="-mt-1 mb-2">
+            <DriveSyncRow dokument={dokument} />
+          </div>
 
           <div className="space-y-4">
             {/* Vorschau */}
@@ -198,6 +211,48 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
             <div>
               <Label htmlFor="d-besch">Beschreibung</Label>
               <Textarea id="d-besch" rows={2} value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="d-kunde">Kunde</Label>
+                <Select
+                  value={kundeId || "_none"}
+                  onValueChange={(v) => {
+                    const next = v === "_none" ? "" : v;
+                    setKundeId(next);
+                    if (!next) setObjektId("");
+                  }}
+                >
+                  <SelectTrigger id="d-kunde"><SelectValue placeholder="— Kein Kunde —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— Kein Kunde —</SelectItem>
+                    {kunden.map((k) => (
+                      <SelectItem key={k.id} value={k.id}>
+                        {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim() || k.nummer}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="d-objekt">Objekt</Label>
+                <Select
+                  value={objektId || "_none"}
+                  onValueChange={(v) => setObjektId(v === "_none" ? "" : v)}
+                  disabled={!kundeId}
+                >
+                  <SelectTrigger id="d-objekt">
+                    <SelectValue placeholder={kundeId ? "— Kein Objekt —" : "Erst Kunde wählen"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— Kein Objekt —</SelectItem>
+                    {objekte.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
