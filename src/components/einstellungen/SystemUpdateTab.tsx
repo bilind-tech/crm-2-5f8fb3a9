@@ -214,12 +214,23 @@ export function SystemUpdateTab() {
             <VersionRow
               key={v.version}
               version={v}
-              onRollback={() => startRollback(v.version)}
-              rollbackPending={rollback.isPending}
+              onRollback={() => setPendingRollback(v.version)}
+              rollbackPending={rollback.isPending && pendingRollback === v.version}
             />
           ))}
         </ul>
       </Section>
+
+      {/* ─── Rollback-Bestätigungs-Dialog ───────────────────────────── */}
+      {pendingRollback && (
+        <RollbackConfirmDialog
+          zielVersion={pendingRollback}
+          aktiveVersion={system.version}
+          open
+          onClose={() => setPendingRollback(null)}
+          onConfirm={(passwort) => confirmRollback(pendingRollback, passwort)}
+        />
+      )}
 
       {/* ─── Live-Fortschritt-Modal ─────────────────────────────────── */}
       {activeLaufId && lauf && (
