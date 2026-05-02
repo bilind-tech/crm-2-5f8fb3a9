@@ -81,7 +81,6 @@ describe("Recovery-Code Flow", () => {
       url: "/auth/recovery/verwenden",
       headers: { "x-forwarded-for": "10.1.1.1" },
       payload: {
-        username: "owner",
         recoveryCode: firstRecovery,
         neuesPasswort: "NeuesPa55w0rt!neu",
       },
@@ -99,7 +98,6 @@ describe("Recovery-Code Flow", () => {
       url: "/auth/recovery/verwenden",
       headers: { "x-forwarded-for": "10.1.1.2" },
       payload: {
-        username: "owner",
         recoveryCode: firstRecovery,
         neuesPasswort: "AndererPa55w0rt!x",
       },
@@ -139,7 +137,6 @@ describe("Recovery-Code Flow", () => {
       url: "/auth/recovery/verwenden",
       headers: { "x-forwarded-for": "10.1.1.4" },
       payload: {
-        username: "owner",
         recoveryCode: body.recoveryCode,
         neuesPasswort: "WiederNeuPa55!a",
       },
