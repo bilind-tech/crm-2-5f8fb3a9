@@ -47,6 +47,9 @@ export function ObjektForm({ onClose, defaultKundeId, kompakt }: Props) {
         ? {
             kundeId,
             name,
+            strasse: strasse.trim() || undefined,
+            plz: plz.trim() || undefined,
+            ort: ort.trim() || undefined,
             typ: "buero",
             frequenz: "auf_abruf",
             reinigungstage: [],
@@ -81,9 +84,13 @@ export function ObjektForm({ onClose, defaultKundeId, kompakt }: Props) {
             placeholder="z. B. Bürogebäude Hauptsitz"
           />
         </Field>
-        <p className="text-xs text-muted-foreground">
-          Adresse und weitere Details kannst du später auf der Objekt-Detailseite ergänzen.
-        </p>
+        <Field label="Straße & Hausnummer">
+          <Input value={strasse} onChange={(e) => setStrasse(e.target.value)} />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="PLZ"><Input value={plz} onChange={(e) => setPlz(e.target.value)} /></Field>
+          <Field label="Ort" className="sm:col-span-2"><Input value={ort} onChange={(e) => setOrt(e.target.value)} /></Field>
+        </div>
         <div className="sticky bottom-0 -mx-4 -mb-6 mt-2 flex flex-col-reverse items-stretch gap-2 border-t border-border bg-background px-4 py-3 sm:-mx-8 sm:px-8 sm:flex-row sm:items-center sm:justify-end">
           <Button variant="outline" onClick={onClose}>Abbrechen</Button>
           <Button disabled={create.isPending} onClick={submit} className="rounded-md px-6">
