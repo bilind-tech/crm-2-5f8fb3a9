@@ -923,12 +923,54 @@ export const useTestGoogleDrive = () =>
       ),
   });
 
-// ---------- Backup-Historie & Sitzungen ----------
+// ---------- Backup-Historie & Live-Status & Sitzungen ----------
 export const useBackupHistorie = () =>
   useQuery({
     queryKey: qk.einstellungen.backupHistorie,
-    queryFn: () => api.get<BackupEintrag[]>("/einstellungen/backup/historie"),
+    queryFn: () => api.get<BackupEintrag[]>("/backup/historie"),
   });
+
+export type BackupInArbeit = BackupEintrag & {
+  phase: "queued" | "snapshot" | "archive" | "checksum" | "finalize" | "done" | "error";
+  percent: number;
+  message?: string;
+};
+
+/** Live-Pollt laufende Backups (alle 800 ms wenn welche aktiv sind). */
+export const useBackupInArbeit = () =>
+  useQuery({
+    queryKey: ["backup", "in-arbeit"] as const,
+    queryFn: () => api.get<BackupInArbeit[]>("/backup/in-arbeit"),
+    refetchInterval: (q) => ((q.state.data?.length ?? 0) > 0 ? 800 : false),
+  });
+
+export type RestoreStatus = {
+  restore: {
+    id: string;
+    phase: "queued" | "safety-backup" | "extract" | "swap" | "verify" | "done" | "rollback" | "error";
+    percent: number;
+    message?: string;
+    startedAt: string;
+    finishedAt?: string;
+  } | null;
+  maintenance: { active: boolean; reason?: string; since?: string };
+};
+
+/** Pollt Restore-Status. Auch im Wartungsmodus erreichbar. */
+export const useRestoreStatus = (enabled = true) =>
+  useQuery({
+    queryKey: ["backup", "restore-status"] as const,
+    queryFn: () => api.get<RestoreStatus>("/backup/restore-status"),
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return enabled ? 1500 : false;
+      if (d.maintenance.active) return 1000;
+      if (d.restore && d.restore.phase !== "done" && d.restore.phase !== "error") return 800;
+      return false;
+    },
+    enabled,
+  });
+
 
 export const useSitzungen = () =>
   useQuery({
