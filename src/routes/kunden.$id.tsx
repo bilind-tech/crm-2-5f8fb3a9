@@ -12,6 +12,7 @@ import { ObjektForm } from "@/components/forms/ObjektForm";
 import { AnsprechpartnerTab } from "@/components/kunden/AnsprechpartnerTab";
 import { AngebotForm } from "@/components/forms/AngebotForm";
 import { RechnungForm } from "@/components/forms/RechnungForm";
+import { KundeBearbeitenDialog } from "@/components/forms/KundeBearbeitenDialog";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { FlowBar } from "@/components/flow/FlowBar";
@@ -25,6 +26,7 @@ function Page() {
   const [openObjekt, setOpenObjekt] = useState(false);
   const [openAngebot, setOpenAngebot] = useState(false);
   const [openRechnung, setOpenRechnung] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
 
   if (isLoading) return <DetailSkeleton variant="kunde" />;
   if (!k) {
@@ -64,7 +66,7 @@ function Page() {
         }
         actions={
           <>
-            <Button variant="outline" className="rounded-lg">
+            <Button variant="outline" className="rounded-lg" onClick={() => setOpenEdit(true)}>
               <Pencil className="mr-1.5 h-4 w-4" /> Bearbeiten
             </Button>
             <Button variant="outline" className="rounded-lg">
@@ -344,6 +346,7 @@ function Page() {
       <SlideOver open={openRechnung} onOpenChange={setOpenRechnung} title="Neue Rechnung" description={`Für ${fullName}`}>
         <RechnungForm onClose={() => setOpenRechnung(false)} defaultKundeId={k.id} />
       </SlideOver>
+      <KundeBearbeitenDialog kunde={k} open={openEdit} onOpenChange={setOpenEdit} />
     </div>
   );
 }

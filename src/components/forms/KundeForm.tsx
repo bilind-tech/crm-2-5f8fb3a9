@@ -52,6 +52,7 @@ interface FormState {
   firmenname: string;
   kuerzel: string;
   kuerzelManuell: boolean;
+  startNummer: number;
   anrede: "" | "herr" | "frau" | "divers" | "keine";
   vorname: string;
   nachname: string;
@@ -78,6 +79,7 @@ const initial: FormState = {
   firmenname: "",
   kuerzel: "",
   kuerzelManuell: false,
+  startNummer: 1,
   anrede: "",
   vorname: "",
   nachname: "",
@@ -104,15 +106,16 @@ export function KundeForm({ onClose, onCreated }: Props) {
   const [f, setF] = useState<FormState>(initial);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
 
-  // Live-Vorschau der zukünftigen Belegnummer ({KÜRZEL}{MM}{YY}/01)
+  // Live-Vorschau der zukünftigen Belegnummer ({KÜRZEL}{MM}{YY}/{NN})
   const vorschauNummer = useMemo(() => {
     const k = f.kuerzel.trim().toUpperCase();
     if (!k) return "";
     const d = new Date();
     const yy = String(d.getFullYear()).slice(-2);
     const mm = String(d.getMonth() + 1).padStart(2, "0");
-    return `${k}${mm}${yy}/01`;
-  }, [f.kuerzel]);
+    const nn = String(Math.max(1, f.startNummer || 1)).padStart(2, "0");
+    return `${k}${mm}${yy}/${nn}`;
+  }, [f.kuerzel, f.startNummer]);
 
   // Beim Verlassen des Firmennamens automatisch ein Kürzel vorschlagen,
   // sofern der Nutzer noch keines manuell eingegeben hat.
@@ -167,6 +170,7 @@ export function KundeForm({ onClose, onCreated }: Props) {
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean),
+      startZaehlerAktuellerMonat: f.kuerzel && f.startNummer > 1 ? f.startNummer : undefined,
     });
     toast.success("Kunde angelegt", { description: `${k.nummer} • erfolgreich gespeichert.` });
     onCreated?.(k);
@@ -244,6 +248,25 @@ export function KundeForm({ onClose, onCreated }: Props) {
               </div>
             </div>
           </Field>
+
+          {f.kuerzel.length >= 3 && (
+            <Field label="Nächste Nummer (diesen Monat) startet bei">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={9999}
+                value={f.startNummer}
+                onChange={(e) => set("startNummer", Math.max(1, Number(e.target.value) || 1))}
+                className="font-mono w-32"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Standard: 1. Wenn du diesen Kunden vorher schon verwendet hast und z. B. 7
+                Belege außerhalb existieren, setze hier <span className="font-mono">8</span>.
+                Bestehende Belege bleiben unverändert.
+              </p>
+            </Field>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Anrede">
