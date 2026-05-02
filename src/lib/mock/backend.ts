@@ -1611,12 +1611,93 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
   }
 
   else if (m === "POST" && match(path, "/backup/erstellen")) {
-    logAktivitaet("backup_erstellt", "Backup erstellt (Mock)");
+    // ─────────────────────────────────────────────────────────────────────
+    // FRONTEND-MOCK — im Pi-Backend wird hier:
+    //   1. sqlite3 "VACUUM INTO" / .backup-API auf data.sqlite ausgeführt
+    //   2. Datei mit gzip komprimiert
+    //   3. nach DATA_DIR/backups/{kategorie}/{name}.sqlite.gz verschoben
+    //   4. Eintrag in backup_history-Tabelle mit abgeschlossenAm=NOW
+    //   5. Optional: Drive-Spiegel-Upload anstoßen
+    //   6. Rotation: alte Backups jenseits behaltenDaily/Weekly/Monthly löschen
+    // Kein Eintrag erscheint mit status="erfolg" bevor wirklich auf Disk!
+    // ─────────────────────────────────────────────────────────────────────
+    const eintrag = startBackupMock(d, "manuell", "manuell");
+    persist();
+    result = eintrag;
+  } else if (m === "GET" && match(path, "/backup/in-arbeit")) {
+    result = (d.backupHistorie ?? []).filter((b) => b.status === "in_arbeit");
+  } else if (m === "POST" && (path.startsWith("/backup/") && path.endsWith("/restore"))) {
+    // /backup/:id/restore — legt pre-restore-Backup an, simuliert Restore
+    const id = path.split("/")[2];
+    const target = (d.backupHistorie ?? []).find((b) => b.id === id);
+    if (!target || target.status !== "erfolg") {
+      throw new ApiError("Backup nicht gefunden oder nicht abgeschlossen", 404);
+    }
+    startBackupMock(d, "vor-restore", "pre-restore");
+    logAktivitaet("backup_erstellt", `Wiederherstellung gestartet: ${target.dateiname}`);
+    persist();
+    // FRONTEND-MOCK — im Live-Backend würde hier der Service kurz pausieren,
+    // die Datei entpackt, atomar nach data.sqlite umbenannt und neu gestartet.
+    result = { erfolg: true, restoredFrom: target.dateiname, restoredAt: target.zeitpunktStart };
+  } else if (m === "POST" && match(path, "/backup/upload")) {
+    // FRONTEND-MOCK — im Live-Backend kommt hier ein Multipart-Upload an,
+    // die Datei wird in /tmp/backup-upload.sqlite.gz validiert (Header-Magic),
+    // dann zur Restore-Bestätigung als Vorschau angeboten.
+    const fileName = (body as { fileName?: string })?.fileName ?? "uploaded-backup.sqlite.gz";
+    const sizeBytes = (body as { sizeBytes?: number })?.sizeBytes ?? 0;
     result = {
-      erfolg: true,
-      nachricht: "Backup im Mock-Modus simuliert. Im Live-Modus liefert das Pi-Backend ein ZIP.",
-      groesseBytes: JSON.stringify(d).length,
+      uploadId: uuid(),
+      fileName,
+      sizeBytes,
+      vermutetesDatum: extrahierteDatumAusName(fileName),
+      valide: /\.(sqlite|sqlite\.gz|db)$/i.test(fileName),
     };
+  } else if (m === "POST" && (path.startsWith("/backup/upload/") && path.endsWith("/restore"))) {
+    // /backup/upload/:uploadId/restore
+    startBackupMock(d, "vor-restore", "pre-restore");
+    persist();
+    result = { erfolg: true };
+  }
+
+  // ─── System & Updates ───────────────────────────────────────────────
+  else if (m === "GET" && match(path, "/system/info")) {
+    result = ensureSystemInfo(d);
+  } else if (m === "GET" && match(path, "/system/update/historie")) {
+    result = ensureVersionen(d);
+  } else if (m === "POST" && match(path, "/system/update/validate")) {
+    // FRONTEND-MOCK — im Pi-Backend wird hier:
+    //   1. ZIP in /tmp/update-{id}/ entpackt (mit Zip-Bomb-Schutz)
+    //   2. package.json gelesen, Version + name validiert
+    //   3. db/migrations/ gegen schema_migrations-Tabelle abgeglichen
+    //   4. PackageInfo zurückgegeben — INSTALLATION passiert noch NICHT
+    const fileName = (body as { fileName?: string })?.fileName ?? "update.zip";
+    const sizeBytes = (body as { sizeBytes?: number })?.sizeBytes ?? 0;
+    const info = mockValidateUpdate(fileName, sizeBytes, d);
+    if (!d.updateUploads) d.updateUploads = {};
+    d.updateUploads[info.uploadId] = info;
+    persist();
+    result = info;
+  } else if (m === "POST" && (path.startsWith("/system/update/install/"))) {
+    // /system/update/install/:uploadId
+    const uploadId = path.split("/")[4];
+    const info = d.updateUploads?.[uploadId];
+    if (!info || !info.valide) {
+      throw new ApiError("Update-Paket nicht gefunden oder ungültig", 400);
+    }
+    const lauf = startUpdateLaufMock(d, info);
+    persist();
+    result = lauf;
+  } else if (m === "GET" && (path.startsWith("/system/update/lauf/"))) {
+    const id = path.split("/")[4];
+    const lauf = d.updateLaeufe?.find((l) => l.id === id);
+    if (!lauf) throw new ApiError("Update-Lauf nicht gefunden", 404);
+    result = lauf;
+  } else if (m === "POST" && (path.startsWith("/system/update/rollback/"))) {
+    // /system/update/rollback/:version
+    const version = decodeURIComponent(path.split("/")[4]);
+    const lauf = startRollbackMock(d, version);
+    persist();
+    result = lauf;
   }
 
   if (result === undefined) {
