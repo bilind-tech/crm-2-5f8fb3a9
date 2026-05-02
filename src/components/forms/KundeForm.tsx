@@ -232,7 +232,7 @@ export function KundeForm({ onClose, onCreated }: Props) {
           id: crypto.randomUUID(),
           bezeichnung: f.daPosBezeichnung.trim(),
           menge: f.daPosMenge || 1,
-          einheit: "Stk",
+          einheit: "monat",
           einzelpreis: f.daPosEinzelpreis || 0,
           rabatt: 0,
         });
