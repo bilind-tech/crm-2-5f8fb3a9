@@ -5,6 +5,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import { existsSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { config } from "./config.js";
 import { openDatabase, closeDatabase, getSchemaVersion } from "./db/index.js";
 import { ensureMasterKey } from "./crypto/masterkey.js";
@@ -142,6 +143,54 @@ async function main(): Promise<void> {
   await app.register(steuernRoutes);
   await app.register(dokumenteRoutes);
   await app.register(mahnungRoutes);
+
+  // Frontend-Statics — nur wenn FRONTEND_DIR existiert (Prod / Pi-Bundle).
+  // Im Dev läuft das Frontend separat über Vite, daher hier kein Fehler.
+  if (existsSync(config.frontendDir)) {
+    const fastifyStatic = (await import("@fastify/static")).default;
+    await app.register(fastifyStatic, {
+      root: config.frontendDir,
+      prefix: "/",
+      decorateReply: true,
+      wildcard: false,
+      index: ["index.html"],
+    });
+    // SPA-Fallback: alle nicht-API/ nicht-Asset-Pfade liefern index.html
+    const indexPath = path.join(config.frontendDir, "index.html");
+    if (existsSync(indexPath)) {
+      app.setNotFoundHandler((req, reply) => {
+        const url = req.raw.url ?? "/";
+        const isApi =
+          url.startsWith("/auth") ||
+          url.startsWith("/health") ||
+          url.startsWith("/einstellungen") ||
+          url.startsWith("/backup") ||
+          url.startsWith("/stammdaten") ||
+          url.startsWith("/kunden") ||
+          url.startsWith("/angebote") ||
+          url.startsWith("/rechnungen") ||
+          url.startsWith("/aktivitaet") ||
+          url.startsWith("/benachrichtigungen") ||
+          url.startsWith("/audit") ||
+          url.startsWith("/events") ||
+          url.startsWith("/system") ||
+          url.startsWith("/steuern") ||
+          url.startsWith("/dokumente") ||
+          url.startsWith("/mahnung") ||
+          url.startsWith("/api");
+        if (isApi || req.method !== "GET") {
+          return reply.status(404).send({ error: "Not found", statusCode: 404 });
+        }
+        return reply.type("text/html").sendFile("index.html");
+      });
+      app.log.info({ frontendDir: config.frontendDir }, "Frontend-Statics aktiv");
+    }
+  } else {
+    app.log.warn(
+      { frontendDir: config.frontendDir },
+      "FRONTEND_DIR existiert nicht — Frontend wird vom Backend NICHT ausgeliefert (Dev-Modus ok)",
+    );
+  }
 
   // PDF-Cache an Belege-Mutationen koppeln
   wirePdfCacheInvalidation();

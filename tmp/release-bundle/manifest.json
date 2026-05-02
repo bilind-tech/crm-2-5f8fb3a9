@@ -1,0 +1,8 @@
+{
+  "appVersion": "0.2.0",
+  "schemaVersion": 15,
+  "createdAt": "2026-05-02T22:17:24.341Z",
+  "minBackendVersion": "0.2.0",
+  "hinweise": "# Release Notes (Vorlage)\n\nWird vom Release-Builder beim nächsten `bun run release` ins Manifest-Feld\n`hinweise` kopiert (max. 4000 Zeichen). Diese Datei kann leer bleiben — dann\nwird kein Hinweis gesetzt. Versionierung passiert per Git, nicht hier.",
+  "signature": "a7f851b42ed10f12e589d54ba3c84673eb85c39f39ce7e0c861d06f30cd1e9c5"
+}
