@@ -18,8 +18,7 @@ import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { PdfPreviewCard } from "@/components/pdf/PdfPreviewCard";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
-import { formatWiederkehrend } from "@/components/forms/DauerauftragKonfig";
-import { Repeat } from "lucide-react";
+import { DauerauftragVerwaltungCard } from "@/components/dauerauftrag/DauerauftragVerwaltungCard";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/rechnungen/$id")({ component: Page });
