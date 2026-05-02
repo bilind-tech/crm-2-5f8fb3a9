@@ -3,7 +3,7 @@
 
 import { getDatabase } from "../db/index.js";
 
-const MAX_FAILS = 5;
+export const MAX_FAILS = 5;
 const LOCK_MINUTES = 15;
 
 function nowMs(): number {
@@ -48,4 +48,15 @@ export function recordSuccess(ip: string, username: string): void {
   getDatabase()
     .prepare(`DELETE FROM auth_lockout WHERE ip = ? AND username = ?`)
     .run(ip, username.toLowerCase());
+}
+
+/** Räumt alte Lockout-Einträge auf (älter als 24h, nicht aktuell gesperrt). */
+export function purgeOldLockouts(): number {
+  return getDatabase()
+    .prepare(
+      `DELETE FROM auth_lockout
+       WHERE (locked_until IS NULL OR datetime(locked_until) < datetime('now'))
+         AND datetime(updated_at) < datetime('now','-1 day')`,
+    )
+    .run().changes;
 }
