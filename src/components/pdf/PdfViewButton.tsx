@@ -77,6 +77,7 @@ function AngebotViewer({
       errorMessage={pdf.error}
       fileName={`${beleg.nummer}.pdf`}
       drive={beleg.drive}
+      editTarget={{ kind: "angebot", id: beleg.id }}
     />
   );
 }
