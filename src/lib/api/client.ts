@@ -26,7 +26,11 @@ export class ApiError extends Error {
   }
 }
 
+// Pfade, die immer übers Mock laufen (Demo-Lock/Unlock).
+const MOCK_ONLY = new Set(["/auth/unlock", "/auth/lock", "/auth/passwort-aendern"]);
+
 function isPiPath(p: string): boolean {
+  if (MOCK_ONLY.has(p)) return false;
   return p.startsWith("/auth/") || p.startsWith("/einstellungen");
 }
 
