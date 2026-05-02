@@ -166,6 +166,17 @@ function Page() {
         verfuegbareDaten={alle.map((r) => r.rechnungsdatum)}
       />
 
+      <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 rounded border-border"
+          checked={nurDA}
+          onChange={(e) => setNurDA(e.target.checked)}
+        />
+        <Repeat className="h-3.5 w-3.5 text-primary" />
+        Nur Daueraufträge anzeigen
+      </label>
+
       {/* Mobil: Card-View */}
       <div className="space-y-2 md:hidden">
         {filtered.map((r) => {
