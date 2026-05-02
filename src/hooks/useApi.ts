@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
+import { piApi, PiApiError } from "@/lib/api/piClient";
 import type {
   Aktivitaet,
   Angebot,
