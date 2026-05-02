@@ -157,7 +157,12 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
         </button>
       </div>
 
-      <div>
+      {vorschauNummer && (
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Belegnummer:{" "}
+          <span className="font-mono font-semibold text-foreground">{vorschauNummer}</span>
+        </p>
+      )}
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Leistungen & Preise
         </p>
