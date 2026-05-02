@@ -43,7 +43,6 @@ function Dashboard() {
   const { data: umsatz = [] } = useUmsatz(zeitraum);
   const { data: rechnungen = [] } = useRechnungen();
   const mahn = useMahnZaehler(zeitraumIstAktiv(zeitraum) ? zeitraum : undefined);
-  const { data: dauerauftraege = [] } = useDauerauftraege();
   const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
 
   const aktiv = zeitraumIstAktiv(zeitraum);
@@ -54,11 +53,6 @@ function Dashboard() {
     [rechnungen],
   );
 
-  const aktiveDA = dauerauftraege.filter((d) => d.status === "aktiv");
-  const mrr = aktiveDA.reduce((sum, da) => {
-    const s = summenRechnung(da.positionen, da.rabattGesamt);
-    return sum + monatlicheBrutto(da, s.brutto);
-  }, 0);
   const offeneDAEntwuerfe = laeufeErzeugt.filter((l) => {
     if (!l.rechnungId) return false;
     const r = rechnungen.find((rr) => rr.id === l.rechnungId);
