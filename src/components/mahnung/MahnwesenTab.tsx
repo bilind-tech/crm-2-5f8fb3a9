@@ -240,44 +240,31 @@ function AutomatikKarte({
     <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <Bell className="h-4 w-4 text-primary" />
-        <h2 className="text-lg font-semibold">Mahn-Automatik</h2>
+        <h2 className="text-lg font-semibold">Mahnwesen</h2>
       </div>
-      <p className="mb-5 text-sm text-muted-foreground">
-        Modus „Vorschlag" erzeugt Hinweise im Cockpit, „Auto" verschickt Mahnungen
-        automatisch per E-Mail (idempotent: pro Stufe nur einmal).
+      <p className="mb-4 text-sm text-muted-foreground">
+        Mahnungen werden <strong>nicht automatisch verschickt</strong>. Im Modus
+        „Vorschlag" erzeugt das System nur einen Hinweis im Cockpit; den
+        eigentlichen Versand löst du manuell im jeweiligen Rechnungs-Detail aus.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="text-xs font-medium">Modus</Label>
-          <Select value={form.modus} onValueChange={(v) => setM({ modus: v as MahnModus })}>
+          <Select
+            value={form.modus === "auto" ? "vorschlag" : form.modus}
+            onValueChange={(v) => setM({ modus: v as MahnModus })}
+          >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="aus">Aus</SelectItem>
-              <SelectItem value="vorschlag">Vorschlag</SelectItem>
-              <SelectItem value="auto">Auto-Versand</SelectItem>
+              <SelectItem value="vorschlag">Vorschlag (nur Hinweis)</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Cron-Zeit (HH:MM)</Label>
-          <Input
-            value={form.cronZeit}
-            onChange={(e) => setM({ cronZeit: e.target.value })}
-            placeholder="08:30"
-          />
-        </div>
-
-        <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-3 sm:col-span-2">
-          <div>
-            <p className="text-sm font-medium">Nur an Werktagen laufen</p>
-            <p className="text-xs text-muted-foreground">Mo–Fr, kein Lauf am Wochenende.</p>
-          </div>
-          <Switch
-            checked={form.nurAnWerktagen}
-            onCheckedChange={(v) => setM({ nurAnWerktagen: v })}
-          />
+          <p className="text-xs text-muted-foreground">
+            Auto-Versand ist deaktiviert — diese App verschickt grundsätzlich
+            keine E-Mails ohne deine ausdrückliche Bestätigung.
+          </p>
         </div>
       </div>
 
