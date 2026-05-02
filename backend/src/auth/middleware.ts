@@ -5,7 +5,7 @@ import { config } from "../config.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    user?: { id: string; username: string };
+    user?: { id: string; username: string; rolle: "owner" | "mitarbeiter" };
   }
 }
 
