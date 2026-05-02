@@ -1,0 +1,50 @@
+{
+  "name": "mycleancenter-backend",
+  "version": "0.2.0",
+  "private": true,
+  "description": "MyCleanCenter Backend (Pi 5, Fastify + SQLite)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node --enable-source-maps dist/server.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^9.4.0",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/multipart": "^8.3.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/static": "^7.0.4",
+    "@node-rs/argon2": "^1.8.3",
+    "better-sqlite3": "^11.3.0",
+    "fastify": "^4.28.1",
+    "googleapis": "^171.4.0",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.7",
+    "pdfmake": "^0.2.10",
+    "pino": "^9.4.0",
+    "tar": "^7.5.13",
+    "unzipper": "^0.12.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.14.10",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^8.0.0",
+    "@types/pdfmake": "^0.3.2",
+    "@types/tar": "^7.0.87",
+    "@types/unzipper": "^0.10.11",
+    "jszip": "^3.10.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.0"
+  }
+}
