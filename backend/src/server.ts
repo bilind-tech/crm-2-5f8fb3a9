@@ -21,6 +21,9 @@ import { auditRoutes } from "./routes/audit.js";
 import { eventsRoutes } from "./routes/events.js";
 import { systemRoutes } from "./routes/system.js";
 import { steuernRoutes } from "./routes/steuern.js";
+import { dokumenteRoutes } from "./routes/dokumente.js";
+import { startFristenScheduler } from "./dokumente/fristen-cron.js";
+import { purgeExpiredSessions as purgeExpiredUploadSessions } from "./dokumente/repo.js";
 import { reapStaleLock } from "./system/runner.js";
 import { purgeExpiredPakete } from "./system/repo.js";
 import { startBelegeScheduler } from "./belege/scheduler.js";
@@ -135,6 +138,7 @@ async function main(): Promise<void> {
   await app.register(eventsRoutes);
   await app.register(systemRoutes);
   await app.register(steuernRoutes);
+  await app.register(dokumenteRoutes);
 
   // PDF-Cache an Belege-Mutationen koppeln
   wirePdfCacheInvalidation();
@@ -152,6 +156,8 @@ async function main(): Promise<void> {
   startScheduler();
   // Belege-Scheduler (überfällig-Markierung) starten
   startBelegeScheduler();
+  // Dokumente-Frist-Cron (täglich nach 07:00 Pi-Zeit)
+  startFristenScheduler();
 
   await app.listen({ port: config.port, host: config.host });
   app.log.info(
@@ -176,8 +182,9 @@ async function main(): Promise<void> {
       const akt = purgeOldAktivitaeten();
       const ben = purgeOldWegwischte();
       const pak = purgeExpiredPakete();
-      if (sess + audit + lock + akt + ben + pak > 0) {
-        app.log.info({ sess, audit, lock, akt, ben, pak }, "background sweep");
+      const ups = purgeExpiredUploadSessions();
+      if (sess + audit + lock + akt + ben + pak + ups > 0) {
+        app.log.info({ sess, audit, lock, akt, ben, pak, ups }, "background sweep");
       }
     } catch (e) {
       app.log.warn({ err: e }, "sweep failed");
