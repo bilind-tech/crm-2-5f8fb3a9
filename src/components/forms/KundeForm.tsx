@@ -14,9 +14,10 @@ import {
 import { SmartInput, smartValue } from "@/components/ui/smart-input";
 import { useCreateKunde, useKuerzelFrei } from "@/hooks/useApi";
 import { useCreateDauerauftrag } from "@/hooks/useDauerauftraege";
+import { api } from "@/lib/api/client";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
-import type { Kunde, DauerauftragFrequenz, DauerauftragModus, Position } from "@/lib/api/types";
+import type { Kunde, Ansprechpartner, DauerauftragFrequenz, DauerauftragModus, Position } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 const PHONE_PREFIX = "+49 ";
