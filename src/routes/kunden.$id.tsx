@@ -346,6 +346,7 @@ function Page() {
       <SlideOver open={openRechnung} onOpenChange={setOpenRechnung} title="Neue Rechnung" description={`Für ${fullName}`}>
         <RechnungForm onClose={() => setOpenRechnung(false)} defaultKundeId={k.id} />
       </SlideOver>
+      <KundeBearbeitenDialog kunde={k} open={openEdit} onOpenChange={setOpenEdit} />
     </div>
   );
 }
