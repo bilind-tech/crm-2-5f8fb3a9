@@ -1,6 +1,6 @@
 // Auth-Provider — verbindet sich mit dem Pi-Backend wenn erreichbar,
-// fällt sonst auf Mock-Lock-Modus zurück. Im Pi-Modus existieren Setup-,
-// Login- und Logout-Flows; Auto-Lock bleibt clientseitig.
+// fällt auf 'mock-lock' (kein Backend konfiguriert) oder 'backend-offline'
+// (Backend konfiguriert aber nicht erreichbar) zurück.
 
 import {
   createContext,
@@ -14,8 +14,15 @@ import {
 import { api } from "@/lib/api/client";
 import { piApi, PiApiError } from "@/lib/api/piClient";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
+import { isBackendUrlExplicit } from "@/lib/api/backendUrl";
 
-export type AuthMode = "loading" | "needs-setup" | "logged-out" | "logged-in" | "mock-lock";
+export type AuthMode =
+  | "loading"
+  | "needs-setup"
+  | "logged-out"
+  | "logged-in"
+  | "mock-lock"
+  | "backend-offline";
 
 interface PiUser {
   id: string;
@@ -27,16 +34,13 @@ interface AuthState {
   user: PiUser | null;
   unlocked: boolean;
   loading: boolean;
-  // Pi-Backend
   setup: (input: { username: string; password: string; setupToken: string }) => Promise<void>;
   login: (input: { username: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (alt: string, neu: string) => Promise<void>;
   refreshMe: () => Promise<void>;
-  // Mock/Lock-Fallback
   unlock: (passwort: string) => Promise<void>;
   lock: () => Promise<void>;
-  // Settings
   setAutoLockMinutes: (m: number) => void;
   autoLockMinutes: number;
 }
@@ -46,9 +50,6 @@ const Ctx = createContext<AuthState | null>(null);
 interface MeResponse {
   user: PiUser;
   expiresAt: string;
-}
-interface MeNeedsSetup {
-  error: "needs-setup";
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -78,18 +79,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         if (err.status === 0) {
-          // Backend offline — Fallback auf Mock-Lock
           setUser(null);
-          setMode("mock-lock");
+          // Wenn URL explizit gesetzt → Offline-Screen, sonst Demo-Mock
+          setMode(isBackendUrlExplicit() ? "backend-offline" : "mock-lock");
           return;
         }
       }
       setUser(null);
-      setMode("mock-lock");
+      setMode(isBackendUrlExplicit() ? "backend-offline" : "mock-lock");
     }
   }, []);
 
-  // Beim Backend-URL-Wechsel oder Status-Wechsel neu prüfen
   useEffect(() => {
     void refreshMe();
   }, [refreshMe, backendStatus]);
@@ -135,7 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await piApi.post("/auth/passwort-aendern", { alt, neu });
   }, []);
 
-  // Mock-Lock-Fallback (alter Code, bleibt für Demo-/Offline-Modus)
   const unlock = useCallback(async (passwort: string) => {
     setLoading(true);
     try {
@@ -157,12 +156,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         /* ignore */
       }
-      setMode("mock-lock");
+      setMode(isBackendUrlExplicit() ? "logged-out" : "mock-lock");
       setUser(null);
     }
   }, [mode, user, logout]);
 
-  // Aktivitäts-Tracking
   useEffect(() => {
     if (mode !== "logged-in") return;
     const handler = (): void => {
@@ -173,7 +171,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => events.forEach((e) => window.removeEventListener(e, handler));
   }, [mode]);
 
-  // Auto-Lock
   useEffect(() => {
     if (mode !== "logged-in") return;
     const id = window.setInterval(() => {

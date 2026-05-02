@@ -20,3 +20,12 @@ export async function verifyPassword(hashStr: string, plain: string): Promise<bo
     return false;
   }
 }
+
+// Konstantzeit-Hash, der NIE matcht — wird bei "User existiert nicht" verifiziert,
+// damit ein Angreifer per Antwortzeit keine Usernames enumerieren kann.
+let dummyHashCache: string | null = null;
+export async function getDummyHash(): Promise<string> {
+  if (dummyHashCache) return dummyHashCache;
+  dummyHashCache = await hash("$$invalid$$ no-real-password $$", OPTIONS);
+  return dummyHashCache;
+}

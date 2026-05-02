@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Server, ShieldAlert, UserPlus } from "lucide-react";
+import { Eye, EyeOff, Lock, RefreshCw, Server, ShieldAlert, UserPlus } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { PiApiError } from "@/lib/api/piClient";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
@@ -32,6 +32,58 @@ function Wrapper({ children, sub }: { children: React.ReactNode; sub: React.Reac
   );
 }
 
+function PasswordInput({
+  id,
+  value,
+  onChange,
+  autoComplete,
+  autoFocus,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete: string;
+  autoFocus?: boolean;
+}) {
+  const [show, setShow] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
+  return (
+    <div className="space-y-1">
+      <div className="relative">
+        <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          id={id}
+          type={show ? "text" : "password"}
+          className="pl-9 pr-9"
+          value={value}
+          autoFocus={autoFocus}
+          autoComplete={autoComplete}
+          required
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => setCapsLock(e.getModifierState?.("CapsLock") ?? false)}
+          onKeyUp={(e) => setCapsLock(e.getModifierState?.("CapsLock") ?? false)}
+        />
+        <button
+          type="button"
+          aria-label={show ? "Passwort verbergen" : "Passwort anzeigen"}
+          onClick={() => setShow((s) => !s)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+      {capsLock && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">Feststelltaste ist aktiv</p>
+      )}
+    </div>
+  );
+}
+
+function formatLockedUntil(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("de-DE", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
+}
+
 function LoginForm() {
   const { login, loading } = useAuth();
   const [username, setUsername] = useState("");
@@ -49,11 +101,29 @@ function LoginForm() {
       if (err instanceof PiApiError && err.status === 423) {
         const b = err.body as { lockedUntil?: string };
         setLockedUntil(b?.lockedUntil ?? null);
-        setFehler("Zu viele Fehlversuche. Bitte später erneut versuchen.");
         return;
       }
       setFehler(err instanceof Error ? err.message : "Anmeldung fehlgeschlagen");
     }
+  }
+
+  if (lockedUntil) {
+    return (
+      <Wrapper sub="Konto vorübergehend gesperrt.">
+        <div className="space-y-3 text-sm">
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive">
+            <div className="mb-1 flex items-center gap-2 font-semibold">
+              <ShieldAlert className="h-4 w-4" />
+              Konto gesperrt
+            </div>
+            Zu viele Fehlversuche. Entsperrt um <strong>{formatLockedUntil(lockedUntil)}</strong>.
+          </div>
+          <Button type="button" variant="secondary" className="w-full" onClick={() => setLockedUntil(null)}>
+            Zurück
+          </Button>
+        </div>
+      </Wrapper>
+    );
   }
 
   return (
@@ -72,28 +142,10 @@ function LoginForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="pw">Passwort</Label>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="pw"
-              type="password"
-              className="pl-9"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
+          <PasswordInput id="pw" value={password} onChange={setPassword} autoComplete="current-password" />
         </div>
         {fehler && (
-          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {fehler}
-            {lockedUntil && (
-              <span className="mt-1 block text-xs">
-                Entsperrt: {new Date(lockedUntil).toLocaleString("de-DE")}
-              </span>
-            )}
-          </p>
+          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{fehler}</p>
         )}
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Anmelden …" : "Anmelden"}
@@ -122,7 +174,7 @@ function SetupForm() {
           return;
         }
         if (err.status === 401) {
-          setFehler("Setup-Token ungültig.");
+          setFehler("Setup-Token ungültig oder abgelaufen.");
           return;
         }
       }
@@ -136,7 +188,7 @@ function SetupForm() {
         <div className="rounded-md border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-200">
           <div className="mb-1 flex items-center gap-1.5 font-semibold">
             <ShieldAlert className="h-3.5 w-3.5" />
-            Setup-Token
+            Setup-Token (gültig 24h)
           </div>
           Steht im Backend-Log beim ersten Start oder in
           <code className="mx-1">data/keys/setup.token</code>.
@@ -153,14 +205,7 @@ function SetupForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="setup-pw">Passwort (min. 12 Zeichen)</Label>
-          <Input
-            id="setup-pw"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            required
-          />
+          <PasswordInput id="setup-pw" value={password} onChange={setPassword} autoComplete="new-password" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="setup-token">Setup-Token</Label>
@@ -184,9 +229,48 @@ function SetupForm() {
   );
 }
 
+function BackendOfflineScreen() {
+  const { url, lastError, refresh, status } = useBackendStatus();
+  const { refreshMe } = useAuth();
+
+  // Bei Reconnect automatisch refreshen
+  useEffect(() => {
+    if (status === "connected") {
+      void refreshMe();
+    }
+  }, [status, refreshMe]);
+
+  return (
+    <Wrapper sub="Verbindung zum Pi-Backend verloren.">
+      <div className="space-y-4 text-sm">
+        <div className="rounded-md border border-border bg-muted/40 p-3">
+          <div className="mb-1 flex items-center gap-1.5 font-semibold text-foreground">
+            <Server className="h-3.5 w-3.5" />
+            Backend nicht erreichbar
+          </div>
+          <p className="text-muted-foreground">
+            <code>{url}</code> antwortet nicht. Prüfe ob der Pi läuft und im Netzwerk erreichbar ist.
+          </p>
+          {lastError && <p className="mt-1 text-xs text-rose-700">{lastError}</p>}
+        </div>
+        <Button
+          type="button"
+          className="w-full"
+          onClick={() => {
+            refresh();
+            void refreshMe();
+          }}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Erneut prüfen
+        </Button>
+      </div>
+    </Wrapper>
+  );
+}
+
 function MockLockForm() {
   const { unlock, loading } = useAuth();
-  const { url, lastError } = useBackendStatus();
   const [passwort, setPasswort] = useState("");
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -201,32 +285,20 @@ function MockLockForm() {
   }
 
   return (
-    <Wrapper sub="Demo-Modus — Pi-Backend nicht erreichbar.">
+    <Wrapper sub="Demo-Modus — kein Pi-Backend hinterlegt.">
       <div className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-xs">
         <div className="mb-1 flex items-center gap-1.5 font-semibold text-foreground">
           <Server className="h-3.5 w-3.5" />
-          Backend offline
+          Demo
         </div>
         <p className="text-muted-foreground">
-          {url} ist nicht erreichbar. Du kannst die App im Demo-Modus erkunden.
+          Hinterlege in Einstellungen → Backend-Verbindung deine Pi-URL, um echte Daten zu nutzen.
         </p>
-        {lastError && <p className="mt-1 text-rose-700">{lastError}</p>}
       </div>
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="pw">Passwort (Demo)</Label>
-          <div className="relative">
-            <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="pw"
-              type="password"
-              autoFocus
-              className="pl-9"
-              value={passwort}
-              onChange={(e) => setPasswort(e.target.value)}
-              required
-            />
-          </div>
+          <PasswordInput id="pw" value={passwort} onChange={setPasswort} autoComplete="current-password" autoFocus />
         </div>
         {fehler && (
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{fehler}</p>
@@ -266,6 +338,6 @@ export function LockScreen() {
   }
   if (mode === "needs-setup") return <SetupForm />;
   if (mode === "logged-out") return <LoginForm />;
-  // mock-lock
+  if (mode === "backend-offline") return <BackendOfflineScreen />;
   return <MockLockForm />;
 }

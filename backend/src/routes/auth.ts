@@ -1,23 +1,23 @@
 // /auth/* Routen.
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "../db/index.js";
-import { hashPassword, verifyPassword } from "../auth/password.js";
-import {
-  createSession,
-  deleteSession,
-  resolveSession,
-  SESSION_COOKIE,
-} from "../auth/sessions.js";
+import { hashPassword, verifyPassword, getDummyHash } from "../auth/password.js";
+import { createSession, deleteSession, resolveSession } from "../auth/sessions.js";
 import { getStatus, recordFailure, recordSuccess } from "../auth/lockout.js";
 import { audit } from "../auth/audit.js";
 import {
   checkAndConsumeSetupToken,
   ensureSetupToken,
+  markSetupComplete,
   userCount,
 } from "../auth/setup-token.js";
-import { config } from "../config.js";
+import {
+  clearSessionCookie,
+  getCookieToken,
+  setSessionCookie,
+} from "../auth/middleware.js";
 
 const PasswortPolicy = z
   .string()
@@ -42,26 +42,7 @@ const ChangePwSchema = z.object({
   neu: PasswortPolicy,
 });
 
-function setSessionCookie(reply: FastifyReply, token: string): void {
-  reply.setCookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: config.nodeEnv === "production",
-    path: "/",
-    maxAge: 14 * 24 * 60 * 60,
-  });
-}
-function clearSessionCookie(reply: FastifyReply): void {
-  reply.clearCookie(SESSION_COOKIE, { path: "/" });
-}
-
-function getCookieToken(req: FastifyRequest): string | undefined {
-  const c = (req as unknown as { cookies?: Record<string, string> }).cookies;
-  return c?.[SESSION_COOKIE];
-}
-
 export async function authRoutes(app: FastifyInstance): Promise<void> {
-  // Beim Boot ggf. Setup-Token erzeugen
   ensureSetupToken((line) => app.log.info(line));
 
   app.get("/auth/me", async (req, reply) => {
@@ -75,6 +56,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       reply.status(401);
       return { error: "unauthenticated" };
     }
+    if (sess.refreshed) setSessionCookie(reply, sess.token);
     return {
       user: { id: sess.userId, username: sess.username },
       expiresAt: sess.expiresAt,
@@ -103,6 +85,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
          VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
       )
       .run(id, parsed.data.username, hash);
+    markSetupComplete();
 
     const sess = createSession(id, req.headers["user-agent"], req.ip);
     setSessionCookie(reply, sess.token);
@@ -113,45 +96,53 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.post("/auth/login", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
-    const parsed = LoginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      reply.status(422);
-      return { error: "validation" };
-    }
-    const { username, password } = parsed.data;
+  app.post(
+    "/auth/login",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const parsed = LoginSchema.safeParse(req.body);
+      if (!parsed.success) {
+        reply.status(422);
+        return { error: "validation" };
+      }
+      const { username, password } = parsed.data;
 
-    const lock = getStatus(req.ip, username);
-    if (lock.locked) {
-      reply.status(423);
-      return { error: "locked", lockedUntil: lock.lockedUntil };
-    }
+      const lock = getStatus(req.ip, username);
+      if (lock.locked) {
+        reply.status(423);
+        return { error: "locked", lockedUntil: lock.lockedUntil };
+      }
 
-    const user = getDatabase()
-      .prepare(`SELECT id, username, password_hash FROM app_user WHERE username = ? COLLATE NOCASE`)
-      .get(username) as { id: string; username: string; password_hash: string } | undefined;
+      const user = getDatabase()
+        .prepare(`SELECT id, username, password_hash FROM app_user WHERE username = ? COLLATE NOCASE`)
+        .get(username) as { id: string; username: string; password_hash: string } | undefined;
 
-    const ok = user ? await verifyPassword(user.password_hash, password) : false;
-    if (!ok || !user) {
-      const status = recordFailure(req.ip, username);
-      audit({ action: "auth.login.fail", detail: { username }, ip: req.ip });
-      reply.status(401);
+      // Konstantzeit: bei nicht existierendem User trotzdem Argon2 laufen lassen
+      const hashToCheck = user?.password_hash ?? (await getDummyHash());
+      const passwordOk = await verifyPassword(hashToCheck, password);
+      const ok = !!user && passwordOk;
+
+      if (!ok) {
+        const status = recordFailure(req.ip, username);
+        audit({ action: "auth.login.fail", detail: { username }, ip: req.ip });
+        // Nach Update sperren, falls Schwelle erreicht wurde — 423 statt 401
+        if (status.locked) {
+          reply.status(423);
+          return { error: "locked", lockedUntil: status.lockedUntil };
+        }
+        reply.status(401);
+        return { error: "invalid-credentials" };
+      }
+      recordSuccess(req.ip, username);
+      const sess = createSession(user.id, req.headers["user-agent"], req.ip);
+      setSessionCookie(reply, sess.token);
+      audit({ userId: user.id, action: "auth.login", ip: req.ip });
       return {
-        error: "invalid-credentials",
-        failCount: status.failCount,
-        locked: status.locked,
-        lockedUntil: status.lockedUntil,
+        user: { id: user.id, username: user.username },
+        expiresAt: sess.expiresAt,
       };
-    }
-    recordSuccess(req.ip, username);
-    const sess = createSession(user.id, req.headers["user-agent"], req.ip);
-    setSessionCookie(reply, sess.token);
-    audit({ userId: user.id, action: "auth.login", ip: req.ip });
-    return {
-      user: { id: user.id, username: user.username },
-      expiresAt: sess.expiresAt,
-    };
-  });
+    },
+  );
 
   app.post("/auth/logout", async (req, reply) => {
     const token = getCookieToken(req);
