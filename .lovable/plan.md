@@ -1,37 +1,74 @@
 ## Ziel
-Den separaten **„Zeitraum"-Balken** (Jahr/Monat) auf der Rechnungs- und Angebotsseite entfernen — er hängt aktuell als zweite Leiste unter der FilterBar und sieht „hässlich" aus. Stattdessen wird der Zeitraum **in den bestehenden Filter integriert**: auf Desktop kompakt in der FilterBar selbst, auf Mobile im Filter-Sheet (das man über das Filter-Icon öffnet).
 
-## Änderungen
+1. Ansprechpartner können nach dem Anlegen jederzeit vollständig bearbeitet werden (Inline-Edit auf der Kunden-Detailseite, Tab "Ansprechpartner").
+2. Das Objekt-Formular (Anlegen) wird vereinfacht: **Frequenz** und **Quadratmeter** komplett raus. Stattdessen Pflichtfelder/Eingaben für **Name**, **Objektnummer** (manuell oder automatisch) sowie **vollständige Adresse** (Straße, PLZ, Ort).
+3. Objekt-Detailseite: Adresse prominent anzeigen, Frequenz-/m²-Zeilen entfernen.
+4. Objekte können auch im Nachhinein bearbeitet werden (gleiche Felder wie beim Anlegen).
 
-### 1. `src/routes/angebote.tsx` & `src/routes/rechnungen.tsx`
-- Den eigenständigen `<ZeitraumFilter ... />`-Block (eigene Zeile unter der FilterBar) entfernen.
-- Stattdessen `zeitraum` + `setZeitraum` + `verfuegbareDaten` als neue Props an `FilterBar` übergeben.
+---
 
-### 2. `src/routes/angebote.tsx` — `FilterBar` erweitern
-Neue Props auf `FilterBarProps`:
-```ts
-zeitraum?: ZeitraumState;
-setZeitraum?: (v: ZeitraumState) => void;
-verfuegbareDaten?: string[];
-```
+## 1. Ansprechpartner bearbeiten — `src/components/kunden/AnsprechpartnerTab.tsx`
 
-**Desktop (`DesktopFilterBar`):** Zwischen den Status-Pillen und dem Such-Input zwei kompakte `Select`s (Jahr + Monat) einfügen — keine eigene umrandete Karte mehr, sondern als nahtlose Pills im selben Bar-Container. Optisch wie die Status-Pillen (h-9, rounded-full, border-border). Wenn ein Zeitraum gesetzt ist, ein kleines „×" zum Zurücksetzen anzeigen.
+Komponente erweitern:
+- Zustand `editId: string | null` zusätzlich zu `showForm`.
+- "Bearbeiten"-Button (Stift-Icon) pro Listeneintrag, neben "Als primär" / "Löschen".
+- Klick auf Bearbeiten → öffnet dasselbe Form-Panel wie "Neu", aber befüllt mit den vorhandenen Werten und im Edit-Modus.
+- Speichern im Edit-Modus ruft `useUpdateAnsprechpartner` mit `{ id, ...felder }` auf statt `useCreateAnsprechpartner`.
+- Header des Form-Panels zeigt "Ansprechpartner bearbeiten" vs. "Neuer Ansprechpartner".
+- Abbrechen schließt das Panel und setzt `editId = null`.
+- "Als primär"-Toggle bleibt im Edit-Form ebenfalls bedienbar (mit korrekter Demote-Logik wie beim Anlegen).
 
-**Mobile (`MobileFilterBar`):** Das Sheet bekommt zwei Sektionen mit Trennlinie:
-- **Status** (wie bisher: Pill-Liste mit Check)
-- **Zeitraum** (neu): Jahr-Select + Monat-Select untereinander, plus „Zurücksetzen"-Link, wenn aktiv.
+Keine API-Änderungen nötig — Hook existiert bereits.
 
-Das Filter-Icon-Button im Mobile-Header zeigt einen kleinen Punkt/Badge, wenn entweder ein Status ≠ „alle" **oder** ein Zeitraum aktiv ist — so sieht der User auf einen Blick, dass im Sheet etwas eingestellt ist.
+---
 
-### 3. `src/components/filters/ZeitraumFilter.tsx`
-- `passtInZeitraum`, `ZEITRAUM_ALLE`, `ZeitraumState` und die `MONATE`-Konstante bleiben als Exporte erhalten (werden weiterhin von beiden Routen + neu von `FilterBar` importiert).
-- Die `ZeitraumFilter`-Komponente selbst wird nicht mehr verwendet — kann gelöscht werden, oder als interne Hilfs-Komponente bleiben (lösche ich, um Tote Code zu vermeiden).
+## 2. Objekt-Formular vereinfachen — `src/components/forms/ObjektForm.tsx`
 
-### 4. Mobile-Verhalten
-Auf 390px-Viewport: keine zweite Leiste mehr unter der FilterBar, dadurch kompakteres Layout, kein versehentliches Horizontal-Scrollen mehr durch die breiten Zeitraum-Pills.
+Entfernen:
+- Feld "m² zu reinigen" (`qmZuReinigen`)
+- Feld "Reinigungsfrequenz" (`frequenz` Select)
+- Feld "Objekttyp" (`typ` Select) — passt nicht mehr ins schlanke Formular
+- Feld "Zugang / Hinweise" — auf Detailseite editierbar (optional behalten? **entfernen**, da User explizit "nur Name und Objektnummer" + Adresse will)
 
-## Ergebnis
-- Eine einzige, einheitliche Filter-Karte pro Liste.
-- Desktop: Zeitraum als zwei dezente Pills inline mit den Status-Pills.
-- Mobile: Zeitraum sauber im Filter-Sheet, Filter-Icon zeigt aktiven Zustand.
-- Keine doppelten Filter-Container mehr.
+Behalten / hinzufügen:
+- **Kunde** (Select, Pflicht)
+- **Objektnummer** (neues Feld, optional — wenn leer, generiert Backend automatisch wie bisher; manuell eintippbar als Override)
+- **Bezeichnung / Name** (Pflicht)
+- **Straße & Hausnummer**
+- **PLZ** + **Ort**
+
+Submit-Defaults für entfernte Pflichtfelder im Datenmodell:
+- `typ: "buero"` (fester Default, da Pflicht im Typ)
+- `frequenz: "auf_abruf"` (fester Default)
+- `reinigungstage: []`
+- `status: "aktiv"`
+
+Der `kompakt`-Zweig (Schnell-Anlage im Kunden-Detail) bleibt unverändert (nur Bezeichnung).
+
+---
+
+## 3. Objekt-Detailseite — `src/routes/objekte.$id.tsx`
+
+- Frequenz, Tage, m²-Zeile entfernen.
+- Adresse + Zugang in der Detail-Card behalten.
+- "Bearbeiten"-Button hinzufügen, der einen `ObjektBearbeitenDialog` öffnet (analog zu `KundeBearbeitenDialog`).
+
+## 4. Neue Komponente `src/components/forms/ObjektBearbeitenDialog.tsx`
+
+- Dialog (gleicher Stil wie `KundeBearbeitenDialog`: `w-[calc(100vw-1rem)]`, `overflow-x-hidden`, `bg-background`).
+- Felder: Name, Objektnummer, Straße, PLZ, Ort, Status (aktiv/pausiert/beendet).
+- Verwendet `useUpdateObjekt(id)` (existiert bereits).
+- Speichern → Toast + Close.
+
+## 5. Objekt-Listenansicht — `src/routes/objekte.tsx`
+
+- Tabellenspalten "Frequenz" und "m²" entfernen, dafür Spalte "Adresse" (Straße + PLZ Ort) ergänzen.
+- Mobile Card: Frequenz/m² aus `meta` entfernen, stattdessen Straße zeigen.
+
+---
+
+## Nicht-Ziele
+
+- Datenmodell `Objekt` bleibt unverändert (Felder existieren weiterhin im Type, werden nur in der UI nicht mehr eingeben/anzeigen).
+- Keine Migration vorhandener Datensätze nötig.
+- `ObjektForm` `kompakt`-Modus (im Kunden-Detail) bleibt wie er ist.
