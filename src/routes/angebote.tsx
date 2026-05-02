@@ -224,6 +224,9 @@ function Page() {
                 <td className="px-4 py-3 text-muted-foreground">{formatDate(a.gueltigBis)}</td>
                 <td className="px-4 py-3 text-right font-semibold">{formatEUR(summe(a))}</td>
                 <td className="px-4 py-3">{statusBadge(a.status)}</td>
+                <td className="px-4 py-3">
+                  <FlowBar steps={angebotFlow(a, angebotMitRechnung.has(a.id)).steps} size="sm" />
+                </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1 text-muted-foreground">
                     <AngebotAnnahmeButtons angebot={a} size="sm" />
