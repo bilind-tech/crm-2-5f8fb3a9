@@ -73,7 +73,7 @@ function Page() {
     if (offen > 0) {
       return (
         <Button className="rounded-lg" onClick={() => setZahlungOpen(true)}>
-          <Wallet className="mr-1.5 h-4 w-4" /> Zahlung erfassen
+          <Wallet className="mr-1.5 h-4 w-4" /> Als bezahlt markieren
         </Button>
       );
     }
