@@ -30,7 +30,7 @@ let app: Awaited<ReturnType<typeof buildApp>>;
 async function buildApp() {
   ensureMasterKey(config.keyPath);
   openDatabase(config.dbPath);
-  const a = Fastify({ logger: false });
+  const a = Fastify({ logger: false, trustProxy: true });
   await a.register(helmet, { contentSecurityPolicy: false });
   await a.register(cookie);
   await a.register(rateLimit, { max: 1000, timeWindow: "1 minute" });
