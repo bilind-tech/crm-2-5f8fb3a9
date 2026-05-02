@@ -431,6 +431,8 @@ export function KundeForm({ onClose, onCreated }: Props) {
               <SmartInput prefix={WEB_PREFIX} value={f.webseite} onChange={(v) => set("webseite", v)} inputMode="url" />
             </Field>
           </div>
+
+          <AnsprechpartnerHinweis f={f} />
         </TabsContent>
 
         <TabsContent value="adresse" className="mt-6 space-y-4">
