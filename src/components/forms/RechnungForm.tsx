@@ -174,10 +174,14 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
         </button>
       </div>
 
-      {vorschauNummer && (
+      {kundeId && (
         <p className="-mt-3 text-xs text-muted-foreground">
           Belegnummer:{" "}
-          <span className="font-mono font-semibold text-foreground">{vorschauNummer}</span>
+          {vorschauLaedt || !vorschauNummer ? (
+            <span className="text-muted-foreground/70">wird ermittelt …</span>
+          ) : (
+            <span className="font-mono font-semibold text-foreground">{vorschauNummer}</span>
+          )}
         </p>
       )}
 
