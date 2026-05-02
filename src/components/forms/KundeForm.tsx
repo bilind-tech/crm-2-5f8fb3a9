@@ -647,3 +647,31 @@ function Field({
     </div>
   );
 }
+
+function AnsprechpartnerHinweis({ f }: { f: FormState }) {
+  const anredeLabel =
+    f.anrede === "herr" ? "Herr" :
+    f.anrede === "frau" ? "Frau" :
+    f.anrede === "divers" ? "" :
+    f.anrede === "keine" ? "" : "";
+  const fullName = [anredeLabel, f.vorname.trim(), f.nachname.trim()].filter(Boolean).join(" ");
+  const kontakt = f.email.trim() || smartValue(f.telefon, PHONE_PREFIX) || smartValue(f.mobil, PHONE_PREFIX) || "";
+  const hatPerson = !!(f.vorname.trim() || f.nachname.trim() || f.email.trim() || f.telefon.trim() || f.mobil.trim());
+
+  if (!hatPerson) {
+    return (
+      <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        Tipp: Trage Anrede + Name (oder Kontakt) ein – die Person wird automatisch als{" "}
+        <span className="font-medium text-foreground">primärer Ansprechpartner</span> für diesen Kunden gespeichert.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground">
+      Wird automatisch als <span className="font-medium">primärer Ansprechpartner</span> gespeichert:{" "}
+      <span className="font-medium">{fullName || "(ohne Name)"}</span>
+      {kontakt && <span className="text-muted-foreground"> · {kontakt}</span>}
+    </div>
+  );
+}
