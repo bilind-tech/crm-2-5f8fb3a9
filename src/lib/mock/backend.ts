@@ -1705,7 +1705,15 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     result = lauf;
   } else if (m === "POST" && (path.startsWith("/system/update/rollback/"))) {
     // /system/update/rollback/:version
+    // SICHERHEIT: Passwort-Pflicht (Re-Auth). Live-Backend MUSS bcrypt-vergleichen,
+    // bei Fehler 401. Vor dem Code-Swap wird ein pre-rollback-{ts}.sqlite.gz
+    // Sicherheitsbackup erstellt. Daten-Verzeichnis bleibt 100% unberührt.
+    const passwort = (body as { passwort?: string })?.passwort ?? "";
+    if (!passwort.trim()) {
+      throw new ApiError("Passwort erforderlich", 401);
+    }
     const version = decodeURIComponent(path.split("/")[4]);
+    startBackupMock(d, "vor-rollback", "pre-update");
     const lauf = startRollbackMock(d, version);
     persist();
     result = lauf;
