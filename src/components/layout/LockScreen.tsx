@@ -101,7 +101,6 @@ function useCountdown(targetIso: string | null): string {
 
 function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   const { login, loading } = useAuth();
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [fehler, setFehler] = useState<string | null>(null);
   const [lockedUntil, setLockedUntil] = useState<string | null>(null);
@@ -111,7 +110,7 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
     setFehler(null);
     setLockedUntil(null);
     try {
-      await login({ username, password });
+      await login({ password });
     } catch (err) {
       if (err instanceof PiApiError && err.status === 423) {
         const b = err.body as { lockedUntil?: string };
@@ -125,19 +124,18 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   const countdown = useCountdown(lockedUntil);
   const istNochGesperrt = lockedUntil ? new Date(lockedUntil).getTime() > Date.now() : false;
 
-  // Wenn Countdown abgelaufen, Lock zurücksetzen
   useEffect(() => {
     if (lockedUntil && !istNochGesperrt) setLockedUntil(null);
   }, [lockedUntil, istNochGesperrt]);
 
   if (lockedUntil && istNochGesperrt) {
     return (
-      <Wrapper sub="Konto vorübergehend gesperrt.">
+      <Wrapper sub="Vorübergehend gesperrt.">
         <div className="space-y-3 text-sm">
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-destructive">
             <div className="mb-1 flex items-center gap-2 font-semibold">
               <ShieldAlert className="h-4 w-4" />
-              Konto gesperrt
+              Anmeldung gesperrt
             </div>
             <p>
               Zu viele Fehlversuche. Erneut möglich in{" "}
@@ -156,22 +154,17 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   }
 
   return (
-    <Wrapper sub="Bitte mit Benutzer und Passwort anmelden.">
+    <Wrapper sub="Bitte Passwort eingeben.">
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="username">Benutzername</Label>
-          <Input
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoFocus
-            autoComplete="username"
-            required
-          />
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="pw">Passwort</Label>
-          <PasswordInput id="pw" value={password} onChange={setPassword} autoComplete="current-password" />
+          <PasswordInput
+            id="pw"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+            autoFocus
+          />
         </div>
         {fehler && (
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{fehler}</p>
