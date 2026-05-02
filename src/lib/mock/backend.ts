@@ -1859,6 +1859,12 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     result = lauf;
   }
 
+  // ─── Steuern (Step 10) ───────────────────────────────────────────────
+  // In-Memory; keine Persist-Notwendigkeit für Demo. Bleibt zwischen Reloads
+  // im LocalStorage-DB ungespeichert — Demo-Konto sieht jedes Mal Defaults.
+  else if (path.startsWith("/steuern/")) {
+    result = handleSteuernMock(m, path, body);
+  }
   if (result === undefined) {
     throw new ApiError(`Mock-Endpoint nicht implementiert: ${m} ${path}`, 404);
   }
