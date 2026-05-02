@@ -280,9 +280,7 @@ function Page() {
                 key={p.id}
                 posten={p}
                 onClick={() => setDetailDialog(p)}
-                onWiderrufen={
-                  p.id.startsWith("auto-") ? () => removeBezahlt(p.id) : undefined
-                }
+                onWiderrufen={() => handleWiderrufen(p.id)}
                 onLoeschen={p.id.startsWith("man-") ? () => removeManuell(p.id) : undefined}
               />
             ))}
