@@ -15,7 +15,6 @@ import { Route as ObjekteRouteImport } from './routes/objekte'
 import { Route as KundenRouteImport } from './routes/kunden'
 import { Route as EinstellungenRouteImport } from './routes/einstellungen'
 import { Route as DokumenteRouteImport } from './routes/dokumente'
-import { Route as DauerauftraegeRouteImport } from './routes/dauerauftraege'
 import { Route as AngeboteRouteImport } from './routes/angebote'
 import { Route as AktivitaetRouteImport } from './routes/aktivitaet'
 import { Route as IndexRouteImport } from './routes/index'
@@ -25,8 +24,6 @@ import { Route as ObjekteNeuRouteImport } from './routes/objekte.neu'
 import { Route as ObjekteIdRouteImport } from './routes/objekte.$id'
 import { Route as KundenNeuRouteImport } from './routes/kunden.neu'
 import { Route as KundenIdRouteImport } from './routes/kunden.$id'
-import { Route as DauerauftraegePosteingangRouteImport } from './routes/dauerauftraege.posteingang'
-import { Route as DauerauftraegeIdRouteImport } from './routes/dauerauftraege.$id'
 import { Route as AngeboteNeuRouteImport } from './routes/angebote.neu'
 import { Route as AngeboteIdRouteImport } from './routes/angebote.$id'
 import { Route as RechnungenIdBearbeitenRouteImport } from './routes/rechnungen.$id.bearbeiten'
@@ -61,11 +58,6 @@ const EinstellungenRoute = EinstellungenRouteImport.update({
 const DokumenteRoute = DokumenteRouteImport.update({
   id: '/dokumente',
   path: '/dokumente',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DauerauftraegeRoute = DauerauftraegeRouteImport.update({
-  id: '/dauerauftraege',
-  path: '/dauerauftraege',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AngeboteRoute = AngeboteRouteImport.update({
@@ -113,17 +105,6 @@ const KundenIdRoute = KundenIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => KundenRoute,
 } as any)
-const DauerauftraegePosteingangRoute =
-  DauerauftraegePosteingangRouteImport.update({
-    id: '/posteingang',
-    path: '/posteingang',
-    getParentRoute: () => DauerauftraegeRoute,
-  } as any)
-const DauerauftraegeIdRoute = DauerauftraegeIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => DauerauftraegeRoute,
-} as any)
 const AngeboteNeuRoute = AngeboteNeuRouteImport.update({
   id: '/neu',
   path: '/neu',
@@ -154,7 +135,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/aktivitaet': typeof AktivitaetRoute
   '/angebote': typeof AngeboteRouteWithChildren
-  '/dauerauftraege': typeof DauerauftraegeRouteWithChildren
   '/dokumente': typeof DokumenteRoute
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
@@ -163,8 +143,6 @@ export interface FileRoutesByFullPath {
   '/steuern': typeof SteuernRoute
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
-  '/dauerauftraege/$id': typeof DauerauftraegeIdRoute
-  '/dauerauftraege/posteingang': typeof DauerauftraegePosteingangRoute
   '/kunden/$id': typeof KundenIdRoute
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
@@ -179,7 +157,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/aktivitaet': typeof AktivitaetRoute
   '/angebote': typeof AngeboteRouteWithChildren
-  '/dauerauftraege': typeof DauerauftraegeRouteWithChildren
   '/dokumente': typeof DokumenteRoute
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
@@ -188,8 +165,6 @@ export interface FileRoutesByTo {
   '/steuern': typeof SteuernRoute
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
-  '/dauerauftraege/$id': typeof DauerauftraegeIdRoute
-  '/dauerauftraege/posteingang': typeof DauerauftraegePosteingangRoute
   '/kunden/$id': typeof KundenIdRoute
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
@@ -205,7 +180,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/aktivitaet': typeof AktivitaetRoute
   '/angebote': typeof AngeboteRouteWithChildren
-  '/dauerauftraege': typeof DauerauftraegeRouteWithChildren
   '/dokumente': typeof DokumenteRoute
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
@@ -214,8 +188,6 @@ export interface FileRoutesById {
   '/steuern': typeof SteuernRoute
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
-  '/dauerauftraege/$id': typeof DauerauftraegeIdRoute
-  '/dauerauftraege/posteingang': typeof DauerauftraegePosteingangRoute
   '/kunden/$id': typeof KundenIdRoute
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
@@ -232,7 +204,6 @@ export interface FileRouteTypes {
     | '/'
     | '/aktivitaet'
     | '/angebote'
-    | '/dauerauftraege'
     | '/dokumente'
     | '/einstellungen'
     | '/kunden'
@@ -241,8 +212,6 @@ export interface FileRouteTypes {
     | '/steuern'
     | '/angebote/$id'
     | '/angebote/neu'
-    | '/dauerauftraege/$id'
-    | '/dauerauftraege/posteingang'
     | '/kunden/$id'
     | '/kunden/neu'
     | '/objekte/$id'
@@ -257,7 +226,6 @@ export interface FileRouteTypes {
     | '/'
     | '/aktivitaet'
     | '/angebote'
-    | '/dauerauftraege'
     | '/dokumente'
     | '/einstellungen'
     | '/kunden'
@@ -266,8 +234,6 @@ export interface FileRouteTypes {
     | '/steuern'
     | '/angebote/$id'
     | '/angebote/neu'
-    | '/dauerauftraege/$id'
-    | '/dauerauftraege/posteingang'
     | '/kunden/$id'
     | '/kunden/neu'
     | '/objekte/$id'
@@ -282,7 +248,6 @@ export interface FileRouteTypes {
     | '/'
     | '/aktivitaet'
     | '/angebote'
-    | '/dauerauftraege'
     | '/dokumente'
     | '/einstellungen'
     | '/kunden'
@@ -291,8 +256,6 @@ export interface FileRouteTypes {
     | '/steuern'
     | '/angebote/$id'
     | '/angebote/neu'
-    | '/dauerauftraege/$id'
-    | '/dauerauftraege/posteingang'
     | '/kunden/$id'
     | '/kunden/neu'
     | '/objekte/$id'
@@ -308,7 +271,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AktivitaetRoute: typeof AktivitaetRoute
   AngeboteRoute: typeof AngeboteRouteWithChildren
-  DauerauftraegeRoute: typeof DauerauftraegeRouteWithChildren
   DokumenteRoute: typeof DokumenteRoute
   EinstellungenRoute: typeof EinstellungenRoute
   KundenRoute: typeof KundenRouteWithChildren
@@ -360,13 +322,6 @@ declare module '@tanstack/react-router' {
       path: '/dokumente'
       fullPath: '/dokumente'
       preLoaderRoute: typeof DokumenteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dauerauftraege': {
-      id: '/dauerauftraege'
-      path: '/dauerauftraege'
-      fullPath: '/dauerauftraege'
-      preLoaderRoute: typeof DauerauftraegeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/angebote': {
@@ -432,20 +387,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KundenIdRouteImport
       parentRoute: typeof KundenRoute
     }
-    '/dauerauftraege/posteingang': {
-      id: '/dauerauftraege/posteingang'
-      path: '/posteingang'
-      fullPath: '/dauerauftraege/posteingang'
-      preLoaderRoute: typeof DauerauftraegePosteingangRouteImport
-      parentRoute: typeof DauerauftraegeRoute
-    }
-    '/dauerauftraege/$id': {
-      id: '/dauerauftraege/$id'
-      path: '/$id'
-      fullPath: '/dauerauftraege/$id'
-      preLoaderRoute: typeof DauerauftraegeIdRouteImport
-      parentRoute: typeof DauerauftraegeRoute
-    }
     '/angebote/neu': {
       id: '/angebote/neu'
       path: '/neu'
@@ -510,20 +451,6 @@ const AngeboteRouteWithChildren = AngeboteRoute._addFileChildren(
   AngeboteRouteChildren,
 )
 
-interface DauerauftraegeRouteChildren {
-  DauerauftraegeIdRoute: typeof DauerauftraegeIdRoute
-  DauerauftraegePosteingangRoute: typeof DauerauftraegePosteingangRoute
-}
-
-const DauerauftraegeRouteChildren: DauerauftraegeRouteChildren = {
-  DauerauftraegeIdRoute: DauerauftraegeIdRoute,
-  DauerauftraegePosteingangRoute: DauerauftraegePosteingangRoute,
-}
-
-const DauerauftraegeRouteWithChildren = DauerauftraegeRoute._addFileChildren(
-  DauerauftraegeRouteChildren,
-)
-
 interface KundenRouteChildren {
   KundenIdRoute: typeof KundenIdRoute
   KundenNeuRoute: typeof KundenNeuRoute
@@ -580,7 +507,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AktivitaetRoute: AktivitaetRoute,
   AngeboteRoute: AngeboteRouteWithChildren,
-  DauerauftraegeRoute: DauerauftraegeRouteWithChildren,
   DokumenteRoute: DokumenteRoute,
   EinstellungenRoute: EinstellungenRoute,
   KundenRoute: KundenRouteWithChildren,
