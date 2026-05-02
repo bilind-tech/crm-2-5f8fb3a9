@@ -68,3 +68,59 @@ export const piApi = {
   put: <T>(p: string, body?: unknown) => request<T>("PUT", p, { body }),
   delete: <T>(p: string) => request<T>("DELETE", p),
 };
+
+/**
+ * Multipart-POST mit Upload-Progress (XHR statt fetch).
+ * `onProgress` bekommt einen Wert zwischen 0 und 1.
+ */
+export function postWithProgress<T>(
+  path: string,
+  formData: FormData,
+  onProgress?: (ratio: number) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${getBackendUrl()}${path}`, true);
+    xhr.withCredentials = true;
+    xhr.responseType = "text";
+
+    xhr.upload.onprogress = (e) => {
+      if (!onProgress) return;
+      if (e.lengthComputable && e.total > 0) {
+        onProgress(Math.min(1, e.loaded / e.total));
+      }
+    };
+
+    xhr.onerror = () => reject(new PiApiError("Backend nicht erreichbar", 0));
+    xhr.ontimeout = () => reject(new PiApiError("Zeitüberschreitung", 0));
+    xhr.onabort = () => reject(new PiApiError("Abgebrochen", 0));
+
+    xhr.onload = () => {
+      const ct = xhr.getResponseHeader("content-type") ?? "";
+      const raw = xhr.responseText;
+      const data: unknown = ct.includes("application/json") && raw ? JSON.parse(raw) : raw;
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status === 204) return resolve(undefined as T);
+        return resolve(data as T);
+      }
+      const msg =
+        typeof data === "string"
+          ? data || xhr.statusText
+          : ((data as { error?: string; message?: string })?.error ??
+            (data as { message?: string })?.message ??
+            xhr.statusText);
+      reject(new PiApiError(msg, xhr.status, data));
+    };
+
+    if (signal) {
+      if (signal.aborted) {
+        xhr.abort();
+        return;
+      }
+      signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    }
+
+    xhr.send(formData);
+  });
+}
