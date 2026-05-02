@@ -1713,7 +1713,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
       throw new ApiError("Passwort erforderlich", 401);
     }
     const version = decodeURIComponent(path.split("/")[4]);
-    startBackupMock(d, "vor-rollback", "pre-update");
+    startBackupMock(d, "vor-restore", "pre-update");
     const lauf = startRollbackMock(d, version);
     persist();
     result = lauf;
