@@ -147,6 +147,10 @@ export interface BelegOptionen {
   wiederkehrend: boolean;
   /** Detail-Konfiguration für „Wiederkehrend": Rhythmus + Wochentage. Optional. */
   wiederkehrendDetails?: WiederkehrendDetails;
+  /** Per-Beleg Logo-Override (Data-URL). Wenn gesetzt, statt Standard-Logo verwenden. */
+  logoOverride?: string;
+  /** Per-Beleg Firmendaten-Override. Felder, die hier gesetzt sind, überschreiben die globalen Firmendaten im PDF. */
+  firmaOverride?: Partial<Firmendaten>;
 }
 
 export type WiederkehrendRhythmus = "woechentlich" | "monatlich" | "quartalsweise" | "jaehrlich";
