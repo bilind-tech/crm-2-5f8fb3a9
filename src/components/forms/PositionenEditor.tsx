@@ -1,4 +1,4 @@
-import { Trash2, Plus, FileText, Receipt } from "lucide-react";
+import { Trash2, Plus, FileText, Receipt, ChevronUp, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -223,14 +223,8 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt %</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={p.steuersatz}
-                onChange={(e) => onChange({ steuersatz: Number(e.target.value) || 0 })}
-                className="h-11"
-              />
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt</label>
+              <MwStStepper value={p.steuersatz} onChange={(v) => onChange({ steuersatz: v })} />
             </div>
           </div>
 
@@ -256,52 +250,25 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
             />
           </div>
 
-          {/* Menge / Einheit / Preis / MwSt */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {/* Preis + MwSt (50/50) */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Menge</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={p.menge}
-                onChange={(e) => onChange({ menge: Number(e.target.value) || 0 })}
-                className="h-10"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Einheit</label>
-              <Select
-                value={p.einheit}
-                onValueChange={(v) => onChange({ einheit: v as Einheit })}
-              >
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {EINHEITEN.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Einzelpreis €</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Preis (netto) €
+              </label>
               <Input
                 type="number"
                 inputMode="decimal"
                 step="0.01"
-                value={p.einzelpreisNetto}
+                value={p.einzelpreisNetto || ""}
                 onChange={(e) => onChange({ einzelpreisNetto: Number(e.target.value) || 0 })}
-                className="h-10"
+                placeholder="z. B. 250.00"
+                className="h-11 text-base font-semibold"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt %</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={p.steuersatz}
-                onChange={(e) => onChange({ steuersatz: Number(e.target.value) || 0 })}
-                className="h-10"
-              />
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt</label>
+              <MwStStepper value={p.steuersatz} onChange={(v) => onChange({ steuersatz: v })} />
             </div>
           </div>
 
@@ -351,6 +318,45 @@ function ModusSwitch({
         <Receipt className="h-3 w-3" />
         Pauschal
       </button>
+    </div>
+  );
+}
+
+function MwStStepper({
+  value,
+  onChange,
+  min = 0,
+  max = 25,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const clamp = (n: number) => Math.max(min, Math.min(max, n));
+  return (
+    <div className="flex h-11 items-stretch overflow-hidden rounded-md border border-input bg-background">
+      <div className="flex flex-1 items-center justify-center text-base font-semibold tabular-nums">
+        {value}&nbsp;%
+      </div>
+      <div className="flex w-9 flex-col border-l border-input">
+        <button
+          type="button"
+          onClick={() => onChange(clamp(value + 1))}
+          aria-label="MwSt erhöhen"
+          className="flex flex-1 items-center justify-center text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(clamp(value - 1))}
+          aria-label="MwSt verringern"
+          className="flex flex-1 items-center justify-center border-t border-input text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }
