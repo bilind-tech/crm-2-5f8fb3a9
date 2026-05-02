@@ -47,6 +47,9 @@ export function ObjektForm({ onClose, defaultKundeId, kompakt }: Props) {
         ? {
             kundeId,
             name,
+            strasse: strasse.trim() || undefined,
+            plz: plz.trim() || undefined,
+            ort: ort.trim() || undefined,
             typ: "buero",
             frequenz: "auf_abruf",
             reinigungstage: [],
