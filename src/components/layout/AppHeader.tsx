@@ -131,6 +131,7 @@ export function AppHeader() {
             </ScrollArea>
           </PopoverContent>
         </Popover>
+        <UserMenu />
       </div>
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
