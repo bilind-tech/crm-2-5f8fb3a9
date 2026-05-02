@@ -154,8 +154,53 @@ function Page() {
           { value: "bilder", label: "Bilder", count: tabCounts.bilder },
           { value: "steuer", label: "Steuer", count: tabCounts.steuer },
         ]}
-        placeholder="Suche nach Titel, Dateiname…"
+        placeholder="Suche nach Titel, Dateiname, Beschreibung, Kunde…"
       />
+
+      {/* Kunde + Objekt Filter */}
+      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 sm:flex-row sm:items-center sm:p-2">
+        <Select
+          value={kundeFilter}
+          onValueChange={(v) => {
+            setKundeFilter(v);
+            setObjektFilter("alle");
+          }}
+        >
+          <SelectTrigger className="h-9 sm:w-64"><SelectValue placeholder="Alle Kunden" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alle">Alle Kunden</SelectItem>
+            {kunden.map((k) => (
+              <SelectItem key={k.id} value={k.id}>
+                {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim() || k.nummer}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={objektFilter} onValueChange={setObjektFilter} disabled={kundeFilter === "alle"}>
+          <SelectTrigger className="h-9 sm:w-64">
+            <SelectValue placeholder={kundeFilter === "alle" ? "Erst Kunde wählen" : "Alle Objekte"} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="alle">Alle Objekte</SelectItem>
+            {objekteFuerFilter.map((o) => (
+              <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(kundeFilter !== "alle" || objektFilter !== "alle") && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setKundeFilter("alle");
+              setObjektFilter("alle");
+            }}
+            className="rounded-lg"
+          >
+            <X className="mr-1 h-4 w-4" /> Filter zurücksetzen
+          </Button>
+        )}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-16 text-center shadow-sm">
