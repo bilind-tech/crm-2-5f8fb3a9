@@ -288,6 +288,12 @@ function Page() {
       )}
 
       <HandyScanDialog open={scanOpen} onOpenChange={setScanOpen} />
+      <DokumentViewer
+        dokument={viewing}
+        open={!!viewing}
+        onOpenChange={(v) => !v && setViewing(null)}
+        onEdit={(d) => setEditing(d)}
+      />
       <DokumentBearbeitenDialog
         dokument={editing}
         open={!!editing}
@@ -297,7 +303,15 @@ function Page() {
   );
 }
 
-function DokumentCard({ d, onClick }: { d: Dokument; onClick: () => void }) {
+function DokumentCard({
+  d,
+  kundeName,
+  onClick,
+}: {
+  d: Dokument;
+  kundeName?: string;
+  onClick: () => void;
+}) {
   const status = fristStatus(d);
   return (
     <button
@@ -313,8 +327,14 @@ function DokumentCard({ d, onClick }: { d: Dokument; onClick: () => void }) {
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{d.titel}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="truncate text-sm font-semibold">{d.titel}</p>
+          <DriveSyncBadge dokument={d} />
+        </div>
         <p className="truncate text-xs text-muted-foreground">{d.dateiname}</p>
+        {kundeName && (
+          <p className="truncate text-xs text-muted-foreground">{kundeName}</p>
+        )}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
           {status !== "ohne" && (
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium ${fristBadgeClass(status)}`}>
