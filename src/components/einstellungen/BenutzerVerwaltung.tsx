@@ -3,7 +3,7 @@
 // Anlegen/Reset im Dialog angezeigt.
 import { useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, KeyRound, ShieldCheck, ShieldOff, Copy, Check } from "lucide-react";
+import { UserPlus, KeyRound, ShieldCheck, ShieldOff, Copy, Check, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
