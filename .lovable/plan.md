@@ -1,80 +1,61 @@
-
 ## Ziel
 
-Belegnummern für Kunden mit Kürzel folgen ab sofort dem Schema:
+Beim Anlegen eines Kunden (und nachträglich) soll der **Startzähler pro Kürzel** für den **aktuellen Monat** einstellbar sein, damit alte, schon vergebene Belegnummern (z. B. „GFU0526/01–07") nicht überschrieben werden und die nächste neue Rechnung/Angebot bei z. B. `08` weitergeht. Die Vorschau folgt immer dem heutigen Monat/Jahr.
 
-```
-{KÜRZEL}{MM}{YY}/{NN}
-```
+## Verhalten (für dich)
 
-Beispiel: Kunde mit Kürzel `GFU`, Mai 2026, erstes Dokument → **`GFU0526/01`**
+**KundeForm (Neuanlage)**
+- Unter dem Kürzel-Feld erscheint, sobald ein Kürzel eingegeben ist, ein neues kleines Feld:
+  „Nächste Nummer (diesen Monat) startet bei: **[ 1 ]**".
+- Vorschau zeigt live: `GFU{MM}{YY}/{NN}` mit dem eingestellten Startwert (z. B. `GFU0526/08`).
+- Standard ist `1`. Wenn man `8` einträgt, bekommt der erste neue Beleg die `08`, der zweite `09` usw.
+- Monat/Jahr in der Vorschau immer = heute.
 
-- `MM` = 2-stelliger Monat
-- `YY` = 2-stellige Jahreszahl
-- `/NN` = laufende Nummer pro Kunde + Monat, 2-stellig, beginnt bei `01`
-- Zähler läuft je Kunde und Monat eigenständig (Mai-Zähler ≠ Juni-Zähler)
-- Gilt für Angebote, Rechnungen, Dauerauftrags-Rechnungen und Angebot→Rechnung-Konvertierung
+**Kunden-Detailseite (`/kunden/$id`)**
+- „Bearbeiten"-Button öffnet einen Dialog (neu, schlicht, ohne Gradient/Deko-Icons) mit denselben Stammdaten + dem Block „Belegnummern".
+- Block „Belegnummern":
+  - Kürzel ändern (3–4 Zeichen, A–Z 0–9).
+  - „Nächste Nummer (Monat MM/YY)" – aktueller Stand wird angezeigt, kann überschrieben werden. Z. B. wenn 7 Belege schon manuell außerhalb existieren → Wert auf `8` setzen.
+  - Kleiner Hinweis: „Ändert nur den Zähler für **diesen Monat**. Bestehende Belege bleiben unverändert."
+- Speichern aktualisiert Kürzel + den Monatszähler atomar.
 
-Kunden ohne Kürzel behalten weiterhin das globale Schema aus den Nummernkreisen (Fallback).
+**Wichtig (Daten-Schutz, gem. Memory)**
+- Kürzel-/Zählerwerte werden nie rückwirkend auf bestehende Belege angewandt — bestehende Nummern bleiben.
+- Beim Pi-Backend später: Update von Kürzel + Zähler in einer SQLite-Transaktion, kein Touch an Daten-Verzeichnis-Inhalten.
 
-## Änderungen
+## Technische Umsetzung
 
-### 1. Zentrale Nummern-Erzeugung (`src/lib/mock/backend.ts`)
+**Typen** (`src/lib/api/types.ts`)
+- `Kunde` bleibt unverändert (Kürzel existiert schon).
+- Neuer optionaler API-Input `startZaehlerAktuellerMonat?: number` für Create und Update — wird nicht persistiert am Kunden, sondern in `db.zaehlerProKunde[kundeId][YYYY-MM]` als `wert - 1` geschrieben (damit `+1` beim nächsten Beleg den gewünschten Startwert ergibt).
 
-`nextCustomerNumber()` umstellen:
-- Statt `${KUERZEL}-${YYYY}-${MM}-${NN}` → `${KUERZEL}${MM}${YY}/${NN}`
-- Periode-Key intern bleibt `YYYY-MM` (eindeutig, keine Kollision über Jahresgrenzen)
-- Fallback bei fehlendem Kürzel unverändert
-- Wird bereits an allen 5 Stellen genutzt (Angebot anlegen, Rechnung anlegen, Angebot→Rechnung, Rechnung duplizieren, Dauerauftrag-Lauf) → keine weiteren Aufrufer-Änderungen nötig
+**Backend Mock** (`src/lib/mock/backend.ts`)
+- `createKunde`: nach Anlage, falls `startZaehlerAktuellerMonat` gesetzt und `kuerzel` vorhanden →
+  `d.zaehlerProKunde[k.id][periodeAktuell] = max(0, start - 1)`.
+- `updateKunde`: gleicher Mechanismus; zusätzlich `kuerzel` darf geändert werden (bestehende Belege bleiben).
+- Helper `getAktuellerZaehler(kundeId): number` → liest `(map[periodeAktuell] ?? 0) + 1` für die UI-Anzeige in der Bearbeiten-Maske.
+- Neuer Endpoint im API-Client: `getKundenZaehler(id)` → `{ periode: "YYYY-MM", naechsterStart: number }`.
 
-### 2. Kürzel-Vorschau im KundeForm (`src/components/forms/KundeForm.tsx`)
+**API-Client / Hook** (`src/lib/api/client.ts`, `src/hooks/useApi.ts`)
+- `useKundenZaehler(id)` (Query).
+- `useUpdateKunde(id)` akzeptiert neues Feld `startZaehlerAktuellerMonat`.
 
-Vorschau-String (Zeile 108–113) auf das neue Format anpassen:
-- Neu: `${kuerzel}${MM}${YY}/01`
-- Hinweis-Text bleibt: „So beginnen alle Rechnungen & Angebote dieses Kunden."
+**KundeForm** (`src/components/forms/KundeForm.tsx`)
+- Neues State-Feld `startNummer: number` (Default `1`).
+- Input erscheint nur wenn `kuerzel.length >= 3`.
+- Vorschau-String: `${kuerzel}${MM}${YY}/${String(startNummer).padStart(2, "0")}`.
+- Beim Submit wird `startZaehlerAktuellerMonat` mitgegeben (nur wenn `>1`).
 
-### 3. Live-Vorschau im AngebotForm (`src/components/forms/AngebotForm.tsx`)
+**Neue Komponente** `src/components/forms/KundeBearbeitenDialog.tsx`
+- Dialog (`bg-background`, kein Gradient, keine Sparkles).
+- Sektion „Stammdaten" (Pflichtfelder analog KundeForm — Wiederverwendung der Felder via kleinem Refactor: Stammdaten-Felder in eine interne `KundeStammdatenFelder`-Komponente extrahieren, von KundeForm und Bearbeiten-Dialog genutzt).
+- Sektion „Belegnummern" mit Kürzel + Startzähler-Override + Live-Vorschau + Hinweistext.
+- Buttons: Abbrechen / Speichern. Toast bei Erfolg.
 
-Sobald ein Kunde gewählt ist, unter dem Titel-Feld eine kleine, dezente Vorschau anzeigen:
+**Anbindung** `src/routes/kunden.$id.tsx`
+- „Bearbeiten"-Button öffnet den neuen Dialog mit Initialwerten aus Kunde + `useKundenZaehler`.
 
-```
-Belegnummer: GFU0526/01
-```
-
-- Hat der Kunde ein Kürzel → Vorschau im neuen Format mit `01` als Platzhalter (echte Zähler-Abfrage wäre overkill und nicht race-frei).
-- Hat der Kunde kein Kürzel → Vorschau aus globalem `angebotPraefix` (Nummernkreise), ähnlich der Logik in `NummernkreiseTab.preview()`.
-- Klein, mono, `text-muted-foreground`, kein eigener Block — direkt unter dem Titel.
-
-### 4. Live-Vorschau im RechnungForm (`src/components/forms/RechnungForm.tsx`)
-
-Analog zu AngebotForm: Vorschau direkt unter Titel, nutzt `rechnungPraefix` als Fallback.
-
-### 5. Helper auslagern
-
-Neuer kleiner Helper `src/lib/format.ts` (oder `src/lib/belegNummer.ts`):
-
-```ts
-export function vorschauBelegnummer(
-  kuerzel: string | undefined,
-  fallbackPraefix: string,
-): string
-```
-
-- Wenn `kuerzel` gesetzt: `${KUERZEL}${MM}${YY}/01`
-- Sonst: `fallbackPraefix` mit `{YYYY}/{YY}/{MM}/{####}/{###}` ersetzen, `NN`-Teile mit `0001`/`001`
-- Wird in KundeForm, AngebotForm, RechnungForm wiederverwendet → eine Quelle der Wahrheit
-
-### 6. Bestehende Belege
-
-Bestehende Angebote/Rechnungen behalten ihre alte Nummer (`AN-2025-001` etc.) — nichts wird rückwirkend umnummeriert. Nur **neue** Belege ab dem Update bekommen das neue Format. Das entspricht dem Hinweis im NummernkreiseTab.
-
-## Was sich nicht ändert
-
-- Datenmodell (`Kunde.kuerzel`, `Angebot.nummer`, `Rechnung.nummer`) bleibt gleich — alles bleibt `string`.
-- Nummernkreise-Einstellungen (für Kunden ohne Kürzel) bleiben unverändert.
-- Kunden-Nummern (`K-2025-001`) bleiben am globalen `kundePraefix`.
-- Mock-Persistenz, Cross-Tab-Sync, Zähler pro Kunde + Periode (`zaehlerProKunde`) bleiben strukturell identisch.
-
-## Backend-Hinweis (für später, Pi)
-
-Sobald das Live-Backend gebaut wird, MUSS dort exakt dieselbe Funktion `nextCustomerNumber()` server-seitig in einer DB-Transaktion laufen (SELECT FOR UPDATE auf den Periode-Counter), damit zwei parallele Anfragen niemals dieselbe Nummer ziehen. Format-String wird im Memory-Eintrag zur Belegnummer dokumentiert.
+## Out of Scope
+- Keine Änderung an Nummernformat selbst (`{KÜRZEL}{MM}{YY}/{NN}` bleibt).
+- Keine Migration alter Belegnummern.
+- Globale Nummernkreise (Kunden ohne Kürzel) bleiben unverändert.
