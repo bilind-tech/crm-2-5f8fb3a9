@@ -336,7 +336,7 @@ export function KundeForm({ onClose, onCreated }: Props) {
         </TabsContent>
       </Tabs>
 
-      <div className="sticky bottom-0 -mx-4 -mb-6 mt-2 flex flex-col-reverse items-stretch gap-2 border-t border-border bg-background px-4 py-3 sm:-mx-8 sm:px-8 sm:flex-row sm:items-center sm:justify-end ">
+      <div className="sticky bottom-0 -mx-4 -mb-5 mt-2 flex flex-col-reverse items-stretch gap-2 border-t border-border bg-background px-4 py-3 sm:-mx-8 sm:-mb-6 sm:px-8 sm:flex-row sm:items-center sm:justify-end ">
         <Button variant="outline" onClick={onClose}>Abbrechen</Button>
         <Button disabled={create.isPending} onClick={submit} className="rounded-md px-6">
           {create.isPending ? "Speichere…" : "Kunde anlegen"}
