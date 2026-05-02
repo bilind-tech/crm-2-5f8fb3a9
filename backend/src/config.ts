@@ -50,6 +50,13 @@ export const config = {
   get maintenanceFlagPath() {
     return path.join(this.dataDir, "maintenance.flag");
   },
+  // Frontend-Statics — vom Backend ausgeliefert (Pi: dist/ neben backend/).
+  // Override via FRONTEND_DIR. Wenn Verzeichnis fehlt, wird Static-Plugin nicht geladen.
+  frontendDir:
+    process.env.FRONTEND_DIR ??
+    (process.env.NODE_ENV === "production"
+      ? "/opt/mycleancenter/current/dist"
+      : path.resolve(process.cwd(), "..", "dist")),
   // CORS: LAN + Lovable Preview erlaubt. Im Dev sehr permissiv.
   corsOrigins: (process.env.CORS_ORIGINS ?? "*").split(",").map((s) => s.trim()),
 } as const;
