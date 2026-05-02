@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Download, Pencil, X, FileText, ExternalLink } from "lucide-react";
+import { Download, Pencil, FileText, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useKunde, useObjekt } from "@/hooks/useApi";
@@ -37,10 +37,9 @@ export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 rounded-none border-0 bg-background p-0 sm:h-[92vh] sm:w-[min(96vw,1100px)] sm:rounded-2xl sm:border"
-        showCloseButton={false}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-3 pr-12 sm:px-5 sm:pr-14">
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold sm:text-base">{dokument.titel}</p>
             <p className="truncate text-xs text-muted-foreground">{dokument.dateiname}</p>
@@ -67,15 +66,6 @@ export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) 
           >
             <Pencil className="h-4 w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Bearbeiten</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-            className="rounded-lg"
-            aria-label="Schließen"
-          >
-            <X className="h-5 w-5" />
           </Button>
         </div>
 
