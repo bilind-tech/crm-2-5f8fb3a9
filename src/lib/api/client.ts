@@ -33,7 +33,7 @@ const PI_PREFIXES = [
   "/ansprechpartner/",
   "/objekte/",
   "/notizen/",
-  "/search",
+  "/search/",
   // Step 4
   "/angebote/",
   "/rechnungen/",
@@ -45,7 +45,12 @@ const MOCK_OVERRIDE_PREFIXES = [
 
 function isPiPath(p: string): boolean {
   if (MOCK_OVERRIDE_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))) return false;
-  return PI_PREFIXES.some((pref) => p === pref.slice(0, -1) || p.startsWith(pref));
+  // Exakt-Match auf "/search" oder "/kunden" etc., oder startsWith "/search/"
+  return PI_PREFIXES.some((pref) => {
+    const bare = pref.endsWith("/") ? pref.slice(0, -1) : pref;
+    if (p === bare) return true;
+    return p.startsWith(pref.endsWith("/") ? pref : `${pref}/`) || p.startsWith(`${bare}?`);
+  });
 }
 
 async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T> {
