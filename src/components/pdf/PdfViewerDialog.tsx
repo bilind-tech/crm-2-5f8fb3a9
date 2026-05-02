@@ -99,22 +99,45 @@ export function PdfViewerDialog({
               <DriveStatusBadge drive={drive} />
             </div>
           </div>
-          {pdfUrl ? (
-            <a
-              href={pdfUrl}
-              download={fileName}
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium hover:bg-accent sm:px-3"
-              aria-label="Download"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Download</span>
-            </a>
-          ) : (
-            <span className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium opacity-50 sm:px-3">
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Download</span>
-            </span>
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {editTarget && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  // Kurze Verzögerung, damit der Dialog sauber schließt, bevor wir navigieren.
+                  setTimeout(() => {
+                    if (editTarget.kind === "rechnung") {
+                      void navigate({ to: "/rechnungen/$id/bearbeiten", params: { id: editTarget.id } });
+                    } else {
+                      void navigate({ to: "/angebote/$id/bearbeiten", params: { id: editTarget.id } });
+                    }
+                  }, 50);
+                }}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium hover:bg-accent sm:px-3"
+                aria-label="PDF bearbeiten"
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="hidden sm:inline">PDF bearbeiten</span>
+              </button>
+            )}
+            {pdfUrl ? (
+              <a
+                href={pdfUrl}
+                download={fileName}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium hover:bg-accent sm:px-3"
+                aria-label="Download"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Download</span>
+              </a>
+            ) : (
+              <span className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium opacity-50 sm:px-3">
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Download</span>
+              </span>
+            )}
+          </div>
         </DialogHeader>
 
         <div ref={containerRef} className="flex-1 overflow-y-auto bg-muted/30 px-1 py-3 sm:px-6 sm:py-4">
