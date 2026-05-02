@@ -141,6 +141,7 @@ async function main(): Promise<void> {
   await app.register(systemRoutes);
   await app.register(steuernRoutes);
   await app.register(dokumenteRoutes);
+  await app.register(mahnungRoutes);
 
   // PDF-Cache an Belege-Mutationen koppeln
   wirePdfCacheInvalidation();
