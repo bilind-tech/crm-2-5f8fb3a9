@@ -799,8 +799,17 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     };
     d.rechnungen.push(neu);
     logAktivitaet("rechnung_angelegt", `Rechnung ${neu.nummer} angelegt`, { typ: "rechnung", id: neu.id });
+
+    // Auto-Dauerauftrag, wenn die Rechnung als wiederkehrend markiert ist und noch keiner verknüpft ist.
+    let dauerauftragNeu: { id: string; nummer: string } | undefined;
+    if (neu.optionen?.wiederkehrend && !neu.dauerauftragId) {
+      const da = erzeugeDauerauftragAusRechnung(d, neu);
+      neu.dauerauftragId = da.id;
+      dauerauftragNeu = { id: da.id, nummer: da.nummer };
+    }
+
     persist();
-    result = neu;
+    result = { ...neu, dauerauftragNeu };
   } else if (matchRoute(m, path, "GET", "/rechnungen/:id")) {
     const id = match(path, "/rechnungen/:id")!.id;
     const r = d.rechnungen.find((x) => x.id === id);
@@ -810,9 +819,17 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     const id = match(path, "/rechnungen/:id")!.id;
     const r = d.rechnungen.find((x) => x.id === id);
     if (!r) throw new ApiError("Rechnung nicht gefunden", 404);
+    const warWiederkehrend = !!r.optionen?.wiederkehrend;
     Object.assign(r, body, { geaendertAm: now() });
+    let dauerauftragNeu: { id: string; nummer: string } | undefined;
+    // Wurde Wiederkehrend neu aktiviert und noch kein Dauerauftrag verknüpft?
+    if (r.optionen?.wiederkehrend && !warWiederkehrend && !r.dauerauftragId) {
+      const da = erzeugeDauerauftragAusRechnung(d, r);
+      r.dauerauftragId = da.id;
+      dauerauftragNeu = { id: da.id, nummer: da.nummer };
+    }
     persist();
-    result = r;
+    result = { ...r, dauerauftragNeu };
   } else if (matchRoute(m, path, "DELETE", "/rechnungen/:id")) {
     const id = match(path, "/rechnungen/:id")!.id;
     d.rechnungen = d.rechnungen.filter((x) => x.id !== id);
