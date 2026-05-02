@@ -38,7 +38,7 @@ export function GlobalDropZone() {
   const objektId = objektMatch?.[1];
 
   // Wenn auf einer Objekt-Seite → Kunde aus Objekt nachladen
-  const { data: objekt } = useObjekt(objektId);
+  const { data: objekt } = useObjekt(objektId ?? "");
 
   const aktiv = isDokumente || !!kundeId || !!objektId;
 
