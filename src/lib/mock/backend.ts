@@ -471,6 +471,19 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     if (typeof rest.kuerzel === "string") {
       rest.kuerzel = rest.kuerzel.trim().toUpperCase().slice(0, 4) || undefined;
     }
+    // Eindeutigkeitsprüfung — nur bei Änderung
+    if (rest.kuerzel) {
+      const konflikt = d.kunden.find(
+        (kk) => kk.id !== id && (kk.kuerzel ?? "").trim().toUpperCase() === rest.kuerzel,
+      );
+      if (konflikt) {
+        const name = konflikt.firmenname || `${konflikt.vorname ?? ""} ${konflikt.nachname ?? ""}`.trim() || "Kunde";
+        throw new ApiError(
+          `Kürzel «${rest.kuerzel}» wird bereits von ${konflikt.nummer} (${name}) verwendet.`,
+          409,
+        );
+      }
+    }
     Object.assign(k, rest, { geaendertAm: now() });
     if (k.kuerzel && typeof startZaehlerAktuellerMonat === "number" && startZaehlerAktuellerMonat >= 1) {
       const nowD = new Date();
