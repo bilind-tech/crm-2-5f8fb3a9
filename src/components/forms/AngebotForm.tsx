@@ -163,6 +163,8 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
           <span className="font-mono font-semibold text-foreground">{vorschauNummer}</span>
         </p>
       )}
+
+      <div>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Leistungen & Preise
         </p>
