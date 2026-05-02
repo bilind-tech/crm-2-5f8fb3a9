@@ -78,7 +78,7 @@ function acquireLock(): boolean {
     } catch { return false; }
   }
   try {
-    require("node:fs").writeFileSync(f, String(process.pid), { flag: "wx" });
+    writeFileSync(f, String(process.pid), { flag: "wx" });
     return true;
   } catch { return false; }
 }
@@ -88,7 +88,7 @@ function releaseLock(): void {
 }
 
 function statMs(p: string): number | null {
-  try { return require("node:fs").statSync(p).mtimeMs; } catch { return null; }
+  try { return statSync(p).mtimeMs; } catch { return null; }
 }
 
 export function isUpdateRunning(): boolean {
@@ -441,13 +441,13 @@ function stagingDirRoot(): string {
 
 function readCurrentTarget(): string | null {
   try {
-    return require("node:fs").readlinkSync(currentLink());
+    return readlinkSync(currentLink());
   } catch { return null; }
 }
 
 function readPreviousTarget(): string | null {
   try {
-    return require("node:fs").readlinkSync(previousLink());
+    return readlinkSync(previousLink());
   } catch {
     // Fallback: zweitneuestes versions/<stamp>
     try {
@@ -472,7 +472,7 @@ function cleanupOldVersions(): void {
       if (full === cur || full === prev) continue;
       // broken-* immer löschen wenn älter 7 Tage
       try {
-        const age = Date.now() - require("node:fs").statSync(full).mtimeMs;
+        const age = Date.now() - statSync(full).mtimeMs;
         if (d.startsWith("broken-") && age < 7 * 86_400_000) continue;
         rmSync(full, { recursive: true, force: true });
       } catch { /* ignore */ }
