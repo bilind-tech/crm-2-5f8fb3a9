@@ -1834,6 +1834,10 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     const lauf = startUpdateLaufMock(d, info);
     persist();
     result = lauf;
+  } else if (m === "GET" && match(path, "/system/update/lauf/aktuell")) {
+    const lauf = d.updateLaeufe?.find((l) => l.status === "laeuft" || l.status === "rollback");
+    if (!lauf) return null as T;
+    result = lauf;
   } else if (m === "GET" && (path.startsWith("/system/update/lauf/"))) {
     const id = path.split("/")[4];
     const lauf = d.updateLaeufe?.find((l) => l.id === id);
