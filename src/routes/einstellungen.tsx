@@ -112,11 +112,19 @@ const tabs: { id: TabId; label: string; icon: typeof Building2; gruppe: string }
 const gruppen = Array.from(new Set(tabs.map((t) => t.gruppe)));
 
 function Page() {
+  const { istOwner } = useAuth();
+  const sichtbareTabs = tabs.filter((t) => istOwner || !OWNER_ONLY.includes(t.id));
+  const sichtbareGruppen = Array.from(new Set(sichtbareTabs.map((t) => t.gruppe)));
   const [tab, setTab] = useState<TabId>("firmendaten");
   const { data: firma } = useFirmendaten();
   const update = useUpdateFirmendaten();
 
-  const aktiverTab = tabs.find((t) => t.id === tab)!;
+  // Falls aktiver Tab durch Rollenwechsel verboten wird, zurück auf "firmendaten"
+  useEffect(() => {
+    if (!sichtbareTabs.find((t) => t.id === tab)) setTab("firmendaten");
+  }, [sichtbareTabs, tab]);
+
+  const aktiverTab = sichtbareTabs.find((t) => t.id === tab) ?? sichtbareTabs[0];
 
   return (
     <div className="space-y-6 pb-24">
