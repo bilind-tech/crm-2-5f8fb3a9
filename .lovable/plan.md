@@ -1,69 +1,58 @@
-# Code-Review Steuer-Modul — gefundene Probleme
+# Steuer-Seite: vollautomatisch, keine manuellen Eingaben
 
-Ich habe alle frisch erstellten Dateien (`berechnung.ts`, `store.ts`, `types.ts`, `routes/steuern.tsx`, `SteuerTab.tsx`, `SteuerBezahltDialog.tsx`, `SteuerDetailDialog.tsx`, `ManuellerPostenDialog.tsx`) durchgelesen. Hier die Funde, sortiert nach Schweregrad.
+Alles, was nur durch Rechnungen/Belege berechenbar ist, läuft automatisch. Manuelle Eingaben (Termin anlegen, Bezahlt-Markierung, tatsächlicher Betrag) verschwinden komplett.
 
-## Bugs (müssen gefixt werden)
+## Was rausfliegt
 
-### 1. USt-Fälligkeit ist um 1 Monat verschoben (echter Rechen-Bug)
-In `berechnung.ts → ustFaelligAm`:
-```
-const f = new Date(p.jahr, endMonat, 10);
-```
-`new Date(jahr, monthIndex, 10)` erwartet `monthIndex` 0-basiert. Bei `endMonat=1` (Januar) entsteht `10. Februar` — also *Folgemonat*. Das war so beabsichtigt für „10. des Folgemonats" laut Kommentar.
-**Aber:** Bei Quartalen ist `endMonat = quartal*3`, also Q1 = 3. `new Date(jahr, 3, 10)` = **10. April** = Folgemonat von März → korrekt.
-Bei Jahres-USt: `endMonat = 12` → `new Date(jahr, 12, 10)` = **10. Januar Folgejahr** → korrekt.
-**→ Tatsächlich korrekt, aber Dezember-Edge-Case prüfen.** Bei monatlicher USt für Dezember: `endMonat=12` → `10. Januar Folgejahr` ✓. Doch der Code-Pfad stimmt nur, wenn der gleiche Zweig genutzt wird. Hier ist Reihenfolge `if monat / else if quartal / else 12`. Für Dez-Monat: `endMonat=12`, `Date(jahr,12,10)` = 10.01.Folgejahr ✓.
-**→ KEIN Bug, nur unklar. Verbesserung: Kommentar präzisieren.**
+- **Button „Steuer-Termin anlegen"** komplett raus (inkl. PrimaryAction-Header)
+- **„Bezahlt"-Button** an jeder Posten-Zeile raus
+- **„Widerrufen"-Button** raus
+- **„Löschen"-Button** raus
+- **SteuerBezahltDialog** + **ManuellerPostenDialog** als Komponenten + Imports raus
+- **„Bezahlt {jahr}" KPI-Kachel** raus (ohne manuelle Bezahlung gibt es keine bezahlten Posten zu zählen)
+- **„Bezahlte Posten"-Sektion** raus
+- **Section „Manuell"-Badge** raus
+- localStorage-Hooks `useManuellePosten` und `useBezahltMarkierungen` werden auf der Seite nicht mehr genutzt (Hooks selbst bleiben im Store für späteren Bedarf, aber ungenutzt)
 
-### 2. USt-Bug bei jährlichem Rhythmus + KEIN Posten in Q4
-In `aggregiereUst`: Wenn der User „jährlich" wählt, aber im laufenden Jahr noch keine bezahlte Rechnung existiert, wird kein USt-Posten erzeugt — dasselbe gilt bei „monatlich" für Monate ohne Umsatz. **Funktional OK** (kein Posten = nichts fällig), aber die Vorsteuer-Belege ohne zugehörigen USt-Posten werden ignoriert. Jeder Vorsteuer-Beleg sollte trotzdem als Erstattungs-Posten (negativ) sichtbar sein.
-**Fix:** auch reine Vorsteuer-Perioden als Posten erzeugen, mit `geschaetzterBetrag = max(0, ust − vorsteuer)` und Notiz „Vorsteuer-Überhang X € → Erstattung".
+## Was bleibt und stärker betont wird
 
-### 3. KSt/Soli/GewSt-Vorauszahlung: Datum springt zu früh
-In `generiereAutomatischePosten`: `naechsterTermin` gibt das nächste **zukünftige** Termin-Datum zurück. Sobald der Termin überschritten ist, springt er auf den nächsten — der überfällige Posten verschwindet aus der UI. Das ist falsch: wenn am 11.03. die KSt-Vorauszahlung nicht bezahlt wurde, sollte sie **als überfällig** angezeigt werden, nicht stillschweigend auf 10.06. verschoben werden.
-**Fix:** Nicht „nächster Termin", sondern **alle vier Quartalstermine** des Jahres als separate Posten erzeugen (ID `auto-kst-${jahr}-Q1` etc.). Vergangene Termine: Status aus Bezahlt-Map ableiten, sonst „überfällig".
+### KPI-Reihe (4 Kacheln, aussagekräftiger)
 
-### 4. KSt/Soli/GewSt-Betrag wird auf alle 4 Quartale gleich verteilt
-`geschaetzterBetrag: kst / 4`. Aber YTD-Gewinn ist „bis heute" — bei Generierung im März ist Hochrechnung × 1/4 zu niedrig (echter Jahres-Gewinn wird unterschätzt, weil März nur 25 % des Jahres ist). 
-**Fix:** Jahres-Gewinn linear hochrechnen: `prognoseJahr = gewinnYtd * 365 / tageDesJahresVergangen`, dann KSt davon × 1/4. Oder simpler: Nur die **bereits bezahlten Quartale** anhand YTD ausweisen, kommende Quartale mit Vermerk „auf Basis YTD-Hochrechnung — noch unsicher".
+1. **Umsatzsteuer-Schuld aktuell** — Summe aller offenen USt-Voranmeldungen (das, was du wirklich zahlen musst, sehr präzise berechenbar)
+2. **Nächste Fälligkeit** — Datum + Betrag des nächsten USt-Termins
+3. **Empfohlene Rücklage gesamt** — der "wenn Finanzamt kommt"-Betrag = USt-Schuld + projizierte Jahres-Ertragsteuern (KSt + Soli + GewSt) auf Basis YTD
+4. **Gewinn YTD** — Netto-Einnahmen minus Netto-Ausgaben, transparent
 
-### 5. `bezahltJahrSumme` rechnet manuelle Posten doppelt
-In `berechneKennzahlen`: filtert nach `p.bezahltAm`. Manuelle Posten setzen `bezahltAm` direkt im Posten (über `update()`), automatische über `bezahltMap`. In der UI werden auto-Posten via `bezahltMap` zu `status:"bezahlt"` mit `bezahltAm` gemerged → korrekt. **Kein Bug**, aber `tatsaechlicherBetrag ?? geschaetzterBetrag` für Summen ist konsistent. ✓
+### Hauptbereich
 
-### 6. ManuellerPostenDialog: kein Validation-Hinweis bei `betrag = 0`
-`parseFloat("")` → 0, wird kommentarlos gespeichert. Akzeptabel, aber UX-Schwäche. **Fix:** Mindestens visueller Hinweis „Betrag schätzen" wenn 0.
+**„Was du zurücklegen solltest"** — eine prominente Karte mit dem Gesamt-Rücklagen-Betrag groß, darunter aufgeschlüsselt:
+- USt-Schuld (präzise) — Betrag X €
+- KSt + Soli (Schätzung Jahr) — Betrag X €
+- GewSt (Schätzung Jahr, Hebesatz Sankt Augustin 525 %) — Betrag X €
+- = Gesamt-Rücklage X €
 
-### 7. SteuerBezahltDialog `parseEUInput` akzeptiert keine Tausenderpunkte
-`"1.234,56"` → cleaned `"1.234.56"` → `parseFloat` = 1.234. **Fix:** erst alle `.` entfernen, dann `,` → `.`. Wie in anderen Dialogen (`ZahlungErfassenDialog` als Referenz prüfen).
+Mit Hinweis: USt-Teil ist exakt, Ertragsteuer-Teil ist Hochrechnung aus YTD.
 
-## Verbesserungen (nice-to-have)
+### Posten-Liste (read-only)
 
-### 8. Cross-Tab-Sync wird nicht genutzt
-`useStorageSync` ist exportiert, aber nirgends gerufen. Wenn der User in zwei Tabs gleichzeitig arbeitet, sieht er Stale-Daten. **Fix:** in `useSteuerEinstellungen`, `useManuellePosten`, `useBezahltMarkierungen` jeweils einen `storage`-Listener registrieren, der den State neu aus localStorage lädt.
+- **Offene USt-Voranmeldungen** mit genauen Beträgen und Fälligkeitsdaten — sortiert nach Fälligkeit, überfällige rot
+- **Offene Quartals-Vorauszahlungen** KSt/Soli/GewSt — sortiert nach Fälligkeit
+- Klick auf Zeile → Detail-Dialog (zeigt verknüpfte Rechnungen/Belege wie bisher)
+- Keine Buttons an den Zeilen, nur Info
 
-### 9. Vorsteuer-Annahme „immer 19 %" ist falsch für Belege mit 7 %
-In `aggregiereUst` und `gewinnYtd`: `d.betrag / 1.19 * 0.19`. Belege können auch 7 % USt enthalten (Bücher, ÖPNV, manche Dienstleistungen) oder steuerfrei sein. **Fix:** `Dokument`-Typ um optionales Feld `ustSatz` erweitern, beim Upload abfragen, default 19. Bis dahin: Disclaimer im Detail-Dialog „Vorsteuer pauschal 19 % angenommen".
+### Disclaimer bleibt
 
-### 10. Manuelle Posten ohne `bezahltAm` werden nie als „bezahlt" gezählt
-In `useManuellePosten` gibt es kein UI, um einen manuellen Posten als bezahlt zu markieren. Der „Bezahlt"-Button ruft `setBezahltDialog`, der ruft `handleBezahlt`, der ruft nur für `auto-`-IDs `setBezahlt`. Manuelle Posten werden also **nie** bezahlbar markiert. **Fix:** in `handleBezahlt` auch für `man-`-IDs den `update`-Call aus `useManuellePosten` triggern.
+„Schätzung — keine Steuerberatung. USt-Beträge sind exakt aus deinen bezahlten Rechnungen berechnet, Ertragsteuern (KSt/Soli/GewSt) sind YTD-Hochrechnungen."
 
-### 11. „Aufschlüsselung pro Steuerart" zeigt Soli nicht
-In `proArt` wird nach `p.art` gruppiert — Soli wird gerendert (Kachel ist da), aber `ART_TONE.soli = "default"` und Icon = `FileSpreadsheet`. Optisch unauffällig. Verbesserung: Soli neben KSt zusammenfassen oder visuell stärker als Sub-Posten markieren.
+## Berechnungs-Engine: keine Änderung nötig
 
-### 12. KpiCard `tone` für 0 €-Fall
-„Offen gesamt" mit 0 € → `tone="default"` ist OK. „Empfohlene Rücklage" bei `gewinnYtd < 0` (Verlust) zeigt 0 €, aber ohne Hinweis dass YTD im Minus ist. **Fix:** sublabel anpassen wenn Gewinn negativ.
+Die `generiereAutomatischePosten` und `berechneKennzahlen` aus dem letzten Durchgang funktionieren weiter — sie liefern bereits alles. Wir entfernen nur das Mergen mit `manuellePosten` und das `bezahltMap`-Overlay.
 
-### 13. Routing-Fehler-Boundary fehlt
-`createFileRoute("/steuern")` hat weder `errorComponent` noch `notFoundComponent`. Anderen Routen im Projekt prüfen — wenn dort Standard, hier nachziehen.
+## Zusammenfassung
 
-### 14. Memory-Regel: keine Gradients in Dialogen ✓
-Geprüft — alle drei neuen Dialoge nutzen `bg-background`, keine Sparkles. ✓
+Die Seite zeigt nur noch das, was technisch sicher berechenbar ist:
+- USt: zu 100 % präzise (aus Brutto/Netto bezahlter Rechnungen + Vorsteuer aus Belegen)
+- KSt/Soli/GewSt: ehrliche YTD-Hochrechnung mit Hinweis
+- Rücklagen-Empfehlung als zentraler "Sicherheitspuffer"
 
-## Vorgeschlagene Fix-Reihenfolge
-
-1. **Sofort (Bugs 3 + 4 + 7 + 10):** echte Logikfehler, die zu falschen Beträgen / nicht-funktionierenden Buttons führen.
-2. **Wichtig (Bug 2 + Verbesserung 9):** Vorsteuer-Logik vervollständigen + Disclaimer.
-3. **Polish (8, 11, 12, 13):** Cross-Tab-Sync, Visuals, Error-Boundaries.
-4. **Optional (1, 5, 6, 14):** Kommentare/UX-Feinschliff.
-
-Soll ich alles in einem Rutsch fixen, oder nur die Bug-Klasse (Punkt 1)? Bei „alles" ist das ~30 min Arbeit, bei „nur Bugs" ~10 min.
+Keine Klicks nötig, keine Eingaben, keine Verwirrung.
