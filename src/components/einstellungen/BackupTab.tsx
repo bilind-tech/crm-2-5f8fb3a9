@@ -195,6 +195,27 @@ export function BackupTab() {
         autoBackup={form.autoBackup}
       />
 
+      {/* ─── Restore-Banner (Wartungsmodus) ───────────────────────────── */}
+      {(maintenanceActive || (restoreState?.restore && restoreState.restore.phase !== "done")) && restoreState?.restore && (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-amber-600" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Wiederherstellung läuft … ({restoreState.restore.phase})</p>
+              <p className="text-xs text-muted-foreground">
+                {restoreState.restore.message ?? "Backend befindet sich im Wartungsmodus, bitte warten."}
+              </p>
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-amber-500/20">
+                <div
+                  className="h-full bg-amber-500 transition-all"
+                  style={{ width: `${Math.max(5, restoreState.restore.percent)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── In-Arbeit-Indikator ─────────────────────────────────────── */}
       {inArbeit.length > 0 && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
@@ -202,7 +223,9 @@ export function BackupTab() {
             <div key={b.id} className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Backup läuft …</p>
+                <p className="text-sm font-medium">
+                  Backup läuft … <span className="text-muted-foreground font-normal">({b.phase})</span>
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Gestartet {formatRelativeShort(b.zeitpunktStart)} ·{" "}
                   {b.kategorie === "pre-restore"
@@ -210,9 +233,13 @@ export function BackupTab() {
                     : b.kategorie === "pre-update"
                       ? "Sicherheitsbackup vor Update"
                       : "Manuelles Backup"}
+                  {b.message ? ` · ${b.message}` : ""}
                 </p>
                 <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-primary/20">
-                  <div className="h-full w-2/3 animate-pulse bg-primary" />
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${Math.max(5, b.percent)}%` }}
+                  />
                 </div>
               </div>
             </div>
