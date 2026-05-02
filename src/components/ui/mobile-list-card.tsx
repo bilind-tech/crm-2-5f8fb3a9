@@ -10,6 +10,7 @@ interface MobileListCardProps {
   trailing?: React.ReactNode;
   badge?: React.ReactNode;
   actions?: React.ReactNode;
+  footer?: React.ReactNode;
   className?: string;
 }
 
@@ -28,6 +29,7 @@ export function MobileListCard({
   trailing,
   badge,
   actions,
+  footer,
   className,
 }: MobileListCardProps) {
   return (
@@ -67,6 +69,7 @@ export function MobileListCard({
           <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
         )}
       </div>
+      {footer && <div className="min-w-0">{footer}</div>}
       {actions && (
         <div
           className="flex items-center justify-end gap-1 border-t border-border pt-2"

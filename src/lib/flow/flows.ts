@@ -135,26 +135,18 @@ export function rechnungFlow(r: Rechnung): FlowResult {
   };
 
   const s3: FlowStep = {
-    key: "teilbezahlt",
-    label: "Teilbezahlt",
-    hint: istTeilbezahlt
-      ? `${formatEUR(bezahlt)} von ${formatEUR(s.brutto)} · noch ${formatEUR(offen)} offen`
-      : undefined,
-    tone: istTeilbezahlt ? "active" : istBezahlt ? "success" : "muted",
-    reached: istTeilbezahlt || istBezahlt,
-    current: istTeilbezahlt,
-  };
-
-  const s4: FlowStep = {
     key: "bezahlt",
     label: istStorniert ? "Storniert" : "Bezahlt",
     date: istBezahlt && r.zahlungen.length > 0
       ? formatDate(r.zahlungen[r.zahlungen.length - 1].datum)
       : undefined,
-    tone: istStorniert ? "muted" : istBezahlt ? "success" : "muted",
-    reached: istBezahlt,
-    current: istBezahlt,
+    hint: istTeilbezahlt
+      ? `${formatEUR(bezahlt)} von ${formatEUR(s.brutto)} · noch ${formatEUR(offen)} offen`
+      : undefined,
+    tone: istStorniert ? "muted" : istBezahlt ? "success" : istTeilbezahlt ? "active" : "muted",
+    reached: istBezahlt || istTeilbezahlt,
+    current: istBezahlt || istTeilbezahlt,
   };
 
-  return { steps: [s1, s2, s3, s4] };
+  return { steps: [s1, s2, s3] };
 }

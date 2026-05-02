@@ -15,6 +15,8 @@ import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { RechnungForm } from "@/components/forms/RechnungForm";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
 import { useConfirm } from "@/hooks/useConfirm";
+import { FlowBar } from "@/components/flow/FlowBar";
+import { rechnungFlow } from "@/lib/flow/flows";
 import type { Rechnung } from "@/lib/api/types";
 
 export const Route = createFileRoute("/rechnungen")({ component: Layout });
@@ -203,6 +205,7 @@ function Page() {
                 </div>
               }
               badge={statusBadge(r.status)}
+              footer={<FlowBar steps={rechnungFlow(r).steps} size="sm" />}
               actions={
                 <>
                   <PdfViewButton kind="rechnung" beleg={r} />
@@ -263,6 +266,7 @@ function Page() {
               <th className="px-4 py-3 text-right font-medium">Brutto</th>
               <th className="px-4 py-3 text-right font-medium">Offen</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Fortschritt</th>
               <th className="px-4 py-3 text-right font-medium">Aktionen</th>
             </tr>
           </thead>
@@ -306,6 +310,9 @@ function Page() {
                     )}
                   </td>
                   <td className="px-4 py-3">{statusBadge(r.status)}</td>
+                  <td className="px-4 py-3">
+                    <FlowBar steps={rechnungFlow(r).steps} size="sm" />
+                  </td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1 text-muted-foreground">
                       <PdfViewButton kind="rechnung" beleg={r} />
@@ -349,7 +356,7 @@ function Page() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">
                   Keine Rechnungen gefunden.
                 </td>
               </tr>

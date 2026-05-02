@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAngebote, useDeleteAngebot, useKunde, useUpdateAngebot } from "@/hooks/useApi";
+import { useAngebote, useDeleteAngebot, useKunde, useUpdateAngebot, useRechnungen } from "@/hooks/useApi";
 import { toast } from "sonner";
 import { useAngebotPdf } from "@/hooks/useBelegPdf";
 import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
@@ -15,6 +15,8 @@ import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { SlideOver } from "@/components/ui/slide-over";
 import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { AngebotForm } from "@/components/forms/AngebotForm";
+import { FlowBar } from "@/components/flow/FlowBar";
+import { angebotFlow } from "@/lib/flow/flows";
 import type { Angebot } from "@/lib/api/types";
 import { useConfirm } from "@/hooks/useConfirm";
 
@@ -60,10 +62,15 @@ function summe(a: Angebot) {
 
 function Page() {
   const { data: alle = [] } = useAngebote();
+  const { data: alleRechnungen = [] } = useRechnungen();
   const navigate = useNavigate();
   const del = useDeleteAngebot();
   const { confirm, dialog: confirmDialog } = useConfirm();
-  
+
+  const angebotMitRechnung = useMemo(
+    () => new Set(alleRechnungen.map((r) => r.quellAngebotId).filter(Boolean) as string[]),
+    [alleRechnungen],
+  );
   const [filter, setFilter] = useState<string>("alle");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -140,6 +147,7 @@ function Page() {
             }
             trailing={formatEUR(summe(a))}
             badge={statusBadge(a.status)}
+            footer={<FlowBar steps={angebotFlow(a, angebotMitRechnung.has(a.id)).steps} size="sm" />}
             actions={
               <>
                 <AngebotAnnahmeButtons angebot={a} />
@@ -191,6 +199,7 @@ function Page() {
               <th className="px-4 py-3 font-medium">Gültig bis</th>
               <th className="px-4 py-3 text-right font-medium">Summe</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Fortschritt</th>
               <th className="px-4 py-3 text-right font-medium">Aktionen</th>
             </tr>
           </thead>
@@ -215,6 +224,9 @@ function Page() {
                 <td className="px-4 py-3 text-muted-foreground">{formatDate(a.gueltigBis)}</td>
                 <td className="px-4 py-3 text-right font-semibold">{formatEUR(summe(a))}</td>
                 <td className="px-4 py-3">{statusBadge(a.status)}</td>
+                <td className="px-4 py-3">
+                  <FlowBar steps={angebotFlow(a, angebotMitRechnung.has(a.id)).steps} size="sm" />
+                </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1 text-muted-foreground">
                     <AngebotAnnahmeButtons angebot={a} size="sm" />
@@ -251,7 +263,7 @@ function Page() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
                   Keine Angebote gefunden.
                 </td>
               </tr>
