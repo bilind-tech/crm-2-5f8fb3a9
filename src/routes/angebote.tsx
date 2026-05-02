@@ -18,11 +18,21 @@ import { AngebotForm } from "@/components/forms/AngebotForm";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { angebotFlow } from "@/lib/flow/flows";
 import {
-  ZeitraumFilter,
   ZEITRAUM_ALLE,
+  MONATE_DE,
+  jahreAusDaten,
   passtInZeitraum,
+  zeitraumIstAktiv,
   type ZeitraumState,
 } from "@/components/filters/ZeitraumFilter";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { X } from "lucide-react";
 import type { Angebot } from "@/lib/api/types";
 import { useConfirm } from "@/hooks/useConfirm";
 
