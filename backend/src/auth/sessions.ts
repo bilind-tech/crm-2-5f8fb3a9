@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { getDatabase } from "../db/index.js";
 
 export const SESSION_COOKIE = "mcc_sess";
-const SLIDING_DAYS = 14;
+export const SLIDING_DAYS = 14;
 const HARD_CAP_DAYS = 90;
 const TOUCH_THROTTLE_MS = 60_000;
 
@@ -44,6 +44,7 @@ export function createSession(userId: string, userAgent?: string, ip?: string): 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(token, userId, nowIso(), nowIso(), expiresAt, hardExpiresAt, userAgent ?? null, ip ?? null);
+  lastTouchedAt.set(token, Date.now());
   return { token, expiresAt };
 }
 
@@ -52,6 +53,8 @@ export interface ResolvedSession {
   userId: string;
   username: string;
   expiresAt: string;
+  /** True wenn beim Resolve eine Sliding-Verlängerung geschrieben wurde — Cookie sollte erneuert werden. */
+  refreshed: boolean;
 }
 
 export function resolveSession(token: string): ResolvedSession | null {
@@ -75,30 +78,43 @@ export function resolveSession(token: string): ResolvedSession | null {
   }
 
   // Sliding update (throttled)
+  let refreshed = false;
+  let expiresAt = row.expires_at;
   const last = lastTouchedAt.get(token) ?? 0;
   if (now - last > TOUCH_THROTTLE_MS) {
     lastTouchedAt.set(token, now);
     const newExpires = plusDaysIso(SLIDING_DAYS);
-    const useExpires =
+    expiresAt =
       Date.parse(newExpires) < Date.parse(row.hard_expires_at) ? newExpires : row.hard_expires_at;
     db.prepare(`UPDATE auth_session SET last_seen_at = ?, expires_at = ? WHERE token = ?`).run(
       nowIso(),
-      useExpires,
+      expiresAt,
       token,
     );
+    refreshed = true;
   }
 
   return {
     token: row.token,
     userId: row.user_id,
     username: row.username,
-    expiresAt: row.expires_at,
+    expiresAt,
+    refreshed,
   };
 }
 
 export function deleteSession(token: string): void {
   getDatabase().prepare(`DELETE FROM auth_session WHERE token = ?`).run(token);
   lastTouchedAt.delete(token);
+}
+
+/** Owner-geprüftes Revoke. Liefert true wenn gelöscht. */
+export function deleteSessionForUser(token: string, userId: string): boolean {
+  const res = getDatabase()
+    .prepare(`DELETE FROM auth_session WHERE token = ? AND user_id = ?`)
+    .run(token, userId);
+  if (res.changes > 0) lastTouchedAt.delete(token);
+  return res.changes > 0;
 }
 
 export function deleteAllSessionsForUser(userId: string, except?: string): number {
@@ -138,4 +154,27 @@ export function purgeExpiredSessions(): number {
   return getDatabase()
     .prepare(`DELETE FROM auth_session WHERE expires_at < ? OR hard_expires_at < ?`)
     .run(nowIso(), nowIso()).changes;
+}
+
+/**
+ * Beim Boot Touch-Throttle aus DB warmladen, damit ein Restart nicht
+ * sofort einen Update-Sturm auslöst.
+ */
+export function warmTouchCacheFromDb(): number {
+  try {
+    const rows = getDatabase()
+      .prepare(`SELECT token, last_seen_at FROM auth_session`)
+      .all() as Array<{ token: string; last_seen_at: string }>;
+    let n = 0;
+    for (const r of rows) {
+      const ts = Date.parse(r.last_seen_at);
+      if (!Number.isNaN(ts)) {
+        lastTouchedAt.set(r.token, ts);
+        n++;
+      }
+    }
+    return n;
+  } catch {
+    return 0;
+  }
 }
