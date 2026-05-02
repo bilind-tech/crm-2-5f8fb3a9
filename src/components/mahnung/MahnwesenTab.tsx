@@ -96,6 +96,9 @@ export function MahnwesenTab() {
         </div>
       </div>
 
+      <AutomatikKarte form={form} setForm={setForm} />
+
+
       {form.stufen
         .slice()
         .sort((a, b) => a.stufe - b.stufe)
