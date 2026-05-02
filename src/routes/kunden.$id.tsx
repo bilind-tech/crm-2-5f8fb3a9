@@ -26,6 +26,7 @@ function Page() {
   const [openObjekt, setOpenObjekt] = useState(false);
   const [openAngebot, setOpenAngebot] = useState(false);
   const [openRechnung, setOpenRechnung] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
 
   if (isLoading) return <DetailSkeleton variant="kunde" />;
   if (!k) {
