@@ -1,5 +1,7 @@
 // Regel-Engine für Mahnwesen — reine Funktionen, kein gespeicherter Zustand.
-// Bestimmt aus Rechnung + Konfiguration die aktuelle und empfohlene Mahnstufe.
+// HINWEIS (Step 14): Diese Datei dient nur noch als Anzeige-Helper / Live-Vorschau.
+// Kanonische Werte für Empfehlungen, Versand-Vorschläge und Lauf-Statistik
+// liefert das Backend (`/mahnung/status`, `/mahnung/laeufe`).
 
 import type {
   MahnEinstellungen,

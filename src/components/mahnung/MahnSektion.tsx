@@ -22,6 +22,7 @@ import {
   useKunde,
   useMahnEinstellungen,
   useMahnungPausieren,
+  useMahnungVersenden,
 } from "@/hooks/useApi";
 import { useRechnungPdf } from "@/hooks/useBelegPdf";
 import {
@@ -42,7 +43,9 @@ export function MahnSektion({ rechnung }: Props) {
   const pdf = useRechnungPdf(rechnung);
   const pausieren = useMahnungPausieren(rechnung.id);
   const inkasso = useInkassoMarkieren(rechnung.id);
+  const versenden = useMahnungVersenden(rechnung.id);
 
+  const [confirmStufe, setConfirmStufe] = useState<MahnStufe | null>(null);
   const [emailOpen, setEmailOpen] = useState(false);
   const [stufeFuerVersand, setStufeFuerVersand] = useState<MahnStufe>(1);
   const [pauseOpen, setPauseOpen] = useState(false);
@@ -60,9 +63,22 @@ export function MahnSektion({ rechnung }: Props) {
   const mahngebuehrenSumme = mahnungen.reduce((acc, m) => acc + m.gebuehr, 0);
   const gesamtForderung = z.offenEUR + mahngebuehrenSumme;
 
-  const oeffneMahnungVersand = (stufe: MahnStufe) => {
+  const oeffneVersandConfirm = (stufe: MahnStufe) => setConfirmStufe(stufe);
+
+  const oeffneEigeneVorlage = (stufe: MahnStufe) => {
     setStufeFuerVersand(stufe);
     setEmailOpen(true);
+  };
+
+  const handleConfirmVersand = () => {
+    if (!confirmStufe) return;
+    versenden.mutate(confirmStufe, {
+      onSuccess: () => {
+        toast.success(`${stufenLabel(confirmStufe, einstellungen)} versendet`);
+        setConfirmStufe(null);
+      },
+      onError: () => toast.error("Versand fehlgeschlagen"),
+    });
   };
 
   const handlePausieren = () => {
@@ -141,7 +157,7 @@ export function MahnSektion({ rechnung }: Props) {
         <div className="mt-4 flex flex-wrap gap-2">
           {z.empfohleneStufe && !z.istPausiert && (
             <Button
-              onClick={() => oeffneMahnungVersand(z.empfohleneStufe!)}
+              onClick={() => oeffneVersandConfirm(z.empfohleneStufe!)}
               className="rounded-lg"
             >
               <Send className="mr-1.5 h-4 w-4" />
@@ -154,7 +170,7 @@ export function MahnSektion({ rechnung }: Props) {
               aktuell={z.letzteVersendeteStufe}
               vorgeschlagen={z.empfohleneStufe}
               einstellungen={einstellungen}
-              onWaehlen={oeffneMahnungVersand}
+              onWaehlen={oeffneVersandConfirm}
             />
           )}
           {!z.istPausiert ? (
@@ -212,7 +228,45 @@ export function MahnSektion({ rechnung }: Props) {
         )}
       </div>
 
-      {/* E-Mail-Dialog mit mahnStufe */}
+      {/* Confirm-Dialog: einfacher Direkt-Versand über Backend */}
+      <Dialog open={confirmStufe !== null} onOpenChange={(o) => !o && setConfirmStufe(null)}>
+        <DialogContent className="bg-background sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmStufe ? stufenLabel(confirmStufe, einstellungen) : "Mahnung"} senden?
+            </DialogTitle>
+            <DialogDescription>
+              Die E-Mail wird automatisch mit der hinterlegten Vorlage versendet
+              und die Mahnung in der Rechnung erfasst.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              onClick={() => {
+                if (confirmStufe) {
+                  oeffneEigeneVorlage(confirmStufe);
+                  setConfirmStufe(null);
+                }
+              }}
+            >
+              Mit eigener Vorlage senden …
+            </button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setConfirmStufe(null)}>
+                Abbrechen
+              </Button>
+              <Button onClick={handleConfirmVersand} disabled={versenden.isPending}>
+                <Send className="mr-1.5 h-4 w-4" />
+                {versenden.isPending ? "Sende …" : "Senden"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Power-User-Pfad: E-Mail-Editor mit eigener Vorlage */}
       <EmailVersandDialog
         open={emailOpen}
         onOpenChange={setEmailOpen}
