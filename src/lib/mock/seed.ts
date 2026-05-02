@@ -165,11 +165,16 @@ export function seed() {
   const appearance: AppearanceEinstellungen = { theme: "hell", akzentfarbe: "#1E3A5F" };
   const backup: BackupEinstellungen = {
     autoBackup: true,
-    zeitpunkt: "02:00",
-    behaltenAnzahl: 14,
-    zielordner: "/var/lib/mcc/backups",
+    zeitpunkt: "03:00",
+    behaltenAnzahl: 7,
+    behaltenDaily: 7,
+    behaltenWeekly: 4,
+    behaltenMonthly: 12,
+    zielordner: "/var/lib/mycleancenter/backups",
+    driveSpiegel: false,
   };
-  const backupHistorie: BackupEintrag[] = [];
+  // Initiale Mock-Historie: 7 daily + 4 weekly + 12 monthly.
+  const backupHistorie: BackupEintrag[] = seedBackupHistorie(uuid);
 
   const googleDrive: GoogleDriveEinstellungen = {
     verbunden: false,
