@@ -1871,6 +1871,68 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
   return result as T;
 }
 
+// ─── Steuern Mock-State (Step 10) ────────────────────────────────────────────
+const STEUER_DEFAULTS_MOCK = {
+  kstSatz: 15, soliSatz: 5.5, gewstMesszahl: 3.5, gewstHebesatz: 525,
+  ustRhythmus: "monatlich", ruecklageSatz: 35, ustPufferSatz: 10,
+};
+const steuerState = {
+  einstellungen: { ...STEUER_DEFAULTS_MOCK, updatedAt: new Date().toISOString() } as Record<string, unknown>,
+  manuell: [] as Array<Record<string, unknown>>,
+  bezahlt: {} as Record<string, Record<string, unknown>>,
+};
+
+function handleSteuernMock(m: string, path: string, body: unknown): unknown {
+  const seg = path.split("/").filter(Boolean); // ["steuern", ...]
+  const sub = seg[1];
+  if (sub === "einstellungen") {
+    if (seg[2] === "reset" && m === "POST") {
+      steuerState.einstellungen = { ...STEUER_DEFAULTS_MOCK, updatedAt: new Date().toISOString() };
+      return steuerState.einstellungen;
+    }
+    if (m === "GET") return steuerState.einstellungen;
+    if (m === "PATCH") {
+      steuerState.einstellungen = { ...steuerState.einstellungen, ...(body as object), updatedAt: new Date().toISOString() };
+      return steuerState.einstellungen;
+    }
+  }
+  if (sub === "manuelle-posten") {
+    if (m === "GET" && !seg[2]) return steuerState.manuell;
+    if (m === "POST" && !seg[2]) {
+      const id = `man-${Math.random().toString(36).slice(2, 10)}`;
+      const p = { id, ...(body as object), erstelltAm: new Date().toISOString() };
+      steuerState.manuell.push(p);
+      return p;
+    }
+    if (m === "PATCH" && seg[2]) {
+      const i = steuerState.manuell.findIndex((p) => p.id === seg[2]);
+      if (i < 0) throw new ApiError("Posten nicht gefunden", 404);
+      steuerState.manuell[i] = { ...steuerState.manuell[i], ...(body as object) };
+      return steuerState.manuell[i];
+    }
+    if (m === "DELETE" && seg[2]) {
+      steuerState.manuell = steuerState.manuell.filter((p) => p.id !== seg[2]);
+      delete steuerState.bezahlt[seg[2]];
+      return undefined;
+    }
+  }
+  if (sub === "bezahlt") {
+    if (m === "GET" && !seg[2]) return steuerState.bezahlt;
+    if (m === "PUT" && seg[2]) {
+      const id = decodeURIComponent(seg[2]);
+      steuerState.bezahlt[id] = { postenId: id, ...(body as object), erstelltAm: new Date().toISOString() };
+      return steuerState.bezahlt[id];
+    }
+    if (m === "DELETE" && seg[2]) {
+      const id = decodeURIComponent(seg[2]);
+      if (!steuerState.bezahlt[id]) throw new ApiError("Markierung nicht gefunden", 404);
+      delete steuerState.bezahlt[id];
+      return undefined;
+    }
+  }
+  throw new ApiError(`Mock /steuern: ${m} ${path} nicht implementiert`, 404);
+}
+
 function matchRoute(method: string, path: string, expectedMethod: string, pattern: string): boolean {
   return method === expectedMethod && match(path, pattern) !== null;
 }
