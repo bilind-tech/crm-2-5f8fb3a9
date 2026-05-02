@@ -83,7 +83,7 @@ async function main(): Promise<void> {
   await app.register(cors, {
     origin: config.corsOrigins.includes("*") ? true : config.corsOrigins,
     credentials: true,
-    exposedHeaders: ["X-Maintenance"],
+    exposedHeaders: ["X-Maintenance", "ETag", "X-Pdf-Cache", "Content-Disposition"],
   });
   if (config.nodeEnv !== "production" && config.corsOrigins.includes("*")) {
     app.log.warn("CORS = '*' (DEV-Modus). In Production explizit setzen.");
