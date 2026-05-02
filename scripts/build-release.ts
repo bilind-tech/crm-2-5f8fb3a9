@@ -229,6 +229,7 @@ async function main(): Promise<void> {
   }
 
   log("Begleitdateien kopieren");
+  mkdirSync(path.join(stagingRoot, "backend"), { recursive: true });
   writeFileSync(
     path.join(stagingRoot, "backend/package.json"),
     readFileSync(path.join(ROOT, "backend/package.json")),
