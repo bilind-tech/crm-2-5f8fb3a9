@@ -131,8 +131,16 @@ const initial: FormState = {
 export function KundeForm({ onClose, onCreated }: Props) {
   const navigate = useNavigate();
   const create = useCreateKunde();
+  const createDA = useCreateDauerauftrag();
   const [f, setF] = useState<FormState>(initial);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
+
+  // Live-Verfügbarkeitsprüfung Kürzel
+  const kuerzelFreiQ = useKuerzelFrei(f.kuerzel);
+  const kuerzelKonflikt =
+    f.kuerzel.length >= 3 && kuerzelFreiQ.data && !kuerzelFreiQ.data.frei
+      ? kuerzelFreiQ.data.kunde
+      : null;
 
   // Live-Vorschau der zukünftigen Belegnummer ({KÜRZEL}{MM}{YY}/{NN})
   const vorschauNummer = useMemo(() => {
@@ -172,35 +180,92 @@ export function KundeForm({ onClose, onCreated }: Props) {
       toast.error("Kürzel muss 3–4 Zeichen haben");
       return;
     }
-    const k = await create.mutateAsync({
-      typ: f.typ,
-      status: f.status,
-      firmenname: f.firmenname || undefined,
-      kuerzel: f.kuerzel || undefined,
-      anrede: f.anrede || undefined,
-      vorname: f.vorname || undefined,
-      nachname: f.nachname || undefined,
-      telefon: smartValue(f.telefon, PHONE_PREFIX),
-      mobil: smartValue(f.mobil, PHONE_PREFIX),
-      email: f.email || undefined,
-      webseite: smartValue(f.webseite, WEB_PREFIX),
-      strasse: f.strasse || undefined,
-      plz: f.plz || undefined,
-      ort: f.ort || undefined,
-      land: f.land || "Deutschland",
-      ustId: f.ustId || undefined,
-      steuernummer: f.steuernummer || undefined,
-      zahlungszielTage: f.zahlungszielTage,
-      standardSteuersatz: f.standardSteuersatz,
-      standardRabatt: f.standardRabatt,
-      notizen: f.notizen || undefined,
-      tags: f.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean),
-      startZaehlerAktuellerMonat: f.kuerzel && f.startNummer > 1 ? f.startNummer : undefined,
-    });
-    toast.success("Kunde angelegt", { description: `${k.nummer} • erfolgreich gespeichert.` });
+    if (kuerzelKonflikt) {
+      toast.error(`Kürzel «${f.kuerzel}» ist bereits vergeben (${kuerzelKonflikt.nummer} • ${kuerzelKonflikt.name}).`);
+      return;
+    }
+    if (f.daAktiv && !f.daBezeichnung.trim()) {
+      toast.error("Bezeichnung für den Dauerauftrag ist erforderlich");
+      return;
+    }
+    let k: Kunde;
+    try {
+      k = await create.mutateAsync({
+        typ: f.typ,
+        status: f.status,
+        firmenname: f.firmenname || undefined,
+        kuerzel: f.kuerzel || undefined,
+        anrede: f.anrede || undefined,
+        vorname: f.vorname || undefined,
+        nachname: f.nachname || undefined,
+        telefon: smartValue(f.telefon, PHONE_PREFIX),
+        mobil: smartValue(f.mobil, PHONE_PREFIX),
+        email: f.email || undefined,
+        webseite: smartValue(f.webseite, WEB_PREFIX),
+        strasse: f.strasse || undefined,
+        plz: f.plz || undefined,
+        ort: f.ort || undefined,
+        land: f.land || "Deutschland",
+        ustId: f.ustId || undefined,
+        steuernummer: f.steuernummer || undefined,
+        zahlungszielTage: f.zahlungszielTage,
+        standardSteuersatz: f.standardSteuersatz,
+        standardRabatt: f.standardRabatt,
+        notizen: f.notizen || undefined,
+        tags: f.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+        startZaehlerAktuellerMonat: f.kuerzel && f.startNummer > 1 ? f.startNummer : undefined,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Kunde konnte nicht angelegt werden";
+      toast.error(msg);
+      return;
+    }
+
+    // Optional: Dauerauftrag direkt mit-anlegen
+    if (f.daAktiv) {
+      const positionen: Position[] = [];
+      if (f.daPosBezeichnung.trim()) {
+        positionen.push({
+          id: crypto.randomUUID(),
+          bezeichnung: f.daPosBezeichnung.trim(),
+          menge: f.daPosMenge || 1,
+          einheit: "Stk",
+          einzelpreis: f.daPosEinzelpreis || 0,
+          rabatt: 0,
+        });
+      }
+      try {
+        await createDA.mutateAsync({
+          kundeId: k.id,
+          bezeichnung: f.daBezeichnung.trim(),
+          frequenz: f.daFrequenz,
+          stichtag:
+            f.daStichtagTyp === "monatsletzter"
+              ? { typ: "monatsletzter" }
+              : { typ: "monatstag", wert: Math.min(28, Math.max(1, f.daStichtagWert || 1)) },
+          laufzeitVon: f.daLaufzeitVon,
+          positionen,
+          rabattGesamt: 0,
+          steuersatz: f.standardSteuersatz,
+          betreffVorlage: f.daBezeichnung.trim(),
+          textVorlage: "",
+          modus: f.daModus,
+          status: "aktiv",
+        });
+        toast.success("Kunde + Dauerauftrag angelegt", {
+          description: `${k.nummer} • Dauerauftrag „${f.daBezeichnung.trim()}" eingerichtet.`,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Dauerauftrag konnte nicht angelegt werden";
+        toast.warning("Kunde angelegt, Dauerauftrag fehlgeschlagen", { description: msg });
+      }
+    } else {
+      toast.success("Kunde angelegt", { description: `${k.nummer} • erfolgreich gespeichert.` });
+    }
+
     onCreated?.(k);
     onClose();
     navigate({ to: "/kunden/$id", params: { id: k.id } });
