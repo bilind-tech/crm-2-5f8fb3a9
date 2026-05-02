@@ -53,7 +53,7 @@ import { StundenzettelTab } from "@/components/einstellungen/StundenzettelTab";
 import { BackendVerbindungTab } from "@/components/einstellungen/BackendVerbindungTab";
 import type { Firmendaten } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/lib/auth";
+
 
 export const Route = createFileRoute("/einstellungen")({ component: Page });
 
