@@ -57,11 +57,14 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
     [objekteAlle, kundeId]
   );
 
+  const zaehlerQ = useKundenZaehler(kundeId);
   const vorschauNummer = useMemo(() => {
     if (!kundeId || !nummernkreise) return "";
     const kunde = kunden.find((k) => k.id === kundeId);
-    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.rechnungPraefix);
-  }, [kundeId, kunden, nummernkreise]);
+    const naechster = zaehlerQ.data?.naechsterStart ?? 1;
+    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.rechnungPraefix, naechster);
+  }, [kundeId, kunden, nummernkreise, zaehlerQ.data?.naechsterStart]);
+  const vorschauLaedt = !!kundeId && zaehlerQ.isLoading;
 
   function setFristTage(tage: number) {
     setFrist(tage);
