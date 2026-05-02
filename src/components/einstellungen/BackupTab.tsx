@@ -285,6 +285,7 @@ export function BackupTab() {
             eintraege={sondern}
             onRestore={setRestoreTarget}
             onDownload={handleDownload}
+            onDelete={handleDelete}
           />
         )}
         {erfolge.length === 0 && (
