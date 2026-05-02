@@ -84,7 +84,7 @@ function formatLockedUntil(iso: string): string {
   return d.toLocaleString("de-DE", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 }
 
-function LoginForm() {
+function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   const { login, loading } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
