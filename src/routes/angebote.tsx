@@ -329,16 +329,20 @@ function AngebotAnnahmeButtons({ angebot, size = "md" }: { angebot: Angebot; siz
       },
     );
   };
-  const klass = size === "sm" ? "p-1.5" : "p-2";
+  const sm = size === "sm";
+  const base = sm
+    ? "h-8 px-2.5 text-xs gap-1"
+    : "h-9 px-3 text-sm gap-1.5";
   return (
     <>
       <button
         type="button"
         onClick={(e) => setStatus("angenommen", e)}
-        className={`rounded-md ${klass} text-success hover:bg-success/10`}
-        title="Als angenommen markieren"
+        className={`inline-flex items-center rounded-md border border-success/30 bg-success/10 font-medium text-success hover:bg-success/20 ${base}`}
+        title="Angebot wurde vom Kunden angenommen"
       >
-        <ThumbsUp className="h-4 w-4" />
+        <ThumbsUp className={sm ? "h-3.5 w-3.5" : "h-4 w-4"} />
+        <span>Annehmen</span>
       </button>
       <button
         type="button"
