@@ -4,8 +4,9 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import "@/lib/pdf/pdfjsWorker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useNavigate } from "@tanstack/react-router";
 
-import { Download, Loader2, AlertCircle } from "lucide-react";
+import { Download, Loader2, AlertCircle, Pencil } from "lucide-react";
 import { DriveStatusBadge } from "./DriveStatusBadge";
 import type { DriveSyncInfo } from "@/lib/api/types";
 
@@ -18,6 +19,8 @@ interface Props {
   errorMessage?: string | null;
   fileName: string;
   drive?: DriveSyncInfo;
+  /** Wenn gesetzt, wird oben rechts ein „PDF bearbeiten"-Button gezeigt, der zum Editor navigiert. */
+  editTarget?: { kind: "angebot" | "rechnung"; id: string };
 }
 
 export function PdfViewerDialog({
