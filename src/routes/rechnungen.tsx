@@ -18,7 +18,6 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { rechnungFlow } from "@/lib/flow/flows";
 import {
-  ZeitraumFilter,
   ZEITRAUM_ALLE,
   passtInZeitraum,
   type ZeitraumState,
