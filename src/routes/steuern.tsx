@@ -289,8 +289,10 @@ function Page() {
           <div>
             <p className="font-medium text-foreground">Schätzung — keine Steuerberatung</p>
             <p className="mt-1">
-              USt-Beträge sind exakt aus bezahlten Rechnungen und steuerrelevanten Belegen berechnet.
-              Ertragsteuern (KSt/Soli/GewSt) sind YTD-Hochrechnungen und werden mit jedem neuen Beleg präziser.
+              USt wird aus bezahlten Rechnungen minus erfasster Vorsteuer berechnet, abzüglich eines
+              Puffers für noch nicht erfasste Belege (anpassbar).
+              Ertragsteuern (KSt/Soli/GewSt) sind eine Rücklage auf den bisher tatsächlich
+              realisierten Gewinn — nicht auf den Umsatz.
               Mit Steuerberater abstimmen vor Vorauszahlung oder Jahreserklärung.{" "}
               <Link to="/einstellungen" className="font-medium text-primary hover:underline">
                 Steuersätze in Einstellungen anpassen
