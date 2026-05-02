@@ -1,102 +1,158 @@
 
-# Step 14 — Frontend-Cleanup Mahnwesen
+# Step 15 — Release-Bundle, Build-Pipeline & Pi-Erstinstallation
 
-Backend-Mahn-Automatik aus Step 13 läuft, aber Frontend rechnet weiter alles
-selbst (`bestimmeMahnZustand` clientseitig pro Rechnung) und sendet Mahnungen
-über den alten Direkt-Email-Pfad statt über die neue Backend-Route. Step 14
-zieht das gerade.
+Step 13/14 sind fertig: Backend-Mahn-Automatik läuft, Frontend zeigt sie korrekt an.
+Was jetzt fehlt, damit das CRM tatsächlich auf dem Pi 5 läuft: ein reproduzierbarer
+**Release-Bundler**, der ein signiertes ZIP baut (Backend kompiliert, Frontend gebaut,
+Manifest signiert), plus ein **Bootstrap-Pfad für die Erstinstallation** (Frontend
+wird vom Backend mit ausgeliefert, nicht aus separatem Webserver).
+
+Step 15 schließt den Loop: lokal `bun run release` → fertiges `mycleancenter-vX.Y.Z.zip`
+→ auf den Pi kopieren → `install.sh` → läuft.
 
 ## Ziele
 
-1. **Single Source of Truth = Backend.** Frontend zeigt Backend-Berechnung an, rechnet nur noch für reine UI-Hilfen (z.B. „in 3 Tagen empfohlen").
-2. **Manueller Versand geht über `POST /rechnungen/:id/mahnung-versenden`** — Email-Worker übernimmt, Mahnungs-Eintrag wird transaktional gesetzt.
-3. **Sichtbare Lauf-Historie** im Mahnwesen-Tab und Drill-Down.
-4. **Dashboard-Aufgaben** ziehen Mahnvorschläge aus `/mahnung/status`.
+1. **Ein einziges Artefakt** (`mycleancenter-vX.Y.Z.zip`) enthält Backend (kompiliert), Frontend (gebaut), Migrationen, Manifest, signiert mit `master.key`.
+2. **Backend serviert das Frontend** statisch (kein zweiter Webserver auf dem Pi nötig).
+3. **Reproduzierbarer Build** über `scripts/build-release.ts` — funktioniert lokal und in CI.
+4. **Update-Pfad konsistent**: dasselbe ZIP, das man frisch installiert, kann über die System-Update-UI (Step Backend bereits vorhanden) eingespielt werden.
+5. **Erstinstallation 1-Befehl-Erlebnis** auf dem Pi.
 
 ## Umfang
 
-### A — Frontend-Regeln zu Anzeige-Helfern degradieren
+### A — Release-Builder (`scripts/build-release.ts`)
 
-`src/lib/mahnung/regeln.ts`:
-- `bestimmeMahnZustand` bleibt als Fallback / Live-Vorschau (Detailseite vor erstem Backend-Refresh), wird aber nicht mehr für Aktionsentscheidungen genutzt.
-- Neue Helper: `formatEmpfehlung(zustand)`, `dringlichkeitsToken(zustand)` — pure Display-Mapping.
-- JSDoc-Hinweis: „Kanonische Werte liefert `/mahnung/status`."
+Neues Script im Repo-Root unter `scripts/`. Verwendet `bun`/`tsx` und nutzt vorhandenes
+`signManifest` aus `backend/src/system/manifest.ts`.
 
-### B — Hooks erweitern
+Ablauf:
+1. Liest `version` aus `package.json` und `backend/package.json` (müssen synchron sein, sonst Abbruch).
+2. Liest aktuelle `schemaVersion` aus `backend/src/db/migrations/` (höchste Migrations-Nummer).
+3. Baut Frontend: `bun run build` → Output nach `dist/` (TanStack/Vite SSR).
+4. Baut Backend: `cd backend && bun run build` → `backend/dist/`.
+5. Kopiert in `tmp/release-bundle/`:
+   - `backend/dist/` → `backend/dist/`
+   - `backend/package.json`, `backend/package-lock.json`
+   - `backend/src/db/migrations/` → `backend/src/db/migrations/` (SQL-Dateien werden zur Laufzeit gelesen)
+   - `backend/deploy/` (install.sh, systemd, sudoers, logrotate)
+   - `dist/` (Frontend-Output, vom Backend statisch ausgeliefert)
+   - `node_modules/` für Backend nicht — wird auf Pi via `npm ci --omit=dev` neu installiert (Native-Module wie `better-sqlite3`/`@node-rs/argon2` müssen für Pi-Architektur gebaut werden).
+6. Generiert Manifest:
+   - `appVersion`, `schemaVersion`, `createdAt = ISO now`, `minBackendVersion` (aus Konfig-Konstante in script), `hinweise` (aus `RELEASE_NOTES.md` falls vorhanden).
+   - Signiert mit `master.key` (Pfad via Flag `--key=<path>`, default `~/.mycleancenter/master.key`).
+   - Schreibt `manifest.json` ins Bundle-Root.
+7. Zip-Stream → `dist-release/mycleancenter-vX.Y.Z.zip`.
+8. Berechnet SHA256 → schreibt `dist-release/mycleancenter-vX.Y.Z.zip.sha256`.
+9. Logging: jeder Schritt mit Zeitstempel, Größenangabe.
 
-`src/hooks/useApi.ts`:
-- `useMahnungVersenden(rechnungId)` → `POST /rechnungen/:id/mahnung-versenden { stufe }`. Invalidiert `qk.rechnung(id)`, `qk.rechnungen()`, `qk.email.versand()`, `["mahnung","status"]`, `["mahnung","laeufe"]`.
-- `useMahnLauf(id)` für Drill-Down.
-- QueryKeys: `qk.mahnung = { status, laeufe, lauf(id) }`.
+CLI-Flags:
+- `--out=<dir>` (default `dist-release/`)
+- `--key=<path>` (default `~/.mycleancenter/master.key`)
+- `--allow-same-version` (für Test-Builds)
+- `--skip-frontend` / `--skip-backend` (Schnell-Iteration)
 
-### C — `MahnSektion` umbauen
+Neuer npm-Script in Root-`package.json`: `"release": "tsx scripts/build-release.ts"`.
 
-- Versand-Pfad: statt `EmailVersandDialog` → kleiner Confirm-Dialog („Mahnung Stufe N senden? E-Mail wird vom Backend versendet."). Bei OK → `useMahnungVersenden`.
-- `EmailVersandDialog` bleibt nur als Eskalations-Option („Mit eigener Vorlage senden …" Link → öffnet weiterhin den freien Editor + ruft alten Pfad).
-- Status-/Empfehlungsanzeige liest primär aus neuem Hook `useRechnungMahnState(id)` (dünner Wrapper, der Backend-Berechnung über Rechnungs-Detail oder `/mahnung/status` mappt). Fallback: lokale `bestimmeMahnZustand`.
+### B — Backend serviert Frontend statisch
 
-### D — `MahnwesenTab` erweitern: Lauf-Historie
+`backend/src/server.ts`:
+- Neue Registrierung `@fastify/static` (Plugin hinzufügen) — Root `dist/` (relativ zu `process.cwd()` bzw. `APP_DIR/current/dist`).
+- Konfig: `config.frontendDir = path.resolve(process.cwd(), "../dist")` mit Override via `FRONTEND_DIR`.
+- Reihenfolge: API-Routen zuerst (`/api/*`, `/auth/*`, `/health`, etc. — alles, was das Backend bereits anbietet bleibt unter denselben Pfaden), danach SPA-Fallback: alle nicht-API-Pfade liefern `index.html` (HTML5-History-Routing).
+- Wenn `FRONTEND_DIR` nicht existiert (Dev-Modus), kein Static-Plugin laden, nur Log-Hinweis. Frontend läuft dann wie bisher über Vite-Dev-Server.
 
-Neue Karte „Letzte Läufe" (unter `AutomatikKarte`):
-- Liste der letzten 10 Läufe aus `useMahnLaeufe()`: Datum, Auslöser (cron/manuell), geprüft / vorschlaege / versendet / fehler, kleines Badge bei Fehlern.
-- Klick → Sheet/Dialog mit `useMahnLauf(id)` → Tabelle der Einträge (Rechnungs-Nr, Stufe, Aktion, Grund). Rechnungs-Nr = Link zu `/rechnungen/$id`.
-- Empty-State: „Noch keine Läufe."
+`backend/package.json`: `@fastify/static` als Dependency.
 
-### E — `NaechsteSchritteCard` ans Backend anschließen
+### C — Frontend → Backend-API-Konfiguration
 
-`src/lib/dashboard/naechsteSchritte.ts`:
-- Funktion `berechneMahnSchritte` rausziehen.
-- Neue Implementierung in `NaechsteSchritteCard`: ruft `useMahnStatus()`, mappt `letzterLauf.eintraege` mit `aktion === "vorschlag"` zu `NaechsterSchritt`-Items (Typ `mahnung_senden`).
-- Übrige Schritt-Typen (Angebot nachfassen, Rechnung erstellen, Versenden) bleiben unverändert clientseitig.
-- `mahnung_senden`-CTA navigiert weiter zu Rechnung (oder direkt versenden via Hook — bewusst Navigate, damit Stufe sichtbar bestätigt wird).
+Aktuelles Frontend nutzt vermutlich relative Pfade gegen Backend (siehe `src/lib/api/`).
+Step 15 stellt sicher:
+- Production-Build verwendet `window.location.origin` als API-Basis (kein hardcoded `localhost:8787`).
+- Falls aktuell `VITE_API_URL` o.ä. gesetzt ist: in Production-Build leer lassen, im
+  Dev-Build auf `http://localhost:8787`.
+- Kontroll-Lesen: `src/lib/api/client.ts` (oder Pendant) anpassen.
 
-### F — Live-Events
+### D — Pi-Erstinstallations-Erlebnis verbessern
 
-`src/hooks/useLiveEvents.ts`:
-- Neue Events `mahnung:lauf-fertig`, `mahnung:vorschlag` → invalidieren `qk.mahnung.status`, `qk.mahnung.laeufe`, betroffene `qk.rechnung()`.
-- Dezenter Toast bei `lauf-fertig` mit `auto`-Modus: „N Mahnungen versendet".
+`backend/deploy/install.sh`:
+- Nach `ensure_node` neue Funktion `install_backend_deps`: wenn `$APP_DIR/current/backend/package.json` existiert und `node_modules` fehlt → `cd $APP_DIR/current/backend && sudo -u $APP_USER npm ci --omit=dev`.
+- Nach erfolgreichem Service-Start: Healthcheck (`curl -fsS http://localhost:8787/health`) mit 30s Retry-Loop, Ausgabe der Setup-URL.
+- Neuer `--bootstrap=<zip>` Flag: nimmt direkt ein Release-ZIP entgegen und entpackt es nach `releases/initial/`, setzt `current`-Symlink, danach normaler Setup-Flow. Spart die manuellen `tar`/`ln`-Schritte aus dem README.
 
-### G — `useMahnZaehler` & andere Aufrufer
+`backend/deploy/README.md`:
+- Erstinstallation auf 2 Befehle reduziert:
+  ```bash
+  scp mycleancenter-v0.2.0.zip pi@mycleancenter.local:~/
+  ssh pi@mycleancenter.local 'sudo bash <(unzip -p mycleancenter-v0.2.0.zip backend/deploy/install.sh) --bootstrap=mycleancenter-v0.2.0.zip'
+  ```
+  (Erläutert + alternative manuelle Variante belassen.)
 
-`src/hooks/useMahnZaehler.ts`: jetzt aus `useMahnStatus().letzterLauf.vorschlaege` lesen (Fallback: 0). Keine Client-Berechnung mehr.
+`backend/deploy/systemd/mycleancenter.service`:
+- `WorkingDirectory=/opt/mycleancenter/current/backend` bleibt.
+- `Environment=FRONTEND_DIR=/opt/mycleancenter/current/dist` neu.
+- `ExecStart` bleibt `node dist/server.js`.
 
-Alle verbleibenden direkten `bestimmeMahnZustand`-Aufrufer (Listen-Routes `rechnungen.tsx`, `angebote.$id.tsx`) prüfen — wo möglich durch Backend-Daten/Status-Felder ersetzen, sonst als Fallback belassen mit JSDoc-Kommentar.
+### E — Master-Key-Bootstrap für Builder
 
-### H — Aufräumen
+Problem: Builder braucht `master.key`, der erst beim ersten Pi-Start generiert wird.
+Lösung:
+- Erstinstallations-Skript zeigt nach erstem Boot den Pfad zum `master.key` und einen
+  Befehl, mit dem man ihn auf die Build-Maschine kopiert (`scp pi@…:/var/lib/mycleancenter/keys/master.key ~/.mycleancenter/master.key`).
+- README ergänzt um Abschnitt „Build-Maschine einrichten" (Master-Key kopieren, Berechtigungen 0600).
+- `scripts/build-release.ts` gibt klare Fehlermeldung mit Anleitung, wenn Key fehlt.
 
-- `src/lib/dashboard/naechsteSchritte.ts`: Mahn-Logik entfernen, verbleibender Code dokumentiert „Backend-only für Mahnungen".
-- Tote Imports raus.
+### F — Release-Notes-Workflow
 
-## Was NICHT in Step 14
+- Neue Datei `RELEASE_NOTES.md` (Root, optional) — wird vom Builder ins Manifest-Feld `hinweise` kopiert (max. 4000 Zeichen, sonst Abbruch).
+- Anzeige im Frontend: System-Update-Dialog zeigt `manifest.hinweise` bereits (vorhanden checken — sonst kleine UI-Ergänzung in `EinstellungenSystemTab` bzw. Update-Komponente).
 
-- Backend-Änderungen (Step 13 fertig).
-- Inkasso-Workflow-Erweiterung.
-- Eigene Mahn-Mail-Vorschau im UI vor Versand.
+### G — Tests
+
+`backend/test/release-bundle.spec.ts` (neu):
+- Erzeugt Test-Master-Key.
+- Ruft `build-release` mit `--skip-frontend --skip-backend` und Mock-Bundle-Verzeichnis auf.
+- Prüft: ZIP enthält `manifest.json`, Manifest validiert via `validateManifest` gegen denselben Key, SHA256-Datei korrekt.
+- Optional Smoke: entpacke ZIP → starte Update-Runner gegen Test-DB → Roll-forward + Rollback funktioniert.
+
+### H — CI-Hinweis (optional, nur Doku)
+
+Kurzer Abschnitt in `backend/deploy/README.md`: wenn später CI gewünscht, Master-Key als Secret hinterlegen, `bun run release` ausführen, ZIP als Artefakt veröffentlichen. Keine Konfiguration in diesem Step — nur Hinweis.
+
+## Was NICHT in Step 15
+
+- Auto-Update-Polling (Pi pullt sich selbst neue Releases) — bleibt manueller Upload.
+- Multi-Tenant / Mehr-Pi-Sync.
+- Frontend-Setup-Wizard für Erst-Admin-Erstellung (separater Step, falls noch nicht vorhanden).
+- Prometheus / Monitoring-Endpoints.
 
 ## Akzeptanzkriterien
 
-1. Im `/einstellungen` → Mahnwesen-Tab erscheint unter „Automatik" eine Lauf-Historie. Klick öffnet Drill-Down mit Einträgen.
-2. „Mahnung senden"-Button auf Rechnungs-Detailseite zeigt Mini-Confirm und erzeugt nach Klick: neuen `mahnungen[]`-Eintrag, Email-Versand-Eintrag, ohne dass der Email-Editor geöffnet werden muss.
-3. „Mit eigener Vorlage senden …" weiterhin verfügbar (Power-User-Pfad).
-4. Dashboard „Nächste Schritte" zeigt Mahnvorschläge identisch zum Backend-Lauf — kein Drift mehr zwischen Cockpit und Mahn-Cron.
-5. SSE-Event `mahnung:lauf-fertig` triggert Refresh ohne manuelle Reload.
-6. Keine Regression: `useMahnEinstellungen`, Pausieren, Inkasso, Stufen-Config funktionieren wie bisher.
+1. `bun run release` auf der Build-Maschine erzeugt ein gültiges, signiertes ZIP plus SHA256, ohne manuelle Nacharbeit.
+2. Das gleiche ZIP, hochgeladen über System-Update-UI, durchläuft den bestehenden Update-Runner ohne Fehler.
+3. Frisch geflashter Pi: nach `install.sh --bootstrap=…` läuft `http://mycleancenter.local:8787` und liefert die SPA aus, API-Calls treffen denselben Origin.
+4. Daten unter `/var/lib/mycleancenter/` werden nie angefasst (Update + Erstinstallation).
+5. `release-bundle.spec.ts` grün.
+6. Build schlägt sauber fehl, wenn `master.key` fehlt oder Versionen nicht synchron sind.
 
 ## Geänderte / neue Dateien
 
-**Editiert:**
-- `src/hooks/useApi.ts` (neue Hooks + qk.mahnung)
-- `src/hooks/useLiveEvents.ts` (neue Events)
-- `src/hooks/useMahnZaehler.ts` (Backend-Quelle)
-- `src/lib/mahnung/regeln.ts` (Display-Helper, JSDoc)
-- `src/lib/dashboard/naechsteSchritte.ts` (Mahn-Pfad raus)
-- `src/components/mahnung/MahnSektion.tsx` (Confirm-Dialog + Backend-Versand)
-- `src/components/mahnung/MahnwesenTab.tsx` (Lauf-Historie-Karte + Drill-Down)
-- `src/components/dashboard/NaechsteSchritteCard.tsx` (Mahn-Pfad via `useMahnStatus`)
-
 **Neu:**
-- `src/components/mahnung/MahnLaeufeListe.tsx`
-- `src/components/mahnung/MahnLaufDetailDialog.tsx`
-- `src/hooks/useRechnungMahnState.ts` (dünner Wrapper)
+- `scripts/build-release.ts`
+- `dist-release/.gitignore` (`*` außer `.gitignore`)
+- `RELEASE_NOTES.md` (Template/Stub)
+- `backend/test/release-bundle.spec.ts`
 
-**Sag „los Step 14", dann setze ich um.**
+**Editiert:**
+- `package.json` (root: `release`-Script, ggf. `tsx`/`archiver` als devDep)
+- `backend/package.json` (`@fastify/static` als dep)
+- `backend/src/server.ts` (Static-Serving + SPA-Fallback)
+- `backend/src/config.ts` (`frontendDir`)
+- `backend/deploy/install.sh` (`--bootstrap`, `install_backend_deps`, Healthcheck-Loop)
+- `backend/deploy/README.md` (Erstinstallation 1-Befehl, Build-Maschine, Master-Key-Bootstrap)
+- `backend/deploy/systemd/mycleancenter.service` (`FRONTEND_DIR` env)
+- `src/lib/api/client.ts` (oder vergleichbarer Einstiegspunkt) — Origin-basierte API-URL in Production
+- ggf. `EinstellungenSystemTab` / Update-Dialog: `hinweise` anzeigen, falls noch nicht
+
+---
+
+**Sag „los Step 15", dann setze ich um.**
