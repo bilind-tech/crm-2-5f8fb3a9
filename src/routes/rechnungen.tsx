@@ -342,10 +342,10 @@ function Page() {
                         <button
                           onClick={(e) => { e.stopPropagation(); e.preventDefault(); setZahlungFuer(r); }}
                           className="inline-flex h-8 items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2.5 text-xs font-medium text-success hover:bg-success/20"
-                          title="Zahlung erfassen — markiert die Rechnung als bezahlt"
+                          title="Bezahlung eintragen — voll oder teilweise"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>Zahlung</span>
+                          <span>Bezahlt</span>
                         </button>
                       )}
                       <button
