@@ -425,6 +425,10 @@ function UpdateProgressDialog({
     return () => clearInterval(t);
   }, [isRunning]);
 
+  // SSE-Verbindungsstatus für „● Live"-Indikator
+  const [sseConnected, setSseConnected] = useState(false);
+  useEffect(() => onSseStatus(setSseConnected), []);
+
   return (
     <Dialog open onOpenChange={(o) => !o && !isRunning && onClose()}>
       <DialogContent className="bg-background sm:max-w-md">
