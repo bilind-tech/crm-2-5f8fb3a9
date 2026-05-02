@@ -52,6 +52,7 @@ interface FormState {
   firmenname: string;
   kuerzel: string;
   kuerzelManuell: boolean;
+  startNummer: number;
   anrede: "" | "herr" | "frau" | "divers" | "keine";
   vorname: string;
   nachname: string;
@@ -78,6 +79,7 @@ const initial: FormState = {
   firmenname: "",
   kuerzel: "",
   kuerzelManuell: false,
+  startNummer: 1,
   anrede: "",
   vorname: "",
   nachname: "",
