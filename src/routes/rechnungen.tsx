@@ -76,6 +76,7 @@ function Page() {
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
   const [zeitraum, setZeitraum] = useState<ZeitraumState>(ZEITRAUM_ALLE);
+  const [nurDA, setNurDA] = useState(false);
   const [open, setOpen] = useState(false);
   const [zahlungFuer, setZahlungFuer] = useState<Rechnung | null>(null);
   const [emailFuer, setEmailFuer] = useState<Rechnung | null>(null);
