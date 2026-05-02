@@ -12,6 +12,7 @@ import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { einstellungenRoutes } from "./routes/einstellungen.js";
 import { backupRoutes } from "./routes/backup.js";
+import { stammdatenRoutes } from "./routes/stammdaten.js";
 import { purgeExpiredSessions, warmTouchCacheFromDb } from "./auth/sessions.js";
 import { purgeOldAuditEntries } from "./auth/audit.js";
 import { purgeOldLockouts } from "./auth/lockout.js";

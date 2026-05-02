@@ -1,196 +1,101 @@
+## Ziel
+Drittes Backend-Modul: alle Stammdaten-Endpoints für Kunden, Ansprechpartner, Objekte und Notizen produktiv ans Pi-Backend hängen — inklusive Volltextsuche (SQLite FTS5) und atomarer Belegnummern-Vergabe pro Kunde+Monat. Mock wird für diese Endpoints abgeschaltet, Mock-Parität für alles andere bleibt.
 
-# Step 2 — Backup & Restore (Pi-Backend)
+## Backend
 
-Ziel: Die Backup-/Restore-Mocks vollständig durch echte Backend-Funktionalität ersetzen. Daten dürfen niemals verloren gehen — weder bei normalem Betrieb, noch bei Update, noch bei Restore. Code/Daten-Trennung bleibt absolut.
+### 1. Migration `005_kunden_objekte.sql`
+- `kunde` — alle Felder aus `Kunde`-Typ (siehe `src/lib/api/types.ts`), inklusive `kuerzel` UNIQUE (case-insensitive via `COLLATE NOCASE`), `tags TEXT` (JSON-Array), `archiviert INTEGER DEFAULT 0`, `erstellt_am`/`geaendert_am`. Trigger `kunde_touch` aktualisiert `geaendert_am` bei jedem UPDATE.
+- `ansprechpartner` — FK auf `kunde(id) ON DELETE CASCADE`, `primaer INTEGER`. Partial-Unique-Index, der pro Kunde nur einen primären Kontakt zulässt: `CREATE UNIQUE INDEX … WHERE primaer=1`.
+- `objekt` — FK auf `kunde(id) ON DELETE CASCADE`. `reinigungstage TEXT` (JSON-Array). `ansprechpartner_vor_ort_id` als FK auf `ansprechpartner(id) ON DELETE SET NULL`.
+- `notiz` — kann an Kunde, Objekt, Angebot oder Rechnung hängen. Spalten: `kunde_id`, `objekt_id`, `angebot_id`, `rechnung_id` (alle nullable, exakt eins muss gesetzt sein → CHECK-Constraint).
+- `belegnummer_zaehler` — `(kunde_id TEXT, periode TEXT, naechster_start INTEGER, PRIMARY KEY(kunde_id, periode))`. `periode` = `MMYY`. Wird beim Vergabe-Flow atomar inkrementiert.
+- `kunde_nummer_zaehler` — `(jahr INTEGER PRIMARY KEY, naechster INTEGER)` für Kundennummern `K-YYYY-NNN`.
+- Indizes: `kunde(kuerzel COLLATE NOCASE)`, `kunde(archiviert)`, `kunde(status)`, `objekt(kunde_id)`, `ansprechpartner(kunde_id)`, `notiz(kunde_id)`, `notiz(objekt_id)`.
 
-## Was du am Ende hast
+### 2. Migration `006_fts.sql` (FTS5)
+- Virtuelle Tabelle `suche_idx` (FTS5, contentless, tokenize=`unicode61 remove_diacritics 2`).
+- Spalten: `entity_typ` (kunde/objekt/notiz/angebot/rechnung), `entity_id`, `titel`, `untertitel`, `body`.
+- Trigger `kunde_ai`/`au`/`ad`, gleich für `objekt`, `notiz` — synchronisieren in `suche_idx`. Angebote/Rechnungen folgen in Step 4/7, Trigger werden dort additiv ergänzt.
+- Re-Index-Befehl `INSERT INTO suche_idx(suche_idx) VALUES('rebuild')` als Admin-Wartungspfad (für späteren System-Tab; in Step 3 nicht UI-exponiert).
 
-- Tägliche, automatische tar.gz-Backups auf der USB-SSD (DB + uploads + master.key + manifest).
-- Sauberes Rotations-System (7 Daily, 4 Weekly, 12 Monthly + unbegrenzt Safety).
-- „Backup jetzt erstellen"-Button funktioniert wirklich, mit Live-Fortschritt.
-- Backup-Datei kannst du herunterladen (kompletter, transportierbarer Zustand des Pi).
-- Backup-Datei kannst du wieder hochladen und der Pi spielt sie sicher zurück — mit automatischem Sicherheits-Backup VORHER und Migrations-Lauf NACH dem Restore.
-- Alles im UI sichtbar und ehrlich: nur was wirklich auf der Platte liegt, taucht in der Liste auf. Laufende Backups sind als „in Arbeit" gekennzeichnet, nicht als „fertig".
-- Garantie: Keine Daten-Verlust-Pfade. Bei Fehler im Restore → automatisches Rollback aufs Sicherheits-Backup.
+### 3. Module unter `backend/src/kunden/`
+- `repo.ts` — Prepared Statements für Kunde/Ansprechpartner/Objekt/Notiz (CRUD), Filter (suche, status, archiviert), Pagination (`limit`, `offset`).
+- `belegnummer.ts` — `nextNummer(kundeId, periodeMMYY)` in `db.transaction(...)`: SELECT FOR UPDATE-Ersatz via `INSERT … ON CONFLICT … DO UPDATE SET naechster_start = naechster_start + 1 RETURNING naechster_start`. Garantiert lückenlos und atomar auch bei Parallelaufrufen. Format-String aus Firmendaten (Kürzel-Logik aus `mem://features/belegnummern`).
+- `kuerzel.ts` — Validierung (3–4 Zeichen, A–Z, 0–9), Eindeutigkeitsprüfung; Liefert `{ frei: boolean, kunde?: { id, nummer, name } }` für `/kunden/kuerzel-frei`.
+- `kunde-nummer.ts` — `nextKundeNummer(jahr)` analog atomar, Format `K-YYYY-NNN`.
+- `notizen.ts` — Validierung der Exklusiv-Bindung (genau eines von kundeId/objektId/angebotId/rechnungId).
+- `search.ts` — Wrapper um FTS5 mit Prefix-Match (`kunde* OR kunde`), Result-Mapping in `SuchTreffer`-Form, Limit 25.
 
-## Architektur
+### 4. Routes unter `backend/src/routes/`
+- `kunden.ts`
+  - `GET /kunden?suche&status&archiviert&limit&offset` — Liste mit serverseitigem Filter.
+  - `GET /kunden/:id` — gibt zusätzlich `ansprechpartner[]`, `objekte[]`, `notizen[]` (kompatibel mit `useKunde`).
+  - `POST /kunden` — vergibt `nummer` über `nextKundeNummer(currentYear)`. Bei `kuerzel`-Konflikt → 409.
+  - `PATCH /kunden/:id` — Partial-Update; bei `kuerzel`-Wechsel Eindeutigkeit erneut prüfen.
+  - `DELETE /kunden/:id` — soft via `archiviert=1` wenn Beziehungen existieren, sonst hart. Antwort enthält angewandten Modus.
+  - `GET /kunden/:id/zaehler` — `{ periode: "MMYY", naechsterStart }`.
+  - `GET /kunden/kuerzel-frei?kuerzel=&exceptId=` — wie Frontend erwartet.
+- `ansprechpartner.ts`
+  - `POST /ansprechpartner` — wenn `primaer=true`, alle anderen desselben Kunden in Transaktion auf `primaer=0` setzen.
+  - `PATCH /ansprechpartner/:id` — analog.
+  - `DELETE /ansprechpartner/:id` — wenn das einzige primäre weg ist und noch andere existieren, das chronologisch erste auf primär setzen.
+- `objekte.ts`
+  - `GET /objekte?kundeId` — Liste, Filter optional.
+  - `GET /objekte/:id` — Detail.
+  - `POST /objekte` — vergibt `nummer` (`O-YYYY-NNN`, Zähler analog).
+  - `PATCH /objekte/:id`, `DELETE /objekte/:id` (soft via `archiviert`/`status='beendet'` bei Beziehungen, hart sonst).
+- `notizen.ts`
+  - `POST /notizen` — Body validiert via Zod (`kundeId | objektId | angebotId | rechnungId`).
+  - `DELETE /notizen/:id`.
+- `suche.ts`
+  - `GET /search?q=` — Output `SuchTreffer[]` mit Linkstruktur, die zu existierenden Frontend-Routen passt (`/kunden/:id`, `/objekte/:id`, später `/angebote/:id`, `/rechnungen/:id`).
 
-```text
-/var/lib/mycleancenter/                      ← Daten (NIE bei Updates angefasst)
-├── db/mycleancenter.db (+ wal/shm)
-├── keys/master.key
-├── uploads/
-└── backups/
-    ├── daily/    (7 Stück, FIFO)
-    ├── weekly/   (4 Stück, jeden Sonntag promoted)
-    ├── monthly/  (12 Stück, am 1. des Monats promoted)
-    ├── safety/   (vor jedem Restore + Update, manuell aufräumbar)
-    └── tmp/      (in-Arbeit-Builds + Restore-Entpack-Bereich)
-```
+### 5. Auth + Audit
+- Alle Routen (außer `/search` für eingeloggte User auch) hängen am bestehenden `requireAuth`-Hook. Mutationen schreiben einen Audit-Eintrag (`kunde.create`, `kunde.update`, `kunde.delete`, …) inklusive `userId` und `ip`.
 
-Eine Backup-Datei ist genau eine `.tar.gz`:
+### 6. Tests `backend/test/kunden.spec.ts`
+- Kunde anlegen → Nummer = `K-{YYYY}-001`, zweiter Kunde 002.
+- Kürzel `GFU` anlegen, zweites Anlegen mit gleichem Kürzel → 409.
+- Belegnummer: 100 parallele `nextNummer("kundeId","0526")` → liefert `1..100` lückenlos und einzigartig.
+- Ansprechpartner: zwei mit `primaer=true` → der zweite überschreibt den ersten, Index-Constraint hält.
+- Objekt + Notiz an Kunde hängen, Kunde löschen → CASCADE entfernt beides.
+- Notiz mit zwei gesetzten FKs → 422.
+- FTS5: Kunde „Gärtner Süd GmbH" + Notiz „Schließanlage Süd" → `q=schliess` findet die Notiz, `q=gartner` (ohne Diakritik) den Kunden.
 
-```text
-backup-2026-05-02T030000Z-<id>.tar.gz
-├── manifest.json     { appVersion, schemaVersion, createdAt, dbSha256, type, sizes }
-├── db/mycleancenter.db        ← per SQLite Online-Backup-API erzeugt (konsistent)
-├── uploads/...                ← rekursiv
-└── keys/master.key            ← sonst sind verschlüsselte Settings nach Restore Schrott
-```
+## Frontend
 
-## Backend-Module
+### `src/lib/api/client.ts`
+- `PI_PREFIXES` um `/kunden`, `/ansprechpartner`, `/objekte`, `/notizen`, `/search` erweitern.
+- Mock-Override-Liste anpassen: alles oben Genannte aus `MOCK_OVERRIDE_PREFIXES` rausnehmen (war eh nicht drin), aber Mock-Code für diese Pfade lassen — Demo-Modus ohne Backend nutzt weiterhin Mock.
 
-### 1. Persistenz-Tabelle `backup_history`
+### `src/hooks/useApi.ts`
+- Keine API-Form-Änderungen — die existierenden Hooks (`useKunden`, `useKunde`, `useCreateKunde`, `useKuerzelFrei`, `useObjekte`, `useCreateObjekt`, `useNotizen`, `useGlobaleSuche` …) zeigen schon auf die richtigen Pfade.
+- 409 bei Kürzel-Konflikt: bestehender `useCreateKunde`-Onerror-Pfad bleibt; nur `ApiError.body` durchreichen für Toast-Detail.
 
-Migration `004_backups.sql`:
+### `src/lib/mock/backend.ts`
+- Marker-Kommentar `// STEP 3 ÜBERNOMMEN` über die Kunden-/Objekte-/Notizen-/Suche-Handler. Mock bleibt funktional als Demo-Fallback wenn keine Backend-URL gesetzt ist (Verhalten konsistent mit Step 1 + 2).
 
-```text
-backup_history
-  id TEXT PK
-  filename TEXT
-  category TEXT  ('daily'|'weekly'|'monthly'|'manual'|'pre-restore'|'pre-update')
-  trigger TEXT   ('auto'|'manual'|'pre-restore'|'pre-update')
-  size_bytes INTEGER
-  status TEXT    ('in_progress'|'success'|'failed')
-  started_at TEXT (ISO)
-  completed_at TEXT NULL
-  sha256 TEXT NULL
-  schema_version INTEGER
-  app_version TEXT
-  error TEXT NULL
-INDEX (status, started_at), (category, started_at)
-```
+### Keine UI-Änderungen
+- Keine Komponente muss umgebaut werden — alle Listen, Detailseiten und Dialoge sprechen schon gegen diese URLs. Lediglich `KuerzelFrei`-Live-Check arbeitet jetzt gegen echte DB statt Mock.
 
-Sichtbarkeitsregel hart durchgesetzt: Liste & Status zeigen nur `status='success' AND completed_at IS NOT NULL`. „In Arbeit" wird in einem getrennten kleinen Indikator angezeigt.
+## Sicherheits- und Datenintegritäts-Garantien
+- Kürzel ist case-insensitive eindeutig; das Frontend normalisiert bereits zu uppercase, das Backend zusätzlich beim INSERT.
+- Belegnummern-Zähler ist die einzige autoritative Quelle. `INSERT … ON CONFLICT DO UPDATE … RETURNING` läuft in einer einzigen SQLite-Anweisung — keine Race-Condition.
+- `ON DELETE CASCADE` von Kunde → Ansprechpartner/Objekte/Notizen ist gewollt; Angebote/Rechnungen folgen in Step 4/7 mit `ON DELETE RESTRICT`, damit keine Belege verschwinden.
+- Soft-Delete: ein Kunde mit Angeboten oder Rechnungen kann nie hart gelöscht werden — Backend antwortet stattdessen mit `archiviert=true`. (Step 4 setzt die RESTRICT-FKs, Step 3 prüft das vorab schon über `EXISTS`-Subqueries gegen `angebot`/`rechnung`, falls deren Tabellen schon existieren — sonst nur gegen interne Beziehungen.)
 
-### 2. `backend/src/backup/`
+## Reihenfolge der Umsetzung
+1. Migrationen 005 + 006 + Module unter `backend/src/kunden/`.
+2. Routen registrieren in `backend/src/server.ts`.
+3. Vitest-Suite (7 Tests) grün.
+4. Frontend-Routing in `client.ts`.
+5. Manuell im Preview testen: neuen Kunden anlegen, Kürzel-Live-Check, Notiz an Kunde + Objekt, Globale Suche.
+6. Memory-Eintrag `mem://features/backend-step3-stammdaten` + Eintrag in `mem/index.md`.
 
-| Datei | Aufgabe |
-|---|---|
-| `paths.ts` | typsicher daily/weekly/monthly/safety/tmp-Pfade, Dateiname-Builder, Parser für Datum/Kategorie |
-| `manifest.ts` | Manifest erzeugen + validieren (Schema, Versions-Check, sha256) |
-| `create.ts` | Snapshot erstellen: tmp-Ordner anlegen → SQLite `db.backup()` → uploads kopieren → master.key kopieren → manifest schreiben → tar.gz packen → sha256 → atomar `fs.rename` ins Ziel-Verzeichnis |
-| `restore.ts` | Sicherheits-Backup → Wartungsmodus an → tar.gz nach `tmp/restore-<id>/` entpacken → Manifest validieren → SQLite-Connection sauber schließen → atomarer Swap von `db/`, `uploads/`, `keys/` → Migrations-Runner → DB neu öffnen → Wartungsmodus aus. Bei Fehler: automatisches Rollback aus dem Sicherheits-Backup |
-| `rotation.ts` | FIFO-Aufräumen Daily/Weekly/Monthly. Promotion: am 1. eines Monats wird das jüngste Daily zusätzlich nach `monthly/` kopiert; Sonntags zusätzlich nach `weekly/` |
-| `scheduler.ts` | `node-cron` Job: täglich um konfigurierter Uhrzeit (Default 03:00), nach Erfolg → Rotation. Konfigurierbar in Settings-Bereich `backup` (bereits im Schema) |
-| `progress.ts` | Pro laufendem Backup In-Memory-Status: `{phase: 'sqlite'|'uploads'|'archive'|'rotate', percent}`. Frontend pollt /backup/in-arbeit, später ersetzbar durch SSE in Step 8 |
-| `maintenance.ts` | Wartungsmodus-Flag (in-Memory + Datei `data/maintenance.flag`). Hook in Fastify: alle Routes außer `/health` und `/backup/restore-status` antworten 503 mit Retry-After |
+## Nicht-Ziele für Step 3
+- Keine Angebote/Rechnungen — kommen in Step 4 / 7.
+- Kein PDF-Generator — Step 5.
+- Kein Drive/Mail-Versand — Step 6.
+- Keine Aktivitäten/SSE — Step 8 (Audit-Logs werden aber bereits geschrieben).
 
-### 3. Routen `backend/src/routes/backup.ts`
-
-Alle authentifiziert (außer `/health`-Erweiterung).
-
-| Methode | Pfad | Verhalten |
-|---|---|---|
-| GET | `/backup/historie` | nur sichtbare (success+completed) Einträge, neueste zuerst |
-| GET | `/backup/in-arbeit` | aktuell laufende Builds + Live-Phase |
-| POST | `/backup/erstellen` | startet Manual-Backup, antwortet sofort `{id}`, Worker läuft im Hintergrund |
-| GET | `/backup/:id/download` | streamt die tar.gz mit Content-Disposition |
-| POST | `/backup/upload` | nimmt Multipart entgegen, validiert Magic + Manifest, legt in `tmp/` ab, antwortet `{uploadId, vermutetesDatum, version, sizeBytes}` |
-| POST | `/backup/:id/restore` | bestehende Backup-Datei auf dem Pi zurückspielen |
-| POST | `/backup/upload/:uploadId/restore` | hochgeladene Datei zurückspielen, **Passwort des aktuellen Owners erforderlich** (zusätzlich zu Session) |
-| GET | `/backup/restore-status` | im Wartungsmodus weiterhin erreichbar, liefert Phase + Progress |
-| DELETE | `/backup/:id` | nur `manual` und `safety` löschbar; geplante Backups löscht ausschließlich die Rotation |
-
-### 4. Settings-Bereich `backup` (bereits vorhanden, jetzt aktiv)
-
-Wird vom Scheduler beim Boot UND bei jedem PATCH neu gelesen:
-- `aktiv: boolean` (Master-Schalter Cron)
-- `uhrzeit: "HH:MM"`
-- `behaltenDaily/Weekly/Monthly`
-- `driveSpiegel: boolean` — bleibt für Step 6, hier nur Flag, kein Upload
-- `zielordner: string` — Default `dataPath('backups')`, abweichende Pfade nur wenn schreibbar (Boot-Check)
-
-### 5. `/health`-Erweiterung
-
-`/health/detail` (auth) bekommt:
-- `lastBackupAt`, `lastBackupOk`, `nextScheduledBackupAt`
-- `backupsDir.freeBytes`, `backupsDir.totalBytes`
-- `maintenance: boolean`
-
-## Sicherheits-Garantien (unverhandelbar)
-
-1. **Sicherheits-Backup** wird VOR jedem Restore und VOR jedem Update geschrieben. Wenn dieser Schritt fehlschlägt → Restore wird abgebrochen, kein Daten-Touch.
-2. **Atomarer Swap** beim Restore: `mv -T` (bzw. `fs.renameSync`) auf Verzeichnis-Ebene. Bei Fehler → Rollback aus dem Sicherheits-Backup, ebenfalls atomar.
-3. **Schema-Downgrade verboten:** `manifest.schemaVersion > current` → 409, klare Fehlermeldung im UI.
-4. **Master-Key:** ist im tar enthalten; ohne ihn werden verschlüsselte Settings (SMTP-Passwort, Drive-Tokens) nach Restore unbrauchbar.
-5. **Upload-Validation:** vor dem Entpacken Magic-Bytes + Manifest-Schema prüfen, Größe-Limit (z. B. 2 GB), kein Pfad-Traversal beim Entpacken.
-6. **Passwort-Bestätigung** bei Upload-Restore: Owner muss aktuelles Passwort eingeben (Schutz vor verlorener Session).
-7. **Wartungsmodus** während Restore: alle anderen Routes 503, kein paralleler Schreibzugriff möglich.
-8. **DB sauber schließen** vor Datei-Swap: alle WAL-Checkpoints flushen, dann `db.close()`. Nach Swap neu öffnen, Migrations-Runner laufen lassen.
-9. **Audit-Log-Einträge** für jedes Backup, jeden Download, jeden Restore (mit Manifest-Daten).
-10. **Keine Cloud-Abhängigkeit** für Restore — alles funktioniert offline auf der Platte.
-
-## Frontend-Änderungen
-
-### Routing
-
-`src/lib/api/client.ts`:
-- Prefix `"/backup/"` zur Pi-Routing-Liste hinzufügen.
-- `/einstellungen/backup` und `/einstellungen/backup/historie` ans Pi-Backend (heute schon teilweise vorgesehen).
-
-### Hooks `src/hooks/useApi.ts`
-
-Bestehende Hooks (`useBackup`, `useBackupHistorie`, `useCreateBackup`, `useRestoreBackup`, `useUploadBackup`, `useRestoreUploadedBackup`) bleiben in der Signatur, sprechen jetzt aber gegen das echte Backend. Neu:
-- `useBackupInArbeit()` — pollt während laufender Backups alle 600 ms.
-- `useDownloadBackup()` — startet Download via Blob (mit Auth-Cookie).
-- `useRestoreStatus()` — pollt während Restore (Wartungsmodus) alle 1 s, zeigt Phase.
-
-### UI
-
-`BackupTab.tsx`:
-- „In Arbeit"-Badge mit Live-Phase + Prozent.
-- Download-Button pro Eintrag (heute Stub).
-- Vor Upload-Restore: Mini-Dialog „Aktuelles Passwort bestätigen" (gleiche Komponente wie Login).
-
-`RestoreBackupDialog.tsx`:
-- Klare Stufen: 1) Sicherheits-Backup wird erstellt, 2) Backend pausiert, 3) Daten werden ersetzt, 4) Migrationen laufen, 5) Backend startet wieder. Live-Fortschritt aus `/backup/restore-status`.
-- Während Wartungsmodus: ganzseitiger Overlay „Wiederherstellung läuft — bitte nicht schließen", App pollt bis Backend wieder antwortet, danach Reload.
-
-### Backend-Offline-Modus
-
-Während des Restore-Wartungsmodus ist das Backend absichtlich für 503. Der bereits gebaute `backend-offline`-Modus (Step 1 Hardening) wird so erweitert, dass er ein Header-Feld `X-Maintenance: 1` erkennt und einen freundlichen „Wiederherstellung läuft"-Screen statt „Verbindung verloren" zeigt.
-
-## Tests (`backend/test/backup.spec.ts`)
-
-Pflicht-Tests, alle gegen einen Temp-Daten-Ordner:
-
-1. Snapshot enthält DB + uploads + master.key + manifest, sha256 stimmt.
-2. Manifest-Validation lehnt fremdes Schema (höher als aktuell) ab.
-3. Rotation: 8 Tage simulieren → genau 7 Daily; Sonntag → Weekly entsteht; 1. eines Monats → Monthly entsteht.
-4. Restore-Roundtrip: Kunde anlegen → Backup → Kunden löschen → Restore → Kunde wieder da, master.key intakt, verschlüsselte Settings entschlüsselbar.
-5. Restore mit absichtlich kaputtem tar → Sicherheits-Backup wird automatisch zurückgespielt, Daten unverändert.
-6. Sichtbarkeitsregel: laufendes Backup taucht NICHT in `/backup/historie` auf.
-7. Wartungsmodus: alle Routes außer `/health` und `/backup/restore-status` antworten 503.
-8. Upload-Restore ohne korrektes Passwort → 401, kein Datei-Touch.
-9. Cross-User-Restore: nur Owner-User darf restoren.
-10. DB-Backup nutzt SQLite-Backup-API (nicht `cp`), funktioniert mit aktivem Schreiber im selben Prozess.
-
-## Reihenfolge der Umsetzung (1 Durchgang ohne Rückfragen)
-
-1. Migration `004_backups.sql` + `dataPath`-Erweiterungen.
-2. `backup/` Module (paths → manifest → create → rotation → scheduler).
-3. Routen `/backup/*` + Wartungsmodus-Hook.
-4. `restore.ts` + Sicherheits-Backup + Migrations-Runner.
-5. `/health/detail`-Erweiterung.
-6. Frontend-Routing-Prefix + Hooks aktualisieren.
-7. `BackupTab` und `RestoreBackupDialog` an echte Endpoints + Live-Phasen.
-8. Vitest-Suite.
-9. Memory `mem/features/backend-step2-backup-restore.md` aktualisieren, Index ergänzen.
-
-## Akzeptanzkriterien
-
-- `npm run test` im Backend grün, alle 10 Backup-Tests bestehen.
-- Manueller Smoke-Test: Backup erstellen → herunterladen → Daten ändern → hochladen + restoren → Daten wieder im Ursprungszustand, Login funktioniert weiter.
-- Cron läuft 03:00, neuer Daily-Eintrag erscheint, ältester Daily verschwindet, Sonntags entsteht ein Weekly.
-- Im UI keine „in-Arbeit"-Backups in der Erfolgs-Liste.
-- Während Restore zeigt das Frontend einen klaren Fortschritts-Screen, kein Mock-Fallback.
-- Garantie-Test: Während Backup-Erstellung Pi hart neu starten → kein „Phantom-Erfolg" in der Historie, da `completed_at` nie gesetzt wurde.
-
-## Out of Scope
-
-- **Drive-Spiegel**: Flag bleibt, Upload nach Drive kommt in Step 6.
-- **SSE-Live-Updates**: Polling reicht für Step 2, SSE folgt in Step 8.
-- **Verschlüsselte Backups**: Erst nach Step 6, falls überhaupt nötig (Pi ist offline im LAN).
-
-Sag „approved" und ich fange mit der Umsetzung in der oben genannten Reihenfolge an.
+Sag „approved" wenn der Plan passt — dann starte ich Step 3.
