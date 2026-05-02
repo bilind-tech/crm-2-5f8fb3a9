@@ -50,7 +50,7 @@ function analysiereUmfeld(url: string): Hindernis {
     return {
       typ: "mixed-content",
       details:
-        "Diese Seite läuft über HTTPS, die Stundenzettel-App über HTTP. Browser blockieren das aus Sicherheitsgründen („Mixed Content"). Auf dem Pi laufen später beide unter derselben Adresse — dann funktioniert es automatisch.",
+        'Diese Seite läuft über HTTPS, die Stundenzettel-App über HTTP. Browser blockieren das aus Sicherheitsgründen („Mixed Content"). Auf dem Pi laufen später beide unter derselben Adresse — dann funktioniert es automatisch.',
     };
   }
 
