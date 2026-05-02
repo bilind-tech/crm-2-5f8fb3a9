@@ -170,6 +170,7 @@ export function KundeForm({ onClose, onCreated }: Props) {
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean),
+      startZaehlerAktuellerMonat: f.kuerzel && f.startNummer > 1 ? f.startNummer : undefined,
     });
     toast.success("Kunde angelegt", { description: `${k.nummer} • erfolgreich gespeichert.` });
     onCreated?.(k);
