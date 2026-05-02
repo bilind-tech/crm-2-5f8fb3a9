@@ -256,6 +256,10 @@ export interface Rechnung {
   inkassoMarkiert?: boolean;
   /** Status der Drive-Synchronisation des PDFs. */
   drive?: DriveSyncInfo;
+  /** Vom Backend gesetzt: ID des Dauerauftrags, zu dem diese Rechnung gehört (Auto-Verknüpfung). */
+  dauerauftragId?: ID;
+  /** Nur in der Server-Antwort (nicht persistiert): Info zu einem neu erzeugten Dauerauftrag, für Toast-Feedback. */
+  dauerauftragNeu?: { id: ID; nummer: string };
   erstelltAm: ISODateTime;
   geaendertAm: ISODateTime;
 }
