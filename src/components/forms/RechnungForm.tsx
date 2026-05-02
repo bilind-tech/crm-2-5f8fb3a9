@@ -55,6 +55,12 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
     [objekteAlle, kundeId]
   );
 
+  const vorschauNummer = useMemo(() => {
+    if (!kundeId || !nummernkreise) return "";
+    const kunde = kunden.find((k) => k.id === kundeId);
+    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.rechnungPraefix);
+  }, [kundeId, kunden, nummernkreise]);
+
   function setFristTage(tage: number) {
     setFrist(tage);
     setFaellig(addDays(rechnungsdatum, tage));
