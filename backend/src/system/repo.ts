@@ -246,6 +246,15 @@ export function deletePaket(id: string): void {
   getDatabase().prepare(`DELETE FROM system_update_paket WHERE id = ?`).run(id);
 }
 
+export function isPaketValide(id: string): boolean {
+  const r = getDatabase()
+    .prepare(`SELECT validiert, gueltig_bis FROM system_update_paket WHERE id = ?`)
+    .get(id) as { validiert: number; gueltig_bis: string } | undefined;
+  if (!r) return false;
+  if (r.validiert !== 1) return false;
+  return new Date(r.gueltig_bis).getTime() > Date.now();
+}
+
 export function purgeExpiredPakete(): number {
   return getDatabase()
     .prepare(`DELETE FROM system_update_paket WHERE datetime(gueltig_bis) < datetime('now')`)
