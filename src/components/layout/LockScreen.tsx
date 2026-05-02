@@ -66,6 +66,26 @@ export function LockScreen() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Entsperren …" : "Entsperren"}
             </Button>
+
+            {/* DEV-AUTOLOGIN-START — provisorisch, vor Release komplett entfernen (inkl. dieses Blocks). */}
+            <Button
+              type="button"
+              size="lg"
+              variant="secondary"
+              className="h-14 w-full text-base font-semibold"
+              disabled={loading}
+              onClick={async () => {
+                setFehler(null);
+                try {
+                  await unlock("040506");
+                } catch (err) {
+                  setFehler(err instanceof Error ? err.message : "Anmeldung fehlgeschlagen");
+                }
+              }}
+            >
+              Schnell-Login (DEV)
+            </Button>
+            {/* DEV-AUTOLOGIN-END */}
           </form>
         </CardContent>
       </Card>
