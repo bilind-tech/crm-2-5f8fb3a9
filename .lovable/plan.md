@@ -1,154 +1,145 @@
-# Step 16 (erweitert) — Auth fertig + Mahnwesen + Dokumente + Steuertermine
 
-Ziel: Vor Step 17 (Release-ZIP) und Step 18 (Pi-Bootstrap) ist die App **vollständig durchgetestet**. Step 16 wird in **4 Blöcke** gegliedert, die je einzeln im Browser testbar sind. Nach jedem Block kannst du ausgiebig probieren und Korrekturen ansagen, bevor der nächste startet.
+## Teil 0 — WICHTIG: Audit „Werden irgendwo automatisch E-Mails versendet?"
 
----
+Ich habe den ganzen Code durchsucht. Stand jetzt:
 
-## Block A — Auth-Reststücke abschließen
+**Stellen, an denen tatsächlich `sendMail` aufgerufen wird:**
+1. `backend/src/email/worker.ts` — pollt alle 30 s die `email_versand`-Queue und sendet alles, was drin liegt. Wird in `server.ts` per `startEmailWorker()` automatisch gestartet.
+2. `backend/src/routes/email.ts` Zeile 135 — manueller Test-Versand-Endpunkt aus den SMTP-Einstellungen (nur auf Klick „Test-Mail senden").
 
-Kleines Aufräumen, damit die Auth-Schicht 100 % rund ist.
+**Wer legt etwas in die Queue (`enqueueVersand`)?**
+- `backend/src/routes/email.ts` Zeile 111 — wenn der User im Frontend im EmailVersandDialog auf „Senden" klickt. **Bewusste User-Aktion. OK.**
+- `backend/src/mahnung/automatik.ts` Zeile 121 — der Mahn-Cron (`startMahnScheduler`). **Genau das, was du nicht willst.**
 
-1. **Tab-Filter Mitarbeiter** in `src/routes/einstellungen.tsx`
-   - Owner sieht alle Tabs.
-   - Mitarbeiter sieht nur: Firma, SMTP, Erscheinung, E-Mail-Vorlagen, Stundenzettel, Dauerauftrag, Nummernkreise, Vorlagen.
-   - Tabs Backup, System-Update, Steuern, Sicherheit, Google Drive sind ausgeblendet.
-2. **Lockout-Countdown im LoginForm**
-   - Bei 429-Antwort liest der Client `retry-after` und zeigt `„Erneut möglich in 04:32"`, Login-Button bleibt deaktiviert.
-3. **Recovery-Code drucken**
-   - Print-Button im Setup-Wizard und im Reset-Dialog der Benutzer-Verwaltung.
-   - Eigene Druckansicht: Logo + „MyCleanCenter Recovery-Code" + Code groß + Datum + Hinweistext „An sicherem Ort verwahren".
-4. **install.sh Setup-URL-Ausgabe**
-   - Nach erfolgreichem Healthcheck: `Setup-URL: http://<hostname>:8787/setup?token=<token>` ausgeben, falls `setup.token` noch existiert.
-5. **Tests** (`backend/test/`):
-   - `auth-recovery.spec.ts`: Code einmal nutzbar, dann ungültig; Rotate invalidiert alten.
-   - `auth-rollen.spec.ts`: Mitarbeiter → 403 auf `/system`, `/backup`, `/steuern`, `/benutzer`; Last-Owner-Schutz.
+**Andere Cron-Jobs (kein Mail-Versand, nur interne Aktionen):**
+- `fristen-cron.ts` — erzeugt nur In-App-Benachrichtigungen (Glocken-Icon), schickt keine Mail.
+- `belege/scheduler.ts` — markiert Rechnungen intern als „überfällig", schickt keine Mail.
+- `drive/upload-worker.ts` — Google-Drive-Upload, keine Mail.
+- `backup/scheduler.ts` — SQLite-Snapshot, keine Mail.
 
-**Akzeptanz Block A**: Mitarbeiter-Login zeigt nur erlaubte Tabs, Lockout-Countdown läuft, Recovery-Code druckbar, Tests grün.
+**Konsequenz für Block B (Mahn-Automatik) — wird NICHT komplett gelöscht, aber stillgelegt:**
+- `startMahnScheduler()` aus `server.ts` auskommentieren/entfernen → Cron tickt nie.
+- In `backend/src/mahnung/automatik.ts` einen harten Guard einbauen: `if (quelle === "cron") return earlyExit` — selbst wenn jemand den Scheduler später wieder anwirft, wird kein Mail-Enqueue passieren.
+- Frontend: im Mahnwesen-Tab den Bereich „Automatik aktiv / Cron-Zeit" ausblenden (Code bleibt liegen, nur die UI wird versteckt + Hinweis „Mahnungen werden nur manuell verschickt").
+- Memory-Eintrag setzen: **„NIEMALS automatischer E-Mail-Versand. Mails nur nach expliziter User-Aktion im EmailVersandDialog."**
 
----
-
-## Block B — Mahn-Automatik (UI + Job)
-
-Migration `014_mahn_automatik.sql` existiert bereits. Wir bauen UI und Trigger-Job darauf auf.
-
-### B.1 Einstellungen-Tab „Mahnwesen" (Owner-only)
-- Schalter „Automatik aktiv"
-- 4 Stufen konfigurierbar (Erinnerung / 1. Mahnung / 2. Mahnung / Inkasso-Vorstufe):
-  - Tage nach Fälligkeit
-  - Mahngebühr (€)
-  - Verzugszinssatz (%) — Default 9 % über Basiszinssatz für B2B
-  - Verknüpfte E-Mail-Vorlage (Auswahl aus bestehenden Vorlagen, Kontext „mahnung")
-- Globale Optionen: Wochenende überspringen, Mindestbetrag offen (z. B. nur ab 10 €), Pausieren bei aktiver Teilzahlung in den letzten N Tagen
-
-### B.2 Rechnung-Detailseite
-- Neuer Bereich „Mahnstatus": aktuelle Stufe, fällig seit X Tagen, nächste Mahnung am …
-- Mahn-Verlauf-Liste (Stufe, Datum, Versandstatus, Mahngebühr, neuer Gesamtbetrag)
-- Button **„Mahnung jetzt erzeugen"** → Mini-Dialog wählt Stufe → erzeugt Mahn-PDF + Vormerker im E-Mail-Versand (Versand erst nach Bestätigung im E-Mail-Postausgang)
-
-### B.3 Listen-Filter
-- Rechnungen-Liste: neue Filter-Chips „Überfällig", „Mahnstufe ≥ 1", „Wartet auf Versand"
-
-### B.4 Backend-Trigger
-- Täglicher Job (Cron-ähnlich, in-process) prüft alle offenen Rechnungen.
-- Erzeugt Mahn-Vormerker (Status `wartet_auf_freigabe`), KEIN Auto-Versand.
-- Bell-Icon im Header zeigt „X Mahnungen warten auf Freigabe" → Klick führt zur gefilterten Liste.
-
-**Akzeptanz Block B**: Du kannst Stufen konfigurieren, eine überfällige Rechnung produziert nach Job-Lauf einen Vormerker, manuelle Mahnung funktioniert, Verlauf wird geführt.
+→ Das mache ich als ersten Schritt vor der eigentlichen Upload-UX.
 
 ---
 
-## Block C — Dokumenten-Upload UX
+## Teil 1 — Bestandsaufnahme Dokumenten-Upload (was es schon gibt)
 
-Migration `013_dokumente.sql` existiert. Wir bauen die UI komplett aus.
+- `src/components/dokumente/DokumentUploader.tsx` — Drag & Drop / Klick / kompakter Button. Lädt nacheinander hoch, zeigt nur Toast.
+- `src/lib/dokument/upload.ts` — Komprimiert Bilder (max. 1600px JPEG q0.8), prüft 20 MB, baut FormData, fällt auf Mock zurück.
+- `src/components/dokumente/HandyScanDialog.tsx` — Handy-Scan via Upload-Session.
+- `src/components/dokumente/DokumentBearbeitenDialog.tsx` — Meta-Edit.
+- `src/components/dokumente/DokumentViewer.tsx` — Vorschau.
+- Backend `backend/src/routes/dokumente.ts` + `013_dokumente.sql` — Multipart-Endpunkt, Frist-Felder, Drive-Sync.
 
-### C.1 Drop-Zone-Komponente
-Wiederverwendbar für Kunde, Angebot, Rechnung, Objekt.
-- Drag & Drop + Klick-zum-Auswählen + Mobile-Kamera-Capture (`capture="environment"`)
-- Mehrfachauswahl, parallele Uploads mit Fortschrittsbalken pro Datei
-- Kategorien-Auswahl pro Datei: Vertrag, Lieferschein, Foto, Schlüsselübergabe, Sonstiges
-- Max-Größe konfigurierbar (Default 25 MB), erlaubte Typen: PDF, JPG, PNG, HEIC, DOCX
-
-### C.2 Dokumenten-Liste
-- Thumbnail-Vorschau (Bild direkt, PDF erste Seite via `pdfjs-dist` Browser-side)
-- Aktionen: Öffnen (Fullscreen-Viewer), Herunterladen, Umbenennen, Kategorie ändern, Löschen (mit Bestätigung)
-- Sortierung: hochgeladen am (neuste zuerst), Filter nach Kategorie
-
-### C.3 Einbau in Detailseiten
-- **Kunde-Detail**: neuer Tab „Dokumente"
-- **Angebot-/Rechnung-Detail**: Akkordeon „Dokumente" unter den Positionen
-- **Objekt-Detail**: Tab „Dokumente"
-
-### C.4 Backend-Anpassungen
-- `/dokumente` Listen-Endpoint mit Filter `kundeId|angebotId|rechnungId|objektId`
-- Multipart-Upload bestehende Route nutzen, Limits aus Einstellungen lesen
-- Storage-Pfad: `$DATA_DIR/dokumente/{YYYY}/{MM}/{uuid}.{ext}`
-
-**Akzeptanz Block C**: Datei per Drag&Drop + per Handy-Kamera hochladbar, Vorschau funktioniert, Löschen funktioniert, Dokumente erscheinen im richtigen Kontext.
+**Schwächen heute:**
+- Kein sichtbarer Fortschritt pro Datei (nur „Wird hochgeladen…").
+- Bei mehreren Dateien sieht man weder welche fertig sind noch welche fehlgeschlagen sind.
+- Keine Vorschau vor dem Hochladen, keine Möglichkeit aus dem Stapel einzelne wieder zu entfernen.
+- Meta (Kunde, Objekt, Typ, Frist, Betrag, steuerrelevant) muss erst nachträglich im Bearbeiten-Dialog gesetzt werden → für Quittungen zu umständlich.
+- Validierung (zu groß, falscher Typ) verschwindet als Toast — keine zweite Chance.
+- Drag&Drop nur in der Drop-Zone, nicht auf der ganzen Seite.
+- Mobil: der große Drop-Bereich ist auf dem Handy unnötig groß.
 
 ---
 
-## Block D — Steuertermine + Erinnerungen
+## Teil 2 — Plan für die neue Upload-UX
 
-### D.1 Tab „Steuertermine" im Steuer-Modul
-- Liste aller Fristen (USt-VA monatlich, KSt jährlich, GewSt jährlich, eigene manuelle Termine)
-- Spalten: Termin, Steuerart, Zeitraum, Sollbetrag (geschätzt), Status (offen / erledigt / überfällig)
-- Aktion „Als erledigt markieren" → Frist-Log-Eintrag mit Datum + Notiz + optional Beleg-Anhang
-- Aktion „Manuellen Termin anlegen"
+**Ziel:** Ein Stapel-Upload-Flow, der robust, übersichtlich und schnell ist — auch für 10 Quittungen auf einmal — ohne dass automatisch Mails oder sonstige Aktionen ausgelöst werden.
 
-### D.2 Frist-Log
-- Migration `015_steuer_frist_log.sql` ist da — wir bauen die Read/Write-Endpoints + UI.
-- Audit-Trail: wann wurde was als erledigt gemeldet, von wem, mit welchem Betrag.
-
-### D.3 Benachrichtigungen
-- In-App: Bell-Icon-Eintrag 7 Tage und 1 Tag vor Frist → Klick führt zum Termin.
-- Optional E-Mail an Owner-Adresse via SMTP (Schalter in Steuer-Einstellungen).
-- Wiederkehrende Termine (USt-VA monatlich) werden automatisch nach Erledigung für nächste Periode neu angelegt.
-
-**Akzeptanz Block D**: Du siehst alle anstehenden Fristen, kannst sie abhaken, Frist-Log wird geführt, Bell-Icon zeigt 7 Tage vor Frist eine Erinnerung.
-
----
-
-## Reihenfolge & Strategie
+### 2.1 Neue Komponente `DokumentUploadPanel`
+Ersetzt die heutige große Drop-Zone auf `/dokumente`. Aufbau:
 
 ```text
-A (klein, ~1 Lauf)  ── du testest Auth & Tabs ──┐
-B (mittel, ~2 Läufe) ── du testest Mahnwesen ──┤
-C (mittel, ~2 Läufe) ── du testest Upload UX ──┤
-D (mittel, ~1-2 Läufe) ── du testest Termine ──┘
-                                                ↓
-                                       Step 17 (Release-ZIP)
-                                       Step 18 (Pi-Bootstrap)
++---------------------------------------------------------+
+|  [Icon] Dateien hierher ziehen oder klicken             |
+|         Bilder oder PDF · max. 20 MB · mehrere möglich  |
++---------------------------------------------------------+
+|  Wenn Dateien ausgewählt → Stapel-Liste darunter:       |
+|                                                         |
+|  [Thumb] rechnung_1.pdf       1.2 MB   [✓ fertig]       |
+|  [Thumb] foto.jpg → 0.6 MB    komprimiert  [▓▓▓░] 78%   |
+|  [Thumb] zu_gross.png         24 MB    [✗ zu groß]  [×] |
+|                                                         |
+|  Gemeinsame Meta (klappt auf, optional):                |
+|    Kunde [Select]  Objekt [Select]  Typ [Select]        |
+|    Fällig am [Datum]  Betrag [€]  ☐ steuerrelevant      |
+|                                                         |
+|  [Alle hochladen]   [Liste leeren]                      |
++---------------------------------------------------------+
 ```
 
-**Begründung der Reihenfolge:**
-- **A zuerst**, weil klein und Voraussetzung für saubere Owner/Mitarbeiter-Trennung in B/C/D.
-- **B vor C**, weil Mahn-Automatik bestehende Rechnungen-/E-Mail-Logik berührt — vor neuen Komponenten klären.
-- **C vor D**, weil Dokumenten-Upload als Anhang in Steuer-Termine wiederverwendet werden kann.
-- **D zuletzt**, weil unabhängiges Modul, baut nur auf bestehender Bell-Icon-Infrastruktur auf.
+**Verhalten:**
+- Auswahl per Klick, Drag&Drop in die Zone, **oder** Drag-Drop irgendwo aufs Fenster (globaler Overlay).
+- Sofort nach Auswahl: Vorschau-Thumb (Bild via `URL.createObjectURL`, PDF generisches Icon), Validierung (Typ + Größe), Komprimierungs-Hinweis bei Bildern.
+- Pro Datei klare Status-Chips: `wartet | komprimiert | lädt hoch X% | fertig | fehler`.
+- Einzelne Dateien per `×` aus dem Stapel entfernen, einzelne fehlgeschlagene per „↻ Erneut" wiederholen.
+- Optional gemeinsame Meta wird auf alle Dateien gleichzeitig angewendet (ist heute der Hauptfrust).
+- „Alle hochladen" mit Concurrency 3 (nicht alle parallel — Pi soll Luft behalten).
+- Nach Abschluss: kompakter Summary-Toast `„7 hochgeladen, 1 fehlgeschlagen"` + die fehlgeschlagene Karte bleibt sichtbar bis sie gelöscht/wiederholt wird.
 
-Nach jedem Block: ich melde mich kurz „Block X fertig — bitte testen", du sagst „weiter" oder nennst Korrekturen.
+### 2.2 Globaler Drop-Overlay
+Eine `<GlobalDropZone />` einmal im `__root.tsx`, die nur auf `/dokumente` und `/kunden/:id` aktiv ist. Wenn der User Dateien irgendwohin aufs Fenster zieht, blendet sich ein blasses Overlay mit „Hier ablegen, um zu Dokumenten hinzuzufügen" ein. Beim Drop landet alles im `DokumentUploadPanel`-Stapel.
+
+### 2.3 Fortschritt vom Upload-Request
+Der heutige `piApi.post` mit `FormData` liefert keinen Progress. Ich erweitere `piClient` um eine `postWithProgress`-Variante (XHR statt fetch), die `onUploadProgress(loaded, total)` zurückgibt. Verhältnis 0–100 % geht an die Stapel-Karte. Funktioniert sowohl Live (Pi) als auch im Mock (sofort 100 %).
+
+### 2.4 Validierung & Sicherheit
+- Whitelist MIME-Types: `image/jpeg, image/png, image/webp, image/heic, application/pdf`.
+- Max 20 MB **vor** Komprimierung prüfen, danach informativ zeigen „1.2 MB → 0.4 MB komprimiert".
+- Dateiname trimmen, gefährliche Zeichen entfernen.
+- Zod-Schema für Meta (Kunde-ID, Objekt-ID, Datum, Betrag).
+
+### 2.5 Mobil-Spezifika
+- Auf `<sm` schrumpft die Drop-Zone zu einem kompakten Button-Block: `[📷 Vom Handy scannen]  [📎 Dateien wählen]`.
+- Der Stapel rendert als gestapelte Karten (genau wie die bestehende Dokument-Karte), inkl. Wisch-Geste „Entfernen".
+- `<input accept="image/*,application/pdf" capture>` erlaubt direkten Kamera-Zugriff.
+
+### 2.6 Wiederverwendbarkeit
+- `DokumentUploadPanel` bekommt Props `kundeId?`, `objektId?`, `defaultFaelligAm?`, `onUploaded?(dokumente: Dokument[])`.
+- Wird genutzt auf `/dokumente` (groß), Kunden-Detail-Tab „Dokumente" (mittel), Objekt-Detail (mittel), und ersetzt den `compact`-Button im PageHeader durch einen Button, der das Panel-Sheet auf Mobile öffnet.
+
+### 2.7 Backend (klein, nicht-invasiv)
+Der Multipart-Endpunkt `/dokumente` existiert bereits. Anpassungen:
+- Nur Header-Feld `Content-Length`-Validierung früh ablehnen (>22 MB → 413), damit der Pi nicht erst alles reinliest.
+- MIME-Whitelist serverseitig spiegeln (Defense in Depth).
+- Kein neuer Endpunkt nötig — das spart Migration.
+
+### 2.8 Was NICHT passiert (explizit)
+- Kein automatisches Verschicken irgendeiner Mail — auch nicht „Dokument xy ist eingegangen".
+- Keine automatische OCR / KI-Erkennung der Quittung in dieser Stufe (kann später).
+- Keine Änderung an Drive-Auto-Upload — der läuft schon und ist gewünscht.
 
 ---
 
-## Was nicht enthalten ist
+## Teil 3 — Reihenfolge der Umsetzung
 
-- 2FA / TOTP — späterer Step
-- E-Mail-basierter Passwort-Reset — Recovery-Code reicht
-- Buchhaltungs-Export (DATEV) — eigener späterer Step
-- OCR auf hochgeladenen Belegen — eigener späterer Step
-
----
-
-## Technische Details (für mich, du musst das nicht lesen)
-
-**Block A:** TanStack-Router-Filter im Tab-Array per `istOwner`-Check; `retry-after`-Parser im `apiClient`-Interceptor; Print-Route als versteckte `/print/recovery?code=…` mit `window.print()` in `useEffect`.
-
-**Block B:** neue Tabellen `mahn_einstellungen`, `mahn_lauf` (existieren via Migration 014); In-Process-Cron via `setInterval` + Persistenz „letzter Lauf" in `system_state`; PDF-Render nutzt vorhandenes Beleg-Template mit Mahn-Variante.
-
-**Block C:** `react-dropzone` (bereits gängig), `pdfjs-dist` für PDF-Thumbnails; Backend Multipart via `@fastify/multipart` (bereits installiert); Storage als Hash-Pfad zur Deduplizierung optional.
-
-**Block D:** Termin-Generator ist reine Date-Math (USt-VA: 10. des Folgemonats, mit Dauerfristverlängerung +1 Monat); Bell-Icon nutzt bestehende `benachrichtigungen`-Tabelle aus Migration 010.
+1. **Auto-Mail-Sperre** (Teil 0) — Scheduler-Start raus, Guard rein, UI ausblenden, Memory-Eintrag.
+2. **`postWithProgress`** im `piClient`.
+3. **`DokumentUploadPanel`** komplett neu (Stapel + Status + Meta-Bulk).
+4. **`GlobalDropZone`** im `__root.tsx`.
+5. **Integration**: `/dokumente`, Kunden-Detail, Objekt-Detail umstellen. Alter `DokumentUploader` als dünner Wrapper für Rückwärtskompatibilität.
+6. **Backend-Härtung** (413 + MIME-Whitelist).
+7. **Smoketest in Preview** (auch wenn Backend offline ist → Mock-Pfad).
 
 ---
 
-**Sag „los Block A", dann starte ich.**
+## Technische Notizen
+- Komponentenpfad: `src/components/dokumente/DokumentUploadPanel.tsx`, `src/components/dokumente/GlobalDropZone.tsx`.
+- Concurrency-Helfer: kleine `runWithConcurrency(items, n, fn)`-Util in `src/lib/util/concurrency.ts`.
+- XHR-Wrapper: `src/lib/api/piClient.ts` → `postWithProgress<T>(path, formData, onProgress)`.
+- State-Modell für Stapel:
+  `type StapelItem = { id; file; previewUrl?; status: "wartet"|"komprimiert"|"laedt"|"fertig"|"fehler"; progress: number; fehler?: string; result?: Dokument }`.
+- Keine neuen DB-Tabellen, keine Migration.
+- Tests: kleiner Vitest für `runWithConcurrency` und für die MIME/Größen-Validierung.
+
+---
+
+**Fragen, die ich beim Bauen entscheiden würde — sag Bescheid wenn du anders willst:**
+- Concurrency-Limit `3` (statt `1` heute) — passt für Pi?
+- Bild-Komprimierung weiter auf 1600 px / q0.8? Bei Quittungen reicht das locker.
+- Soll der globale Drop-Overlay nur auf `/dokumente` aktiv sein oder app-weit (überall „nimm das auf")?
