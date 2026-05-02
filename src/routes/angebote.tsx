@@ -79,6 +79,7 @@ function Page() {
   );
   const [filter, setFilter] = useState<string>("alle");
   const [q, setQ] = useState("");
+  const [zeitraum, setZeitraum] = useState<ZeitraumState>(ZEITRAUM_ALLE);
   const [open, setOpen] = useState(false);
   const [emailFuer, setEmailFuer] = useState<Angebot | null>(null);
 
@@ -98,6 +99,7 @@ function Page() {
   const filtered = useMemo(() => {
     let list = alle;
     if (filter !== "alle") list = list.filter((a) => a.status === filter);
+    list = list.filter((a) => passtInZeitraum(a.erstelltAm, zeitraum));
     if (q.trim()) {
       const t = q.toLowerCase();
       list = list.filter(
@@ -105,7 +107,7 @@ function Page() {
       );
     }
     return [...list].sort((a, b) => b.erstelltAm.localeCompare(a.erstelltAm));
-  }, [alle, filter, q]);
+  }, [alle, filter, q, zeitraum]);
 
   return (
     <div className="space-y-6">
@@ -136,6 +138,12 @@ function Page() {
           { value: "angenommen", label: "Angenommen" },
         ]}
         placeholder="Suche nach Nummer, Titel, Kunde…"
+      />
+
+      <ZeitraumFilter
+        value={zeitraum}
+        onChange={setZeitraum}
+        verfuegbareDaten={alle.map((a) => a.erstelltAm)}
       />
 
       {/* Mobil: Card-View */}
