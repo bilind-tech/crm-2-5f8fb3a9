@@ -168,20 +168,30 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       // Manifest aus tar extrahieren (in-memory, ohne ganzes Archiv auszupacken)
       let manifestRaw: unknown = null;
       try {
-        await tar.list({
-          file: tmpFile,
-          filter: (p) => p === "manifest.json" || p === "./manifest.json",
-          onReadEntry: (entry) => {
-            const chunks: Buffer[] = [];
-            entry.on("data", (c: Buffer) => chunks.push(c));
-            entry.on("end", () => {
-              try {
-                manifestRaw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-              } catch {
-                manifestRaw = null;
-              }
-            });
-          },
+        await new Promise<void>((resolve, reject) => {
+          const chunks: Buffer[] = [];
+          let found = false;
+          tar.list({
+            file: tmpFile,
+            filter: (p) => p === "manifest.json" || p === "./manifest.json",
+            onReadEntry: (entry) => {
+              found = true;
+              entry.on("data", (c: Buffer) => chunks.push(c));
+              entry.on("end", () => {
+                try {
+                  manifestRaw = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+                } catch {
+                  manifestRaw = null;
+                }
+              });
+            },
+          }).then(
+            () => {
+              if (!found) reject(new Error("manifest.json fehlt"));
+              else resolve();
+            },
+            (e) => reject(e),
+          );
         });
       } catch (e) {
         try { unlinkSync(tmpFile); } catch { /* ignore */ }
