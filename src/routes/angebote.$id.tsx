@@ -21,8 +21,7 @@ import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
-import { formatWiederkehrend } from "@/components/forms/DauerauftragKonfig";
-import { Repeat } from "lucide-react";
+import { DauerauftragVerwaltungCard } from "@/components/dauerauftrag/DauerauftragVerwaltungCard";
 import { toast } from "sonner";
 import { useNavigate, Link } from "@tanstack/react-router";
 
@@ -253,19 +252,15 @@ function Page() {
               <ul className="space-y-1.5 text-sm text-muted-foreground">
                 <li>{a.optionen.materialBereitgestellt ? "✓" : "✗"} Material bereitgestellt</li>
                 <li>{a.optionen.standardAnschreiben ? "✓" : "✗"} Standard-Anschreiben</li>
-                {a.optionen.wiederkehrend && (
-                  <li className="flex items-center gap-1.5 text-foreground">
-                    <Repeat className="h-3.5 w-3.5 text-primary" />
-                    Dauerauftrag
-                    {a.optionen.wiederkehrendDetails && (
-                      <span className="text-muted-foreground">
-                        · {formatWiederkehrend(a.optionen.wiederkehrendDetails)}
-                      </span>
-                    )}
-                  </li>
-                )}
               </ul>
             </div>
+          )}
+
+          {a.optionen?.wiederkehrend && (
+            <DauerauftragVerwaltungCard
+              rechnungId={folgeRechnung?.id}
+              details={a.optionen.wiederkehrendDetails}
+            />
           )}
 
           <EmailVersandHistorie belegId={a.id} belegTyp="angebot" />

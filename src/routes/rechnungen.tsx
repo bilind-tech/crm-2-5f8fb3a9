@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { CheckCircle2, Trash2, ChevronRight, Mail } from "lucide-react";
+import { CheckCircle2, Trash2, ChevronRight, Mail, Repeat } from "lucide-react";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { useRechnungen, useDeleteRechnung, useKunde } from "@/hooks/useApi";
@@ -76,6 +76,7 @@ function Page() {
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
   const [zeitraum, setZeitraum] = useState<ZeitraumState>(ZEITRAUM_ALLE);
+  const [nurDA, setNurDA] = useState(false);
   const [open, setOpen] = useState(false);
   const [zahlungFuer, setZahlungFuer] = useState<Rechnung | null>(null);
   const [emailFuer, setEmailFuer] = useState<Rechnung | null>(null);
@@ -105,13 +106,14 @@ function Page() {
       if (filter === "teilbezahlt") list = list.filter((r) => r.status === "teilbezahlt");
       else list = list.filter((r) => r.status === filter);
     }
+    if (nurDA) list = list.filter((r) => r.optionen?.wiederkehrend === true);
     list = list.filter((r) => passtInZeitraum(r.rechnungsdatum, zeitraum));
     if (q.trim()) {
       const t = q.toLowerCase();
       list = list.filter((r) => r.nummer.toLowerCase().includes(t) || r.titel.toLowerCase().includes(t));
     }
     return [...list].sort((a, b) => b.rechnungsdatum.localeCompare(a.rechnungsdatum));
-  }, [alle, filter, q, zeitraum]);
+  }, [alle, filter, q, zeitraum, nurDA]);
 
   return (
     <div className="space-y-6">
@@ -164,6 +166,17 @@ function Page() {
         verfuegbareDaten={alle.map((r) => r.rechnungsdatum)}
       />
 
+      <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 rounded border-border"
+          checked={nurDA}
+          onChange={(e) => setNurDA(e.target.checked)}
+        />
+        <Repeat className="h-3.5 w-3.5 text-primary" />
+        Nur Daueraufträge anzeigen
+      </label>
+
       {/* Mobil: Card-View */}
       <div className="space-y-2 md:hidden">
         {filtered.map((r) => {
@@ -185,6 +198,9 @@ function Page() {
               meta={
                 <>
                   <span className="font-mono">{r.nummer}</span>
+                  {r.optionen?.wiederkehrend && (
+                    <Repeat className="h-3 w-3 text-primary" aria-label="Dauerauftrag" />
+                  )}
                   <span>· {formatDate(r.rechnungsdatum)}</span>
                   <span>· fällig {formatDate(r.faelligkeitsdatum)}</span>
                 </>
@@ -303,7 +319,14 @@ function Page() {
                   }}
                   className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-muted/40 focus:bg-muted/40 focus:outline-none"
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{r.nummer}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      {r.nummer}
+                      {r.optionen?.wiederkehrend && (
+                        <Repeat className="h-3 w-3 text-primary" aria-label="Dauerauftrag" />
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 font-medium">{r.titel}</td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(r.rechnungsdatum)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(r.faelligkeitsdatum)}</td>

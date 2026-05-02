@@ -6,9 +6,7 @@ import {
   useRechnungen,
 } from "@/hooks/useApi";
 import { useMahnZaehler } from "@/hooks/useMahnZaehler";
-import { useDauerauftraege, useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
-import { monatlicheBrutto } from "@/lib/dauerauftrag/termine";
-import { summenRechnung } from "@/lib/mock/backend";
+import { useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
 import { formatEUR, formatDate } from "@/lib/format";
 import {
   Building2,
@@ -18,7 +16,6 @@ import {
   Bell,
   CheckCircle2,
   ArrowRight,
-  Repeat,
   Inbox,
 } from "lucide-react";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
@@ -46,7 +43,6 @@ function Dashboard() {
   const { data: umsatz = [] } = useUmsatz(zeitraum);
   const { data: rechnungen = [] } = useRechnungen();
   const mahn = useMahnZaehler(zeitraumIstAktiv(zeitraum) ? zeitraum : undefined);
-  const { data: dauerauftraege = [] } = useDauerauftraege();
   const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
 
   const aktiv = zeitraumIstAktiv(zeitraum);
@@ -57,11 +53,6 @@ function Dashboard() {
     [rechnungen],
   );
 
-  const aktiveDA = dauerauftraege.filter((d) => d.status === "aktiv");
-  const mrr = aktiveDA.reduce((sum, da) => {
-    const s = summenRechnung(da.positionen, da.rabattGesamt);
-    return sum + monatlicheBrutto(da, s.brutto);
-  }, 0);
   const offeneDAEntwuerfe = laeufeErzeugt.filter((l) => {
     if (!l.rechnungId) return false;
     const r = rechnungen.find((rr) => rr.id === l.rechnungId);
@@ -254,59 +245,27 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Repeat className="h-4 w-4" />
+      {offeneDAEntwuerfe > 0 && (
+        <Link
+          to="/rechnungen"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-4 text-sm transition hover:bg-primary/10"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Inbox className="h-4 w-4" />
             </span>
-            <h2 className="text-base font-semibold">Daueraufträge</h2>
-          </div>
-          <Link
-            to="/dauerauftraege"
-            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-          >
-            Übersicht öffnen <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-        {aktiveDA.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            Noch keine Daueraufträge.{" "}
-            <Link to="/dauerauftraege" className="text-primary hover:underline">
-              Jetzt anlegen
-            </Link>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-border bg-muted/30 p-3">
-              <p className="text-xs font-medium text-muted-foreground">Aktive Aufträge</p>
-              <p className="mt-1 text-2xl font-semibold">{aktiveDA.length}</p>
+            <div className="min-w-0">
+              <p className="font-medium">
+                {offeneDAEntwuerfe} Rechnungs-Entwurf{offeneDAEntwuerfe === 1 ? "" : "e"} aus Daueraufträgen
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Warten auf Freigabe — in der Rechnungsliste mit Filter „Entwurf" sichtbar.
+              </p>
             </div>
-            <div className="rounded-xl border border-border bg-muted/30 p-3">
-              <p className="text-xs font-medium text-muted-foreground">Wiederkehrend / Monat</p>
-              <p className="mt-1 text-2xl font-semibold text-success">{formatEUR(mrr)}</p>
-            </div>
-            <Link
-              to="/dauerauftraege/posteingang"
-              className={`rounded-xl border p-3 transition hover:bg-muted/40 ${
-                offeneDAEntwuerfe > 0
-                  ? "border-primary/40 bg-primary/5"
-                  : "border-border bg-muted/30"
-              }`}
-            >
-              <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Inbox className="h-3 w-3" /> Posteingang
-              </p>
-              <p className={`mt-1 text-2xl font-semibold ${offeneDAEntwuerfe > 0 ? "text-primary" : ""}`}>
-                {offeneDAEntwuerfe}
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {offeneDAEntwuerfe > 0 ? "Entwurf zur Freigabe" : "alles erledigt"}
-              </p>
-            </Link>
           </div>
-        )}
-      </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
+        </Link>
+      )}
 
     </div>
   );

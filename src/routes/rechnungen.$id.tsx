@@ -18,8 +18,7 @@ import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { PdfPreviewCard } from "@/components/pdf/PdfPreviewCard";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
-import { formatWiederkehrend } from "@/components/forms/DauerauftragKonfig";
-import { Repeat } from "lucide-react";
+import { DauerauftragVerwaltungCard } from "@/components/dauerauftrag/DauerauftragVerwaltungCard";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/rechnungen/$id")({ component: Page });
@@ -246,19 +245,15 @@ function Page() {
               <ul className="space-y-1.5 text-sm text-muted-foreground">
                 <li>{r.optionen.materialBereitgestellt ? "✓" : "✗"} Material bereitgestellt</li>
                 <li>{r.optionen.standardAnschreiben ? "✓" : "✗"} Standard-Anschreiben</li>
-                {r.optionen.wiederkehrend && (
-                  <li className="flex items-center gap-1.5 text-foreground">
-                    <Repeat className="h-3.5 w-3.5 text-primary" />
-                    Dauerauftrag
-                    {r.optionen.wiederkehrendDetails && (
-                      <span className="text-muted-foreground">
-                        · {formatWiederkehrend(r.optionen.wiederkehrendDetails)}
-                      </span>
-                    )}
-                  </li>
-                )}
               </ul>
             </div>
+          )}
+
+          {r.optionen?.wiederkehrend && (
+            <DauerauftragVerwaltungCard
+              rechnungId={r.id}
+              details={r.optionen.wiederkehrendDetails}
+            />
           )}
 
           <EmailVersandHistorie belegId={r.id} belegTyp="rechnung" />
