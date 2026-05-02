@@ -4,8 +4,9 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import "@/lib/pdf/pdfjsWorker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useNavigate } from "@tanstack/react-router";
 
-import { Download, Loader2, AlertCircle } from "lucide-react";
+import { Download, Loader2, AlertCircle, Pencil } from "lucide-react";
 import { DriveStatusBadge } from "./DriveStatusBadge";
 import type { DriveSyncInfo } from "@/lib/api/types";
 
@@ -18,6 +19,8 @@ interface Props {
   errorMessage?: string | null;
   fileName: string;
   drive?: DriveSyncInfo;
+  /** Wenn gesetzt, wird oben rechts ein „PDF bearbeiten"-Button gezeigt, der zum Editor navigiert. */
+  editTarget?: { kind: "angebot" | "rechnung"; id: string };
 }
 
 export function PdfViewerDialog({
@@ -29,7 +32,9 @@ export function PdfViewerDialog({
   errorMessage,
   fileName,
   drive,
+  editTarget,
 }: Props) {
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [numPages, setNumPages] = useState<number>(0);
@@ -94,22 +99,45 @@ export function PdfViewerDialog({
               <DriveStatusBadge drive={drive} />
             </div>
           </div>
-          {pdfUrl ? (
-            <a
-              href={pdfUrl}
-              download={fileName}
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium hover:bg-accent sm:px-3"
-              aria-label="Download"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Download</span>
-            </a>
-          ) : (
-            <span className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium opacity-50 sm:px-3">
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Download</span>
-            </span>
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {editTarget && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  // Kurze Verzögerung, damit der Dialog sauber schließt, bevor wir navigieren.
+                  setTimeout(() => {
+                    if (editTarget.kind === "rechnung") {
+                      void navigate({ to: "/rechnungen/$id/bearbeiten", params: { id: editTarget.id } });
+                    } else {
+                      void navigate({ to: "/angebote/$id/bearbeiten", params: { id: editTarget.id } });
+                    }
+                  }, 50);
+                }}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium hover:bg-accent sm:px-3"
+                aria-label="PDF bearbeiten"
+              >
+                <Pencil className="h-4 w-4" />
+                <span className="hidden sm:inline">PDF bearbeiten</span>
+              </button>
+            )}
+            {pdfUrl ? (
+              <a
+                href={pdfUrl}
+                download={fileName}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium hover:bg-accent sm:px-3"
+                aria-label="Download"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Download</span>
+              </a>
+            ) : (
+              <span className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm font-medium opacity-50 sm:px-3">
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline">Download</span>
+              </span>
+            )}
+          </div>
         </DialogHeader>
 
         <div ref={containerRef} className="flex-1 overflow-y-auto bg-muted/30 px-1 py-3 sm:px-6 sm:py-4">
