@@ -211,7 +211,7 @@ function Page() {
       {/* Desktop: Tabelle */}
       <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <th className="px-4 py-3 font-medium">Nummer</th>
@@ -221,7 +221,7 @@ function Page() {
               <th className="px-4 py-3 text-right font-medium">Summe</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Fortschritt</th>
-              <th className="px-4 py-3 text-right font-medium">Aktionen</th>
+              <th className="whitespace-nowrap px-4 py-3 text-right font-medium">Aktionen</th>
             </tr>
           </thead>
           <tbody>
@@ -248,8 +248,8 @@ function Page() {
                 <td className="px-4 py-3">
                   <FlowBar steps={angebotFlow(a, angebotMitRechnung.has(a.id)).steps} size="sm" />
                 </td>
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-end gap-1 text-muted-foreground">
+                <td className="whitespace-nowrap px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-end gap-1.5 whitespace-nowrap text-muted-foreground">
                     <AngebotAnnahmeButtons angebot={a} size="sm" />
                     <PdfViewButton kind="angebot" beleg={a} />
                     <button
