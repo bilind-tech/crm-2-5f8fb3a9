@@ -21,8 +21,7 @@ import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
-import { formatWiederkehrend } from "@/components/forms/DauerauftragKonfig";
-import { Repeat } from "lucide-react";
+import { DauerauftragVerwaltungCard } from "@/components/dauerauftrag/DauerauftragVerwaltungCard";
 import { toast } from "sonner";
 import { useNavigate, Link } from "@tanstack/react-router";
 
