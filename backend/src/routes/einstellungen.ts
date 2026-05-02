@@ -23,6 +23,8 @@ import {
 } from "../auth/sessions.js";
 import { createConnection } from "node:net";
 import { resetTransport } from "../email/transport.js";
+import { flachZuUi, uiPatchZuFlach } from "../mahnung/settings-adapter.js";
+import { MahnungSchema } from "../settings/schemas.js";
 
 function loadArea(name: keyof typeof AREAS): unknown {
   const a = AREAS[name];
