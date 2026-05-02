@@ -1859,6 +1859,72 @@ function matchRoute(method: string, path: string, expectedMethod: string, patter
 // =============================================================================
 
 /**
+ * Erzeugt aus einer wiederkehrenden Rechnung automatisch einen Dauerauftrag,
+ * verknüpft den aktuellen Monat als bereits-erzeugten Lauf und gibt den DA zurück.
+ */
+function erzeugeDauerauftragAusRechnung(d: DB, rechnung: Rechnung): Dauerauftrag {
+  const details = rechnung.optionen?.wiederkehrendDetails;
+  const frequenz: DauerauftragFrequenz =
+    details?.rhythmus === "quartalsweise"
+      ? "quartalsweise"
+      : details?.rhythmus === "jaehrlich"
+        ? "jaehrlich"
+        : "monatlich";
+
+  d.zaehler.dauerauftrag += 1;
+  const heute = now().slice(0, 10);
+  const nummer = `DA-${new Date().getFullYear()}-${String(d.zaehler.dauerauftrag).padStart(4, "0")}`;
+  const da: Dauerauftrag = {
+    id: uuid(),
+    nummer,
+    kundeId: rechnung.kundeId,
+    objektId: rechnung.objektId,
+    ansprechpartnerId: rechnung.ansprechpartnerId,
+    bezeichnung: rechnung.titel,
+    frequenz,
+    stichtag: d.dauerauftragEinstellungen.defaultStichtag,
+    laufzeitVon: rechnung.rechnungsdatum ?? heute,
+    laufzeitBis: undefined,
+    positionen: rechnung.positionen.map((p) => ({ ...p, id: uuid() })),
+    rabattGesamt: rechnung.rabattGesamt,
+    steuersatz: rechnung.steuersatz,
+    betreffVorlage: rechnung.titel,
+    textVorlage: rechnung.introText ?? "",
+    modus: d.dauerauftragEinstellungen.defaultModus,
+    emailEmpfaenger: undefined,
+    status: "aktiv",
+    pausiertBis: undefined,
+    letzteAusfuehrung: rechnung.rechnungsdatum,
+    notizen: `Automatisch erzeugt aus Rechnung ${rechnung.nummer}.`,
+    erstelltAm: now(),
+    geaendertAm: now(),
+  };
+  d.dauerauftraege.push(da);
+
+  // Lauf für die aktuelle Periode als „bereits erzeugt" markieren, damit der
+  // Scheduler in diesem Monat keine zweite Rechnung anlegt.
+  const stichtag = new Date(rechnung.rechnungsdatum ?? heute);
+  const periode = periodeFuer(da, stichtag);
+  d.dauerauftragLaeufe.push({
+    id: uuid(),
+    dauerauftragId: da.id,
+    periode,
+    geplantFuer: isoDate(stichtag),
+    ausgefuehrtAm: now(),
+    rechnungId: rechnung.id,
+    status: "erzeugt",
+  });
+
+  logAktivitaet(
+    "dauerauftrag_angelegt",
+    `Dauerauftrag ${da.nummer} automatisch aus Rechnung ${rechnung.nummer} erzeugt`,
+    { typ: "dauerauftrag", id: da.id },
+  );
+
+  return da;
+}
+
+/**
  * Erzeugt einen einzelnen Lauf für einen Dauerauftrag und die zugehörige Rechnung.
  * Idempotent: prüft (dauerauftragId, periode) — existiert der Lauf schon, liefert er ihn zurück.
  */
