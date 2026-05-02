@@ -253,7 +253,7 @@ function Page() {
       {offeneErtrag.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Ertragsteuer-Vorauszahlungen · Schätzung aus YTD-Gewinn
+            Ertragsteuer-Rücklage · auf bisher realisierten Gewinn
           </h2>
           <div className="space-y-2">
             {offeneErtrag.map((p) => (
