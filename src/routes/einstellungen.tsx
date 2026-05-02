@@ -140,12 +140,12 @@ function Page() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {gruppen.map((g) => (
+            {sichtbareGruppen.map((g) => (
               <div key={g}>
                 <div className="px-2 py-1 text-[10px] font-semibold uppercase text-muted-foreground">
                   {g}
                 </div>
-                {tabs
+                {sichtbareTabs
                   .filter((t) => t.gruppe === g)
                   .map((t) => (
                     <SelectItem key={t.id} value={t.id}>
@@ -165,13 +165,13 @@ function Page() {
         {/* Desktop: Sub-Sidebar */}
         <nav className="hidden md:block">
           <div className="sticky top-4 space-y-4 rounded-2xl border border-border bg-card p-3 shadow-sm">
-            {gruppen.map((g) => (
+            {sichtbareGruppen.map((g) => (
               <div key={g}>
                 <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {g}
                 </p>
                 <ul className="space-y-0.5">
-                  {tabs
+                  {sichtbareTabs
                     .filter((t) => t.gruppe === g)
                     .map((t) => {
                       const active = t.id === tab;
