@@ -257,7 +257,7 @@ export function AnsprechpartnerTab({ kundeId, liste }: Props) {
       <AlertDialog open={!!confirmDeleteId} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
         <AlertDialogContent className="bg-background">
           <AlertDialogHeader>
-            <AlertDialogTitle>Ansprechpartner löschen?</AlertChAlertDialogTitle>
+            <AlertDialogTitle>Ansprechpartner löschen?</AlertDialogTitle>
             <AlertDialogDescription>
               Diese Aktion kann nicht rückgängig gemacht werden.
             </AlertDialogDescription>
