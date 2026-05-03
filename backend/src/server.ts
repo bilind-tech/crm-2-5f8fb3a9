@@ -23,6 +23,7 @@ import { eventsRoutes } from "./routes/events.js";
 import { systemRoutes } from "./routes/system.js";
 import { steuernRoutes } from "./routes/steuern.js";
 import { dokumenteRoutes } from "./routes/dokumente.js";
+import { protokolleRoutes } from "./routes/protokolle.js";
 import { startFristenScheduler } from "./dokumente/fristen-cron.js";
 import { mahnungRoutes } from "./routes/mahnung.js";
 import { startMahnScheduler } from "./mahnung/cron.js";
@@ -154,6 +155,7 @@ async function main(): Promise<void> {
   await app.register(systemRoutes);
   await app.register(steuernRoutes);
   await app.register(dokumenteRoutes);
+  await app.register(protokolleRoutes);
   await app.register(mahnungRoutes);
   await app.register(driveRoutes);
 
@@ -189,6 +191,7 @@ async function main(): Promise<void> {
           url.startsWith("/system") ||
           url.startsWith("/steuern") ||
           url.startsWith("/dokumente") ||
+          url.startsWith("/protokolle") ||
           url.startsWith("/mahnung") ||
           url.startsWith("/api");
         if (isApi || req.method !== "GET") {
