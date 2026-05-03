@@ -43,7 +43,7 @@ export function AppSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (r) => r.location.pathname });
-  const { lock, logout } = useAuth();
+  const { lock } = useAuth();
   const closeOnMobile = () => {
     if (isMobile) setOpenMobile(false);
   };
