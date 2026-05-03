@@ -44,7 +44,7 @@ import { getBackendUrl } from "@/lib/api/backendUrl";
 import { cn } from "@/lib/utils";
 
 const PFAD_PLATZHALTER = ["{YYYY}", "{MM}"];
-const DATEI_PLATZHALTER = ["{nummer}", "{kunde}", "{leistung}", "{MM}", "{YYYY}", "{datum}"];
+const DATEI_PLATZHALTER = ["{nummer}", "{kunde}", "{leistung}", "{DD}", "{MM}", "{YYYY}", "{datum}"];
 
 function pfadVorschau(template: string): string {
   const now = new Date();
@@ -53,16 +53,25 @@ function pfadVorschau(template: string): string {
     .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, "0"));
 }
 
-function dateiVorschau(template: string, beleg: "rechnung" | "angebot"): string {
+function dateiVorschau(template: string, beleg: "rechnung" | "angebot" | "protokoll"): string {
   const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(now.getFullYear());
+  const beispiel = {
+    rechnung: { nummer: "RE-2026-0042", leistung: "Buero-Reinigung" },
+    angebot: { nummer: "AN-2026-0042", leistung: "Buero-Reinigung" },
+    protokoll: { nummer: "PR0526-01", leistung: "Goethestrasse 12" },
+  }[beleg];
   return (
     template
-      .replace(/\{nummer\}/g, beleg === "rechnung" ? "RE-2026-0042" : "AN-2026-0042")
+      .replace(/\{nummer\}/g, beispiel.nummer)
       .replace(/\{kunde\}/g, "Mustermann GmbH")
-      .replace(/\{leistung\}/g, "Buero-Reinigung")
-      .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, "0"))
-      .replace(/\{YYYY\}/g, String(now.getFullYear()))
-      .replace(/\{datum\}/g, now.toISOString().slice(0, 10)) + ".pdf"
+      .replace(/\{leistung\}/g, beispiel.leistung)
+      .replace(/\{DD\}/g, dd)
+      .replace(/\{MM\}/g, mm)
+      .replace(/\{YYYY\}/g, yyyy)
+      .replace(/\{datum\}/g, `${yyyy}-${mm}-${dd}`) + ".pdf"
   );
 }
 
