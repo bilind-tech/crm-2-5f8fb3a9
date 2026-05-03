@@ -274,7 +274,6 @@ function TypToggle({
 }) {
   const opts: { v: ChartTyp; Icon: typeof BarChart3; title: string }[] = [
     { v: "bar", Icon: BarChart3, title: "Balken" },
-    { v: "line", Icon: LineIcon, title: "Linie" },
     { v: "area", Icon: AreaIcon, title: "Fläche" },
   ];
   return (
