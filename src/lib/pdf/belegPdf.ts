@@ -131,19 +131,19 @@ function anrede(k: Kunde, ap?: Ansprechpartner) {
 
 // ───────── Header / Footer ─────────────────────────────────────────────────
 
-function header(absender: string, logo: string | null) {
+function header(firma: Firmendaten, logo: string | null) {
   return {
     margin: [55, 35, 55, 0] as [number, number, number, number],
     columns: [
       {
         width: "*",
         stack: [
-          { text: absender, fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 22, 0, 0] },
+          { text: absenderzeile(firma), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 22, 0, 0] },
         ],
       },
       logo
         ? { width: 150, image: logo, fit: [150, 70], alignment: "right" }
-        : { width: 150, text: "MY CLEAN CENTER", bold: true, fontSize: 16, color: COLOR_TEXT, alignment: "right" },
+        : { width: 150, text: (firma.firmenname || "MY CLEAN CENTER").toUpperCase(), bold: true, fontSize: 16, color: COLOR_TEXT, alignment: "right" },
     ],
   };
 }
@@ -176,9 +176,16 @@ function footer(firma: Firmendaten) {
   };
 }
 
-// ───────── Tabelle (Pauschal & klassisch) ──────────────────────────────────
+// ───────── Tabelle (einheitlich nach Vorlage: 3 Spalten) ──────────────────
 
-function pauschalTabelle(positionen: Position[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
+function ausfuehrungText(p: Position): string {
+  if (p.ausfuehrung && p.ausfuehrung.trim()) return p.ausfuehrung;
+  if (p.modus === "pauschal") return "Pauschal";
+  const menge = p.menge.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return `${menge} ${p.einheit}\n(à ${eur(p.einzelpreisNetto)})`;
+}
+
+function leistungstabelle(positionen: Position[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
   const headerRow = [
     { text: "Ausführung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
     { text: "Leistung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
@@ -186,21 +193,24 @@ function pauschalTabelle(positionen: Position[], totalsT: { netto: number; steue
   ];
   const body: unknown[][] = [headerRow];
   positionen.forEach((p) => {
-    const ausf = p.ausfuehrung ?? (p.modus === "pauschal" ? "Pauschal" : `${p.menge.toLocaleString("de-DE")} ${p.einheit}`);
     body.push([
-      { text: ausf, fontSize: 10, id: `pos:${p.id}` },
+      { text: ausfuehrungText(p), fontSize: 10, id: `pos:${p.id}` },
       beschreibungBlock(p.beschreibung || ""),
       { text: eur(summe(p)), fontSize: 10, alignment: "right" },
     ]);
   });
-  // Summenzeilen direkt in die Tabelle (entspricht Vorlage)
   body.push([
-    { text: `Zzgl. Gesetzlicher Mehrwertsteuer ${steuersatz}%`, colSpan: 2, fontSize: 10 },
+    { text: "Zwischensumme (netto)", colSpan: 2, fontSize: 10, alignment: "right" },
+    {},
+    { text: eur(totalsT.netto), fontSize: 10, alignment: "right" },
+  ]);
+  body.push([
+    { text: `Zzgl. gesetzliche Mehrwertsteuer ${steuersatz}%`, colSpan: 2, fontSize: 10, alignment: "right" },
     {},
     { text: eur(totalsT.steuer), fontSize: 10, alignment: "right" },
   ]);
   body.push([
-    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 2, fontSize: 10, bold: true },
+    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 2, fontSize: 10, alignment: "right", bold: true },
     {},
     { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
   ]);
@@ -211,94 +221,29 @@ function pauschalTabelle(positionen: Position[], totalsT: { netto: number; steue
       headerRows: 1,
       keepWithHeaderRows: 1,
       dontBreakRows: true,
-      widths: [95, "*", 90],
+      widths: [110, "*", 90],
       body,
     },
     layout: {
       hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0.4),
-      vLineWidth: () => 0.4,
+      vLineWidth: () => 0,
       hLineColor: () => COLOR_LINE,
       vLineColor: () => COLOR_LINE,
-      paddingTop: () => 8,
-      paddingBottom: () => 8,
+      paddingTop: () => 7,
+      paddingBottom: () => 7,
       paddingLeft: () => 6,
       paddingRight: () => 6,
     },
   };
 }
 
-function klassischTabelle(positionen: Position[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
-  const headerRow = [
-    { text: "Pos.", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Beschreibung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Menge", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-    { text: "Einheit", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Einzelpreis", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-    { text: "Summe", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-  ];
-  const body: unknown[][] = [headerRow];
-  positionen.forEach((p, i) => {
-    body.push([
-      { text: String(i + 1), fontSize: 10, id: `pos:${p.id}` },
-      beschreibungBlock(p.beschreibung || ""),
-      { text: p.menge.toLocaleString("de-DE"), fontSize: 10, alignment: "right" },
-      { text: p.einheit, fontSize: 10 },
-      { text: eur(p.einzelpreisNetto), fontSize: 10, alignment: "right" },
-      { text: eur(summe(p)), fontSize: 10, alignment: "right" },
-    ]);
-  });
-  body.push([
-    { text: "Netto", colSpan: 5, fontSize: 10, alignment: "right" },
-    {}, {}, {}, {},
-    { text: eur(totalsT.netto), fontSize: 10, alignment: "right" },
-  ]);
-  body.push([
-    { text: `MwSt ${steuersatz}%`, colSpan: 5, fontSize: 10, alignment: "right" },
-    {}, {}, {}, {},
-    { text: eur(totalsT.steuer), fontSize: 10, alignment: "right" },
-  ]);
-  body.push([
-    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 5, fontSize: 10, alignment: "right", bold: true },
-    {}, {}, {}, {},
-    { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
-  ]);
-  const totalRows = body.length;
-  return {
-    id: "tabelle",
-    table: {
-      headerRows: 1,
-      keepWithHeaderRows: 1,
-      dontBreakRows: true,
-      widths: [22, "*", 38, 38, 60, 60],
-      body,
-    },
-    layout: {
-      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0.4),
-      vLineWidth: () => 0.4,
-      hLineColor: () => COLOR_LINE,
-      vLineColor: () => COLOR_LINE,
-      paddingTop: () => 6,
-      paddingBottom: () => 6,
-      paddingLeft: () => 5,
-      paddingRight: () => 5,
-    },
-  };
-}
-
-function leistungstabelle(positionen: Position[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
-  const hatPauschal = positionen.some((p) => p.modus === "pauschal");
-  return hatPauschal
-    ? pauschalTabelle(positionen, totalsT, steuersatz)
-    : klassischTabelle(positionen, totalsT, steuersatz);
-}
-
 // ───────── Meta-Box ────────────────────────────────────────────────────────
 
-function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain") {
+function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain", note?: string) {
   if (variant === "plain") {
     return {
       id: "meta",
-      width: 200,
+      width: 210,
       stack: meta.map((m) => ({
         text: `${m.label}: ${m.wert}`,
         fontSize: 10,
@@ -307,23 +252,38 @@ function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plai
       })),
     };
   }
+  const dataRows = meta.map((m) => [
+    { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
+    { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
+  ]);
+  const noteRows = note
+    ? [[
+        {
+          text: note,
+          fontSize: 9,
+          colSpan: 2,
+          margin: [0, 6, 0, 0],
+          border: [false, true, false, false],
+        },
+        {},
+      ]]
+    : [];
+  const body = [...dataRows, ...noteRows];
+  const totalRows = body.length;
   return {
     id: "meta",
-    width: 230,
+    width: 245,
     table: {
       widths: ["auto", "*"],
-      body: meta.map((m) => [
-        { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
-        { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
-      ]),
+      body,
     },
     layout: {
-      hLineWidth: (i: number, node: { table: { body: unknown[] } }) => (i === 0 || i === node.table.body.length ? 0.7 : 0),
+      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0),
       vLineWidth: (i: number, node: { table: { widths: unknown[] } }) => (i === 0 || i === node.table.widths.length ? 0.7 : 0),
       hLineColor: () => COLOR_TEXT,
       vLineColor: () => COLOR_TEXT,
-      paddingTop: () => 6,
-      paddingBottom: () => 6,
+      paddingTop: () => 5,
+      paddingBottom: () => 5,
       paddingLeft: () => 8,
       paddingRight: () => 8,
     },
@@ -358,22 +318,15 @@ function defaultIntroRechnung(_r: Rechnung, opts: BuildOptions) {
   if (opts.intro) return opts.intro;
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
-function defaultOutroRechnung(r: Rechnung, opts: BuildOptions) {
+function defaultOutroRechnung(_r: Rechnung, opts: BuildOptions) {
   if (opts.outro) return opts.outro;
   const teile = [
-    `Wir möchten Sie bitten, den Rechnungsbetrag innerhalb von ${ziel(r)} Tagen nach Rechnungszustellung auf unser unten genanntes Bankkonto zu überweisen.`,
+    "Vielen Dank für Ihren Auftrag.",
     opts.materialBereitgestellt
       ? "Zugunsten der Reinigung werden Reinigungswerkzeuge und Reinigungsmittel von uns zur Verfügung gestellt."
       : null,
   ].filter(Boolean);
   return teile.join("\n\n");
-}
-function ziel(r: Rechnung): number {
-  if (!r.rechnungsdatum || !r.faelligkeitsdatum) return 14;
-  const a = new Date(r.rechnungsdatum).getTime();
-  const b = new Date(r.faelligkeitsdatum).getTime();
-  const d = Math.round((b - a) / 86400000);
-  return d > 0 ? d : 14;
 }
 
 interface PdfContext {
@@ -395,11 +348,18 @@ function mergeFirma(firma: Firmendaten, override?: Partial<Firmendaten>): Firmen
   return merged;
 }
 
+async function resolveLogo(firma: Firmendaten, override: string | null): Promise<string | null> {
+  if (override) return override;
+  if (firma.logoUrl && firma.logoUrl.trim()) return firma.logoUrl;
+  return await logoDataUrl();
+}
+
 async function buildDoc(
   ctx: PdfContext,
   titel: string,
   meta: { label: string; wert: string }[],
   metaVariant: "box" | "plain",
+  metaNote: string | undefined,
   beleg: { positionen: Position[]; rabattGesamt: number; steuersatz: number },
   intro: string,
   outro: string,
@@ -408,13 +368,13 @@ async function buildDoc(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pageBreakBefore?: (currentNode: any) => boolean,
 ) {
-  const logo = logoOverride ?? (await logoDataUrl());
+  const logo = await resolveLogo(ctx.firma, logoOverride);
   const t = totals(beleg.positionen, beleg.rabattGesamt, beleg.steuersatz);
   return {
     pageSize: "A4" as const,
     pageMargins: [55, 110, 55, 130] as [number, number, number, number],
     defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
-    header: header(absenderzeile(ctx.firma), logo),
+    header: header(ctx.firma, logo),
     footer: footer(ctx.firma),
     pageBreakBefore,
     content: [
@@ -430,7 +390,7 @@ async function buildDoc(
               bold: i === 0,
             })),
           },
-          metaBox(meta, metaVariant),
+          metaBox(meta, metaVariant, metaNote),
         ],
         columnGap: 20,
       },
@@ -508,6 +468,7 @@ export async function generateAngebotPdf(
     `Angebot ${angebot.titel || ""}`.trim(),
     meta,
     "plain",
+    undefined,
     { positionen: angebot.positionen, rabattGesamt: angebot.rabattGesamt, steuersatz: angebot.steuersatz },
     defaultIntroAngebot(angebot, opts),
     defaultOutroAngebot(angebot, opts),
@@ -537,11 +498,13 @@ export async function generateRechnungPdf(
   };
   const effFirma = mergeFirma(firma, rechnung.optionen?.firmaOverride);
   const tracker = createHotspotTracker(A4);
+  const note = `Bitte überweisen Sie den Rechnungsbetrag bis zum ${dt(rechnung.faelligkeitsdatum)} unter Angabe der Rechnungsnummer ${rechnung.nummer} auf unser unten angegebenes Konto.`;
   const doc = await buildDoc(
     { firma: effFirma, kunde, ansprechpartner },
     "Rechnung",
     meta,
     "box",
+    note,
     { positionen: rechnung.positionen, rabattGesamt: rechnung.rabattGesamt, steuersatz: rechnung.steuersatz },
     defaultIntroRechnung(rechnung, opts),
     defaultOutroRechnung(rechnung, opts),

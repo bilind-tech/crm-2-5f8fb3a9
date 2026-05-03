@@ -115,7 +115,14 @@ function footer(f: FirmaForPdf) {
   };
 }
 
-function pauschalTabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
+function ausfuehrungText(p: ApiPosition): string {
+  if (p.ausfuehrung && p.ausfuehrung.trim()) return p.ausfuehrung;
+  if (p.modus === "pauschal") return "Pauschal";
+  const menge = p.menge.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return `${menge} ${p.einheit}\n(à ${eur(p.einzelpreisNetto)})`;
+}
+
+function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
   const headerRow = [
     { text: "Ausführung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
     { text: "Leistung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
@@ -123,20 +130,24 @@ function pauschalTabelle(positionen: ApiPosition[], totalsT: { netto: number; st
   ];
   const body: unknown[][] = [headerRow];
   positionen.forEach((p) => {
-    const ausf = p.ausfuehrung ?? (p.modus === "pauschal" ? "Pauschal" : `${p.menge.toLocaleString("de-DE")} ${p.einheit}`);
     body.push([
-      { text: ausf, fontSize: 10 },
+      { text: ausfuehrungText(p), fontSize: 10 },
       beschreibungBlock(p.beschreibung || ""),
       { text: eur(summe(p)), fontSize: 10, alignment: "right" },
     ]);
   });
   body.push([
-    { text: `Zzgl. Gesetzlicher Mehrwertsteuer ${steuersatz}%`, colSpan: 2, fontSize: 10 },
+    { text: "Zwischensumme (netto)", colSpan: 2, fontSize: 10, alignment: "right" },
+    {},
+    { text: eur(totalsT.netto), fontSize: 10, alignment: "right" },
+  ]);
+  body.push([
+    { text: `Zzgl. gesetzliche Mehrwertsteuer ${steuersatz}%`, colSpan: 2, fontSize: 10, alignment: "right" },
     {},
     { text: eur(totalsT.steuer), fontSize: 10, alignment: "right" },
   ]);
   body.push([
-    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 2, fontSize: 10, bold: true },
+    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 2, fontSize: 10, alignment: "right", bold: true },
     {},
     { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
   ]);
@@ -146,90 +157,26 @@ function pauschalTabelle(positionen: ApiPosition[], totalsT: { netto: number; st
       headerRows: 1,
       keepWithHeaderRows: 1,
       dontBreakRows: true,
-      widths: [95, "*", 90],
+      widths: [110, "*", 90],
       body,
     },
     layout: {
       hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0.4),
-      vLineWidth: () => 0.4,
+      vLineWidth: () => 0,
       hLineColor: () => COLOR_LINE,
       vLineColor: () => COLOR_LINE,
-      paddingTop: () => 8,
-      paddingBottom: () => 8,
+      paddingTop: () => 7,
+      paddingBottom: () => 7,
       paddingLeft: () => 6,
       paddingRight: () => 6,
     },
   };
 }
 
-function klassischTabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
-  const headerRow = [
-    { text: "Pos.", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Beschreibung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Menge", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-    { text: "Einheit", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Einzelpreis", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-    { text: "Summe", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-  ];
-  const body: unknown[][] = [headerRow];
-  positionen.forEach((p, i) => {
-    body.push([
-      { text: String(i + 1), fontSize: 10 },
-      beschreibungBlock(p.beschreibung || ""),
-      { text: p.menge.toLocaleString("de-DE"), fontSize: 10, alignment: "right" },
-      { text: p.einheit, fontSize: 10 },
-      { text: eur(p.einzelpreisNetto), fontSize: 10, alignment: "right" },
-      { text: eur(summe(p)), fontSize: 10, alignment: "right" },
-    ]);
-  });
-  body.push([
-    { text: "Netto", colSpan: 5, fontSize: 10, alignment: "right" },
-    {}, {}, {}, {},
-    { text: eur(totalsT.netto), fontSize: 10, alignment: "right" },
-  ]);
-  body.push([
-    { text: `MwSt ${steuersatz}%`, colSpan: 5, fontSize: 10, alignment: "right" },
-    {}, {}, {}, {},
-    { text: eur(totalsT.steuer), fontSize: 10, alignment: "right" },
-  ]);
-  body.push([
-    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 5, fontSize: 10, alignment: "right", bold: true },
-    {}, {}, {}, {},
-    { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
-  ]);
-  const totalRows = body.length;
-  return {
-    table: {
-      headerRows: 1,
-      keepWithHeaderRows: 1,
-      dontBreakRows: true,
-      widths: [22, "*", 38, 38, 60, 60],
-      body,
-    },
-    layout: {
-      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0.4),
-      vLineWidth: () => 0.4,
-      hLineColor: () => COLOR_LINE,
-      vLineColor: () => COLOR_LINE,
-      paddingTop: () => 6,
-      paddingBottom: () => 6,
-      paddingLeft: () => 5,
-      paddingRight: () => 5,
-    },
-  };
-}
-
-function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
-  const hatPauschal = positionen.some((p) => p.modus === "pauschal");
-  return hatPauschal
-    ? pauschalTabelle(positionen, totalsT, steuersatz)
-    : klassischTabelle(positionen, totalsT, steuersatz);
-}
-
-function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain") {
+function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain", note?: string) {
   if (variant === "plain") {
     return {
-      width: 200,
+      width: 210,
       stack: meta.map((m) => ({
         text: `${m.label}: ${m.wert}`,
         fontSize: 10,
@@ -238,22 +185,37 @@ function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plai
       })),
     };
   }
+  const dataRows = meta.map((m) => [
+    { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
+    { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
+  ]);
+  const noteRows = note
+    ? [[
+        {
+          text: note,
+          fontSize: 9,
+          colSpan: 2,
+          margin: [0, 6, 0, 0],
+          border: [false, true, false, false],
+        },
+        {},
+      ]]
+    : [];
+  const body = [...dataRows, ...noteRows];
+  const totalRows = body.length;
   return {
-    width: 230,
+    width: 245,
     table: {
       widths: ["auto", "*"],
-      body: meta.map((m) => [
-        { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
-        { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
-      ]),
+      body,
     },
     layout: {
-      hLineWidth: (i: number, node: { table: { body: unknown[] } }) => (i === 0 || i === node.table.body.length ? 0.7 : 0),
+      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0),
       vLineWidth: (i: number, node: { table: { widths: unknown[] } }) => (i === 0 || i === node.table.widths.length ? 0.7 : 0),
       hLineColor: () => COLOR_TEXT,
       vLineColor: () => COLOR_TEXT,
-      paddingTop: () => 6,
-      paddingBottom: () => 6,
+      paddingTop: () => 5,
+      paddingBottom: () => 5,
       paddingLeft: () => 8,
       paddingRight: () => 8,
     },
@@ -288,17 +250,9 @@ function defaultIntroRechnung(_r: ApiRechnung, intro?: string): string {
   if (intro) return intro;
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
-function defaultOutroRechnung(r: ApiRechnung, outro?: string): string {
+function defaultOutroRechnung(_r: ApiRechnung, outro?: string): string {
   if (outro) return outro;
-  const tage = ziel(r);
-  return `Wir möchten Sie bitten, den Rechnungsbetrag innerhalb von ${tage} Tagen nach Rechnungszustellung auf unser unten genanntes Bankkonto zu überweisen.`;
-}
-function ziel(r: ApiRechnung): number {
-  if (!r.rechnungsdatum || !r.faelligkeitsdatum) return 14;
-  const a = new Date(r.rechnungsdatum).getTime();
-  const b = new Date(r.faelligkeitsdatum).getTime();
-  const d = Math.round((b - a) / 86400000);
-  return d > 0 ? d : 14;
+  return "Vielen Dank für Ihren Auftrag.";
 }
 
 function signaturFromFirma(f: FirmaForPdf): string[] {
@@ -318,6 +272,7 @@ interface BuildArgs {
   titel: string;
   meta: { label: string; wert: string }[];
   metaVariant: "box" | "plain";
+  metaNote?: string;
   positionen: ApiPosition[];
   rabattGesamt: number;
   steuersatz: number;
@@ -345,7 +300,7 @@ function buildDoc(args: BuildArgs) {
               bold: i === 0,
             })),
           },
-          metaBox(args.meta, args.metaVariant),
+          metaBox(args.meta, args.metaVariant, args.metaNote),
         ],
         columnGap: 20,
       },
@@ -414,11 +369,13 @@ export function rechnungDocDef(args: {
     { label: "Rechnungsdatum", wert: dt(rechnung.rechnungsdatum) },
     { label: "Fällig am", wert: dt(rechnung.faelligkeitsdatum) },
   ];
+  const metaNote = `Bitte überweisen Sie den Rechnungsbetrag bis zum ${dt(rechnung.faelligkeitsdatum)} unter Angabe der Rechnungsnummer ${rechnung.nummer} auf unser unten angegebenes Konto.`;
   return buildDoc({
     firma, kunde, ansprechpartner, logoDataUrl,
     titel: "Rechnung",
     meta,
     metaVariant: "box",
+    metaNote,
     positionen: rechnung.positionen,
     rabattGesamt: rechnung.rabattGesamt,
     steuersatz: rechnung.steuersatz,
