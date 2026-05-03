@@ -333,34 +333,29 @@ function ModusSwitch({
   value: PositionModus;
   onChange: (m: PositionModus) => void;
 }) {
+  const opts: { v: PositionModus; label: string; Icon: typeof Receipt }[] = [
+    { v: "pauschal", label: "Pauschal", Icon: Receipt },
+    { v: "stunden", label: "Stunden", Icon: Clock },
+    { v: "einzel", label: "Einzel", Icon: FileText },
+  ];
   return (
     <div className="inline-flex rounded-lg border border-border bg-muted p-0.5 text-xs">
-      <button
-        type="button"
-        onClick={() => onChange("einzel")}
-        className={cn(
-          "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition",
-          value === "einzel"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <FileText className="h-3 w-3" />
-        Einzel
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("pauschal")}
-        className={cn(
-          "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition",
-          value === "pauschal"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <Receipt className="h-3 w-3" />
-        Pauschal
-      </button>
+      {opts.map(({ v, label, Icon }) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          className={cn(
+            "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition",
+            value === v
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Icon className="h-3 w-3" />
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
