@@ -74,7 +74,7 @@ export function StundenzettelTab() {
             <Label className="text-xs font-medium">Adresse der Stundenzettel-App</Label>
             <Input
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => { setDraft(e.target.value); setServerError(null); }}
               placeholder="z. B. http://mycleancenter.local:4001"
               disabled={isLoading}
             />
