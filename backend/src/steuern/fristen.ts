@@ -141,5 +141,32 @@ export function runSteuerFristCheck(now = new Date()): SteuerFristResult {
     logBenachrichtigung(p.id, tag, status);
     benachrichtigt++;
   }
-  return { geprueft: posten.length, benachrichtigt, uebersprungen };
+
+  // --- Auto-Posten (USt/KSt/GewSt) — deterministische Kalender-Termine ---
+  const auto = naechsteAutoFristen(now);
+  for (const a of auto) {
+    if (bezahlt[a.id]) { uebersprungen++; continue; }
+    const status = fristStatusFor(a.faelligAm, heute);
+    if (status === "ok" || status === "erledigt") { uebersprungen++; continue; }
+    if (alreadyLogged(a.id, tag, status)) { uebersprungen++; continue; }
+    const tpl = STATUS_LABEL[status];
+    record({
+      art: "steuer_frist",
+      bezugArt: "steuer_posten",
+      bezugId: a.id,
+      titel: tpl.titel(a.titel),
+      beschreibung: `Fällig am ${a.faelligAm}`,
+      notify: {
+        prioritaet: tpl.prio,
+        titel: tpl.titel(a.titel),
+        beschreibung: `Fällig am ${a.faelligAm}`,
+        aktionLabel: "Öffnen",
+        aktionRoute: "/steuern",
+      },
+    });
+    logBenachrichtigung(a.id, tag, status);
+    benachrichtigt++;
+  }
+
+  return { geprueft: posten.length + auto.length, benachrichtigt, uebersprungen };
 }
