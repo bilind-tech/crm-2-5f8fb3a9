@@ -1388,8 +1388,12 @@ export const useDeleteProtokoll = () => {
 export const useAbschliessenProtokoll = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { dateiname: string; mimeType: string; groesseBytes: number; url: string }) =>
-      api.post<Protokoll>(`/protokolle/${id}/abschliessen`, data),
+    mutationFn: (data: { dateiname: string; mimeType: string; groesseBytes: number; url: string }) => {
+      // `url` ist eine DataURL (z. B. "data:application/pdf;base64,XXXX").
+      // Mock-Backend nutzt `url` direkt, Pi-Backend erwartet `pdfBase64`.
+      const base64 = data.url.includes(",") ? data.url.split(",")[1] : data.url;
+      return api.post<Protokoll>(`/protokolle/${id}/abschliessen`, { ...data, pdfBase64: base64 });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qkProtokoll(id) });
       qc.invalidateQueries({ queryKey: ["protokolle"] });
