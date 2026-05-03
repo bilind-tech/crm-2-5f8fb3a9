@@ -186,16 +186,6 @@ export function AppSidebar() {
               {!collapsed && <span>Sperren</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Abmelden"
-              onClick={() => void logout()}
-              className="text-muted-foreground hover:bg-sidebar-accent/60"
-            >
-              <LogOut className="h-4 w-4" />
-              {!collapsed && <span>Abmelden</span>}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
         </SidebarMenu>
         <PiStatusIndikator />
       </SidebarFooter>
