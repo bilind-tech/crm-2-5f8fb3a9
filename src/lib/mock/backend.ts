@@ -1327,10 +1327,19 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     void _strip;
     result = safe;
   } else if (m === "POST" && match(path, "/einstellungen/smtp/test")) {
+    // Schneller TCP-/Konfig-Check (kein echter Versand).
     if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
       result = { erfolg: false, nachricht: "Bitte zuerst alle Felder inkl. Passwort speichern." };
     } else {
-      result = { erfolg: true, nachricht: `Testmail (simuliert) an ${d.smtp.absenderEmail || d.smtp.benutzer} versendet.` };
+      result = { erfolg: true, nachricht: "Konfiguration plausibel (Mock)." };
+    }
+  } else if (m === "POST" && match(path, "/email/verify")) {
+    // Vollständige SMTP-Verbindungsprüfung (verify) — Mock simuliert Latenz + Fehlercodes.
+    await new Promise((r) => setTimeout(r, 600));
+    if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
+      result = { ok: false, errorCode: "EAUTH", error: "Zugangsdaten unvollständig — bitte Server, Benutzer und Passwort speichern." };
+    } else {
+      result = { ok: true, latencyMs: 240 + Math.floor(Math.random() * 180) };
     }
   } else if (m === "GET" && match(path, "/einstellungen/nummernkreise")) {
     result = d.nummernkreise;
@@ -1551,7 +1560,13 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     if (belegTyp) liste = liste.filter((v) => v.belegTyp === belegTyp);
     result = liste.sort((a, b) => (b.versendetAm ?? "").localeCompare(a.versendetAm ?? ""));
   } else if (m === "POST" && match(path, "/email/versand")) {
-    const v = body as Partial<EmailVersand> & { mahnStufe?: MahnStufe };
+    const v = body as Partial<EmailVersand> & { mahnStufe?: MahnStufe; idempotenzKey?: string };
+    // Idempotenz: gleicher Key → bestehenden Eintrag zurückgeben (kein zweiter Versand).
+    if (v.idempotenzKey) {
+      const dup = d.emailVersand.find((e) => (e as EmailVersand & { idempotenzKey?: string }).idempotenzKey === v.idempotenzKey);
+      if (dup) { result = dup; persist(); }
+    }
+    if (!result) {
     // Mock: 90% Erfolg, 10% zufälliger Fehler — Spinner bleibt sichtbar
     await new Promise((r) => setTimeout(r, 1200));
     const erfolgreich = Math.random() > 0.1;
@@ -1635,7 +1650,9 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     if (!erfolgreich) {
       throw new ApiError(eintrag.fehlerGrund ?? "Versand fehlgeschlagen", 502, eintrag);
     }
+    (eintrag as EmailVersand & { idempotenzKey?: string }).idempotenzKey = v.idempotenzKey;
     result = eintrag;
+    } // end if (!result)
   }
 
   // ---- Mahnwesen ----

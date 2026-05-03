@@ -37,7 +37,7 @@ import {
   useDeleteEmailSignatur,
   useSmtp,
   useUpdateSmtp,
-  useTestSmtp,
+  // useTestSmtp entfernt — Schnelltest durch verify ersetzt.
   useVerifySmtp,
   useSendTestMail,
 } from "@/hooks/useApi";
@@ -510,7 +510,7 @@ function SignaturDialog({
 export function SmtpTab() {
   const { data: smtp } = useSmtp();
   const update = useUpdateSmtp();
-  const test = useTestSmtp();
+  // Schnelltest entfernt — Verbindung-prüfen (verify) ist die robuste Variante.
   const verify = useVerifySmtp();
   const sendTest = useSendTestMail();
   const [form, setForm] = useState({
@@ -754,19 +754,7 @@ export function SmtpTab() {
               )}
               Verbindung prüfen
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() =>
-                test.mutate(undefined, {
-                  onSuccess: (res) =>
-                    res.erfolg ? toast.success(res.nachricht) : toast.error(res.nachricht),
-                })
-              }
-              disabled={test.isPending || !smtp.passwortGesetzt}
-            >
-              {test.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-              Schnelltest
-            </Button>
+            {/* Schnelltest entfernt — „Verbindung prüfen" (verify) ist die robuste Variante. */}
           </div>
           <Button onClick={handleSpeichern} disabled={update.isPending}>
             <Check className="mr-1.5 h-4 w-4" /> Speichern
