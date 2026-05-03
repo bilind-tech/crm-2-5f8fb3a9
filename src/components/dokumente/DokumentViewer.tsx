@@ -19,6 +19,8 @@ export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) 
   const { data: kunde } = useKunde(dokument?.kundeId ?? "");
   const { data: objekt } = useObjekt(dokument?.objektId ?? "");
   const { url: dateiUrl, loading } = useDokumentBlobUrl(dokument);
+  const isProtokoll = dokument?.typ === "protokoll" || /^(PR|SU)\d/.test(dokument?.dateiname ?? "");
+  const { data: protokoll } = useProtokollByDokumentId(isProtokoll ? dokument?.id : null);
 
   if (!dokument) return null;
 
