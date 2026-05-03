@@ -11,6 +11,7 @@ import { HandyScanDialog } from "@/components/dokumente/HandyScanDialog";
 import { DokumentBearbeitenDialog } from "@/components/dokumente/DokumentBearbeitenDialog";
 import { DokumentViewer } from "@/components/dokumente/DokumentViewer";
 import { DriveSyncBadge } from "@/components/dokumente/DriveSyncBadge";
+import { GlobalDriveSyncBadge } from "@/components/dokumente/GlobalDriveSyncBadge";
 import { DokumentThumb } from "@/components/dokumente/DokumentThumb";
 import { fristStatus, FRIST_LABEL, fristBadgeClass } from "@/lib/dokument/frist";
 import {
@@ -123,6 +124,7 @@ function Page() {
         subtitle="Quittungen, Rechnungen und Belege zentral ablegen — mit Frist und Erinnerung."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <GlobalDriveSyncBadge dokumente={alle} />
             <PrimaryAction
               icon={Smartphone}
               label="Vom Handy scannen"
