@@ -403,7 +403,7 @@ export const useSendeRechnung = (id: string) => {
  * Status sofort korrekt hochstuft (versendet/teilbezahlt → bezahlt).
  */
 function berechneRechnungStatus(r: Rechnung): Rechnung["status"] {
-  if (r.status === "storniert" || r.status === "entwurf") return r.status;
+  if (r.status === "storniert") return r.status;
   let netto = 0;
   let steuer = 0;
   for (const p of r.positionen) {
@@ -413,7 +413,8 @@ function berechneRechnungStatus(r: Rechnung): Rechnung["status"] {
   }
   const brutto = (netto + steuer) * (1 - r.rabattGesamt / 100);
   const bezahlt = r.zahlungen.reduce((s, z) => s + z.betrag, 0);
-  if (bezahlt >= brutto - 0.005) return "bezahlt";
+  if (bezahlt >= brutto - 0.005 && bezahlt > 0) return "bezahlt";
+  if (r.status === "entwurf") return r.status;
   if (bezahlt > 0) return "teilbezahlt";
   if (new Date(r.faelligkeitsdatum) < new Date()) return "ueberfaellig";
   return r.status;
