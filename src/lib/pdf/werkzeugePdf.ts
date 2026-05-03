@@ -550,7 +550,7 @@ export async function generateProtokollPdf(
 
 export function protokollDateiname(p: Protokoll, kunde?: KundeT, objekt?: ObjektT): string {
   const kn = safeFilename(kunde ? (kunde.firmenname || [kunde.vorname, kunde.nachname].filter(Boolean).join(" ") || kunde.nummer) : "Kunde");
-  const obj = objekt?.bezeichnung ? safeFilename(objekt.bezeichnung) : "";
+  const obj = objekt?.name ? safeFilename(objekt.name) : "";
   const d = p.datum ? new Date(p.datum) : new Date();
   const ddmmyyyy = isNaN(d.getTime())
     ? ""
