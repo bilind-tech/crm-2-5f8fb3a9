@@ -1,7 +1,9 @@
 // /email/* — Vorlagen, Signaturen, Versand-Queue, Test.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import crypto from "node:crypto";
 import { requireAuth } from "../auth/middleware.js";
+import { audit } from "../auth/audit.js";
 import {
   listVorlagen, getVorlage, createVorlage, updateVorlage, deleteVorlage,
   listSignaturen, getSignatur, createSignatur, updateSignatur, deleteSignatur,
