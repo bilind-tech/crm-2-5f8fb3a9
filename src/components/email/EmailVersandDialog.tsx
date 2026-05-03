@@ -1,25 +1,11 @@
 // =============================================================================
 // E-Mail-Versand-Dialog
 // -----------------------------------------------------------------------------
-// FRONTEND-STUB-HINWEIS (wichtig für später):
-//
-// Aktuell wird KEINE echte E-Mail verschickt. Der Aufruf läuft über
-// `useSendEmail()` → `POST /email/versand` ins Mock-Backend
-// (src/lib/mock/backend.ts). Das Backend simuliert lediglich den Versand
-// und legt einen `EmailVersand`-Eintrag an. Es geht nichts an einen echten
-// SMTP-Server (Strato/nodemailer) raus.
-//
-// Wenn das echte Pi-Backend (Node + Fastify + nodemailer + Strato-SMTP)
-// angebunden ist, MUSS dieser Dialog NICHT geändert werden — der Hook
-// `useSendEmail` ruft bereits den richtigen Endpunkt auf. Das Pi-Backend
-// muss bei `POST /email/versand` dann:
-//   1. SMTP-Transport (nodemailer) anwerfen
-//   2. PDF-Anhang aus Storage / Drive einbinden
-//   3. Bei Erfolg `status: "sent"` zurückgeben (sonst `status: "failed"`)
-//   4. Bei Mahnungen das Beleg-Status-Feld aktualisieren
-// Erst dann fließt aus diesem Dialog tatsächlich eine E-Mail raus.
-// Die UI ist hier so gebaut, dass sie ohne weitere Änderung sofort auf das
-// echte Backend umschwenkt, sobald der Endpunkt liefert.
+// MANUAL-ONLY: Diese Komponente ist der EINZIGE Pfad, über den eine Mail das
+// System verlässt. Versand erfolgt synchron via POST /email/versand. Backend
+// lehnt jede andere Quelle als `quelle="manuell"` mit 403 ab. Pro Klick wird
+// ein eigener idempotenzKey erzeugt — Doppelklick wird vom Backend
+// abgefangen, auch wenn das Netz hakt.
 // =============================================================================
 
 import { useEffect, useMemo, useRef, useState } from "react";
