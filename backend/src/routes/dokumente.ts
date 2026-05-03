@@ -34,7 +34,6 @@ import { isAllowedMime, MAX_UPLOAD_BYTES } from "../dokumente/types.js";
 import type { DokumentTyp, DokumentQuelle } from "../dokumente/types.js";
 import { runFristCheck } from "../dokumente/fristen-cron.js";
 // Avoid unused
-void _unused;
 
 interface ParsedUpload {
   buffer: Buffer;
