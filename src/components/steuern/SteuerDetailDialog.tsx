@@ -67,11 +67,6 @@ export function SteuerDetailDialog({ posten, onOpenChange }: Props) {
     toast.success("Termin gelöscht");
     onOpenChange(false);
   }
-    ? rechnungen.filter((r) => grundlage.rechnungIds.includes(r.id))
-    : [];
-  const refDokumente = grundlage
-    ? dokumente.filter((d) => grundlage.dokumentIds.includes(d.id))
-    : [];
 
   const kundenMap = new Map(kunden.map((k) => [k.id, k]));
 
