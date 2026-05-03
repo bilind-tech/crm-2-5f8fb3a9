@@ -133,17 +133,17 @@ function anrede(k: Kunde, ap?: Ansprechpartner) {
 
 function header(firma: Firmendaten, logo: string | null) {
   return {
-    margin: [55, 35, 55, 0] as [number, number, number, number],
+    margin: [55, 30, 55, 0] as [number, number, number, number],
     columns: [
       {
         width: "*",
         stack: [
-          { text: absenderzeile(firma), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 22, 0, 0] },
+          { text: absenderzeile(firma), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 35, 0, 0] },
         ],
       },
       logo
-        ? { width: 150, image: logo, fit: [150, 70], alignment: "right" }
-        : { width: 150, text: (firma.firmenname || "MY CLEAN CENTER").toUpperCase(), bold: true, fontSize: 16, color: COLOR_TEXT, alignment: "right" },
+        ? { width: 230, image: logo, fit: [230, 100], alignment: "right" }
+        : { width: 230, text: (firma.firmenname || "MY CLEAN CENTER").toUpperCase(), bold: true, fontSize: 18, color: COLOR_TEXT, alignment: "right" },
     ],
   };
 }
@@ -176,70 +176,72 @@ function footer(firma: Firmendaten) {
   };
 }
 
-// ───────── Tabelle (einheitlich nach Vorlage: 3 Spalten) ──────────────────
+// ───────── Tabelle (4 Spalten, voller Rahmen — exakt nach Vorlage) ────────
 
-function ausfuehrungText(p: Position): string {
+function stundenText(p: Position): string {
+  if (p.modus === "pauschal") return "";
+  const menge = p.menge.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return `${menge} ${p.einheit}`;
+}
+function abrechnungsartText(p: Position): string {
   if (p.ausfuehrung && p.ausfuehrung.trim()) return p.ausfuehrung;
   if (p.modus === "pauschal") return "Pauschal";
-  const menge = p.menge.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-  return `${menge} ${p.einheit}\n(à ${eur(p.einzelpreisNetto)})`;
+  return `à ${eur(p.einzelpreisNetto)}`;
 }
 
 function leistungstabelle(positionen: Position[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
   const headerRow = [
-    { text: "Ausführung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
     { text: "Leistung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
+    { text: "Stunden", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "center", margin: [0, 4, 0, 4] },
+    { text: "Abrechnungsart", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "center", margin: [0, 4, 0, 4] },
     { text: "Preis ohne MwSt.", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
   ];
   const body: unknown[][] = [headerRow];
   positionen.forEach((p) => {
     body.push([
-      { text: ausfuehrungText(p), fontSize: 10, id: `pos:${p.id}` },
-      beschreibungBlock(p.beschreibung || ""),
+      { stack: [beschreibungBlock(p.beschreibung || "")], id: `pos:${p.id}` },
+      { text: stundenText(p), fontSize: 10, alignment: "center" },
+      { text: abrechnungsartText(p), fontSize: 10, alignment: "center" },
       { text: eur(summe(p)), fontSize: 10, alignment: "right" },
     ]);
   });
   body.push([
-    { text: "Zwischensumme (netto)", colSpan: 2, fontSize: 10, alignment: "right" },
+    { text: `Zzgl. gesetzlicher Mehrwertsteuer ${steuersatz}%`, colSpan: 3, fontSize: 10 },
     {},
-    { text: eur(totalsT.netto), fontSize: 10, alignment: "right" },
-  ]);
-  body.push([
-    { text: `Zzgl. gesetzliche Mehrwertsteuer ${steuersatz}%`, colSpan: 2, fontSize: 10, alignment: "right" },
     {},
     { text: eur(totalsT.steuer), fontSize: 10, alignment: "right" },
   ]);
   body.push([
-    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 2, fontSize: 10, alignment: "right", bold: true },
+    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 3, fontSize: 10, bold: true },
+    {},
     {},
     { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
   ]);
-  const totalRows = body.length;
   return {
     id: "tabelle",
     table: {
       headerRows: 1,
       keepWithHeaderRows: 1,
       dontBreakRows: true,
-      widths: [110, "*", 90],
+      widths: ["*", 60, 90, 85],
       body,
     },
     layout: {
-      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0.4),
-      vLineWidth: () => 0,
-      hLineColor: () => COLOR_LINE,
-      vLineColor: () => COLOR_LINE,
-      paddingTop: () => 7,
-      paddingBottom: () => 7,
-      paddingLeft: () => 6,
-      paddingRight: () => 6,
+      hLineWidth: () => 0.6,
+      vLineWidth: () => 0.6,
+      hLineColor: () => COLOR_TEXT,
+      vLineColor: () => COLOR_TEXT,
+      paddingTop: () => 8,
+      paddingBottom: () => 8,
+      paddingLeft: () => 8,
+      paddingRight: () => 8,
     },
   };
 }
 
 // ───────── Meta-Box ────────────────────────────────────────────────────────
 
-function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain", note?: string) {
+function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain", headerNote?: string) {
   if (variant === "plain") {
     return {
       id: "meta",
@@ -252,24 +254,25 @@ function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plai
       })),
     };
   }
-  const dataRows = meta.map((m) => [
-    { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
-    { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
-  ]);
-  const noteRows = note
-    ? [[
-        {
-          text: note,
-          fontSize: 9,
-          colSpan: 2,
-          margin: [0, 6, 0, 0],
-          border: [false, true, false, false],
-        },
+  const body: unknown[][] = [];
+  let noteRowsCount = 0;
+  if (headerNote) {
+    const noteLines = headerNote.split("\n");
+    for (const line of noteLines) {
+      body.push([
+        { text: line, fontSize: 10, bold: true, colSpan: 2, border: [false, false, false, false], margin: [0, 0, 0, 0] },
         {},
-      ]]
-    : [];
-  const body = [...dataRows, ...noteRows];
-  const totalRows = body.length;
+      ]);
+      noteRowsCount++;
+    }
+  }
+  meta.forEach((m) => {
+    body.push([
+      { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 2, 8, 2] },
+      { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 2, 0, 2] },
+    ]);
+  });
+  const dividerIndex = noteRowsCount; // Linie zwischen Note und Daten
   return {
     id: "meta",
     width: 245,
@@ -278,12 +281,16 @@ function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plai
       body,
     },
     layout: {
-      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0),
+      hLineWidth: (i: number, node: { table: { body: unknown[][] } }) => {
+        if (i === 0 || i === node.table.body.length) return 0.7;
+        if (i === dividerIndex && noteRowsCount > 0) return 0.5;
+        return 0;
+      },
       vLineWidth: (i: number, node: { table: { widths: unknown[] } }) => (i === 0 || i === node.table.widths.length ? 0.7 : 0),
       hLineColor: () => COLOR_TEXT,
       vLineColor: () => COLOR_TEXT,
-      paddingTop: () => 5,
-      paddingBottom: () => 5,
+      paddingTop: () => 4,
+      paddingBottom: () => 4,
       paddingLeft: () => 8,
       paddingRight: () => 8,
     },
@@ -372,7 +379,7 @@ async function buildDoc(
   const t = totals(beleg.positionen, beleg.rabattGesamt, beleg.steuersatz);
   return {
     pageSize: "A4" as const,
-    pageMargins: [55, 110, 55, 130] as [number, number, number, number],
+    pageMargins: [55, 130, 55, 130] as [number, number, number, number],
     defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
     header: header(ctx.firma, logo),
     footer: footer(ctx.firma),
@@ -487,9 +494,8 @@ export async function generateRechnungPdf(
   ansprechpartner?: Ansprechpartner,
 ): Promise<PdfBuildResult> {
   const meta = [
-    { label: "Rechnung-Nr.", wert: rechnung.nummer },
-    { label: "Rechnungsdatum", wert: dt(rechnung.rechnungsdatum) },
-    { label: "Fällig am", wert: dt(rechnung.faelligkeitsdatum) },
+    { label: "Rechnung-Nr.:", wert: rechnung.nummer },
+    { label: "Rechnungsdatum:", wert: dt(rechnung.rechnungsdatum) },
   ];
   const opts: BuildOptions = {
     intro: rechnung.optionen?.eigenesIntro || rechnung.introText,
@@ -498,16 +504,30 @@ export async function generateRechnungPdf(
   };
   const effFirma = mergeFirma(firma, rechnung.optionen?.firmaOverride);
   const tracker = createHotspotTracker(A4);
-  const note = `Bitte überweisen Sie den Rechnungsbetrag bis zum ${dt(rechnung.faelligkeitsdatum)} unter Angabe der Rechnungsnummer ${rechnung.nummer} auf unser unten angegebenes Konto.`;
+  const t = totals(rechnung.positionen, rechnung.rabattGesamt, rechnung.steuersatz);
+  // Tage zwischen Rechnungsdatum und Fälligkeit
+  let tage = 14;
+  if (rechnung.rechnungsdatum && rechnung.faelligkeitsdatum) {
+    const d1 = new Date(rechnung.rechnungsdatum).getTime();
+    const d2 = new Date(rechnung.faelligkeitsdatum).getTime();
+    const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+    if (diff > 0) tage = diff;
+  }
+  const zahlungsSatz = `Wir möchten Sie bitten, den Rechnungsbetrag in Höhe von ${eur(t.brutto)} innerhalb von ${tage} Tagen nach Rechnungszustellung auf unser unten genanntes Bankkonto zu überweisen.`;
+  const baseOutro = opts.outro ? opts.outro : zahlungsSatz;
+  const fullOutro = opts.outro
+    ? baseOutro
+    : [zahlungsSatz, opts.materialBereitgestellt ? "Zugunsten der Reinigung werden Reinigungswerkzeuge und Reinigungsmittel von uns zur Verfügung gestellt." : null].filter(Boolean).join("\n\n");
+  const headerNote = "Bei Zahlung bitte\ndie Rechnungs-Nr. angeben";
   const doc = await buildDoc(
     { firma: effFirma, kunde, ansprechpartner },
     "Rechnung",
     meta,
     "box",
-    note,
+    headerNote,
     { positionen: rechnung.positionen, rabattGesamt: rechnung.rabattGesamt, steuersatz: rechnung.steuersatz },
     defaultIntroRechnung(rechnung, opts),
-    defaultOutroRechnung(rechnung, opts),
+    fullOutro,
     signaturFromFirma(effFirma),
     rechnung.optionen?.logoOverride ?? null,
     tracker.pageBreakBefore,
