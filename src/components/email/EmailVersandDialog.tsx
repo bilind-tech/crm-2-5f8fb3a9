@@ -110,7 +110,16 @@ export function EmailVersandDialog({
   const { data: signaturen = [] } = useEmailSignaturen();
   const { data: firma } = useFirmendaten();
   const { data: mahnEinstellungen } = useMahnEinstellungen();
+  const { data: smtp } = useSmtp();
   const send = useSendEmail();
+
+  // Harte Voraussetzung: ohne SMTP kein Versand. UI muss das klar zeigen
+  // und den Senden-Button sperren — sonst entsteht ein falsches Erfolgs-Signal.
+  const smtpKonfiguriert = !!(
+    smtp?.server?.trim() &&
+    smtp?.benutzer?.trim() &&
+    smtp?.passwortGesetzt
+  );
 
   const passendeVorlagen = useMemo(
     () => vorlagen.filter((v) => v.kontext === kontext || v.kontext === "allgemein"),
