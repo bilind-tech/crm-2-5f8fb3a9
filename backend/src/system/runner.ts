@@ -196,22 +196,29 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
     // 3. QUARANTÄNE — Staging in versions/<stamp>/ verschieben + Symlink-Swap
     await stepRun(laufId, "quarantaene", async () => {
       ensureAppDirs();
-      mkdirSync(versionsDir(), { recursive: true });
+      assertNotInDataDir(targetVersionDir, "quarantaene:targetVersionDir");
+      safeMkdir(versionsDir());
       // Move staging → versions/<stamp>
-      renameSync(stagedRoot, targetVersionDir);
+      safeRename(stagedRoot, targetVersionDir);
 
       // previous = aktuelles current-Ziel
       const old = readCurrentTarget();
       // current.tmp -> versions/<stamp>
       const tmpLink = currentLink() + ".tmp";
-      try { unlinkSync(tmpLink); } catch { /* ignore */ }
-      symlinkSync(targetVersionDir, tmpLink);
+      try { safeUnlink(tmpLink); } catch { /* ignore */ }
+      safeSymlink(targetVersionDir, tmpLink);
       // mv -T current.tmp current
-      renameSync(tmpLink, currentLink());
-      // previous-Pointer aktualisieren
-      try { unlinkSync(previousLink()); } catch { /* ignore */ }
-      if (old) symlinkSync(old, previousLink());
+      safeRename(tmpLink, currentLink());
+      // previous-Pointer deterministisch setzen (auch entfernen, wenn kein old)
+      try { safeUnlink(previousLink()); } catch { /* ignore */ }
+      if (old) safeSymlink(old, previousLink());
       swapped = true;
+
+      // Verifikation: current zeigt jetzt wirklich auf den neuen Ordner
+      const verify = readCurrentTarget();
+      if (verify !== targetVersionDir) {
+        throw new Error(`Symlink-Swap nicht verifiziert (current=${verify})`);
+      }
       return `Symlink → ${targetVersionDir}`;
     });
 
