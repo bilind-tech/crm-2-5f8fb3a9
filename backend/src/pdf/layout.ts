@@ -291,7 +291,7 @@ function buildDoc(args: BuildArgs) {
   const signatur = signaturFromFirma(args.firma);
   return {
     pageSize: "A4" as const,
-    pageMargins: [55, 110, 55, 130] as [number, number, number, number],
+    pageMargins: [55, 130, 55, 130] as [number, number, number, number],
     defaultStyle: { font: DEFAULT_FONT, fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
     header: header(args.firma, args.logoDataUrl),
     footer: footer(args.firma),
