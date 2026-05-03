@@ -79,6 +79,13 @@ export function GoogleDriveTab() {
     if (data) setForm(data);
   }, [data]);
 
+  // Wenn nach OAuth zurückgekehrt wird (verbunden==true), Connect-Dialog
+  // automatisch schließen.
+  useEffect(() => {
+    if (form?.verbunden && connectOpen) setConnectOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.verbunden]);
+
   if (isLoading || !form || !data) return <LoadingPlaceholder />;
 
   const dirty = JSON.stringify(form) !== JSON.stringify(data);
