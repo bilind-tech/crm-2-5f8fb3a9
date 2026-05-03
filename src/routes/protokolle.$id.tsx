@@ -145,11 +145,13 @@ function Page() {
               <Download className="mr-1.5 h-4 w-4" />PDF
             </Button>
             <PrintButton url={pdf.url} variant="outline" size="default" />
-            <Button variant="outline" asChild className="rounded-lg">
-              <Link to="/protokolle/$id/bearbeiten" params={{ id }}>
-                <Pencil className="mr-1.5 h-4 w-4" />Bearbeiten
-              </Link>
-            </Button>
+            {istEntwurf && (
+              <Button variant="outline" asChild className="rounded-lg">
+                <Link to="/protokolle/$id/bearbeiten" params={{ id }}>
+                  <Pencil className="mr-1.5 h-4 w-4" />Bearbeiten
+                </Link>
+              </Button>
+            )}
             {istEntwurf && (
               <Button onClick={onAbschliessen} disabled={busy || !p.kundeId || !pdf.blob} className="rounded-lg">
                 {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-4 w-4" />}
