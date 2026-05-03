@@ -100,6 +100,7 @@ export const GoogleDriveSchema = z.object({
   }),
   autoUpload: z.coerce.boolean().default(true),
 });
+export type GoogleDriveSettings = z.infer<typeof GoogleDriveSchema>;
 
 export const GoogleDriveSecretSchema = z.object({
   clientSecret: z.string().min(1).max(500).optional(),
