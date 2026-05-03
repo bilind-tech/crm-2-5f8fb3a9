@@ -266,6 +266,44 @@ export function GoogleDriveTab() {
               </span>
             </p>
           </Field>
+          <Field label="Unterordner für Übergabe-/Abnahmeprotokolle" required>
+            <Input
+              value={form.unterordnerSchema.protokollUebergabe ?? "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}"}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  unterordnerSchema: { ...form.unterordnerSchema, protokollUebergabe: e.target.value },
+                })
+              }
+              className="font-mono"
+              disabled={!form.verbunden}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Beispiel:{" "}
+              <span className="font-mono text-foreground">
+                {form.rootOrdnerName}/{pfadVorschau(form.unterordnerSchema.protokollUebergabe ?? "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}")}/
+              </span>
+            </p>
+          </Field>
+          <Field label="Unterordner für Schlüsselübergaben" required>
+            <Input
+              value={form.unterordnerSchema.protokollSchluessel ?? "Protokolle/Schlüsselübergabe/{YYYY}/{MM}"}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  unterordnerSchema: { ...form.unterordnerSchema, protokollSchluessel: e.target.value },
+                })
+              }
+              className="font-mono"
+              disabled={!form.verbunden}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Beispiel:{" "}
+              <span className="font-mono text-foreground">
+                {form.rootOrdnerName}/{pfadVorschau(form.unterordnerSchema.protokollSchluessel ?? "Protokolle/Schlüsselübergabe/{YYYY}/{MM}")}/
+              </span>
+            </p>
+          </Field>
           <PlatzhalterChips items={PFAD_PLATZHALTER} />
         </div>
       </Section>
