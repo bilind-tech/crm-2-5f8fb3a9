@@ -87,68 +87,14 @@ interface VersendeOpts {
   heute: string;
 }
 
-/** Versendet eine Mahnung: Email-Versand einreihen + mahnungen[]-Eintrag setzen. */
-export function versendeMahnungJetzt(opts: VersendeOpts): {
+/** ABSCHALTET. Der frühere Auto-Versand ist ersatzlos entfernt — Mahnungen
+ *  gehen ausschließlich über den manuellen EmailVersandDialog raus. */
+export function versendeMahnungJetzt(_opts: VersendeOpts): {
   ok: boolean;
   emailVersandId?: string;
   grund?: string;
 } {
-  const r = getRechnung(opts.rechnungId);
-  if (!r) return { ok: false, grund: "rechnung-nicht-gefunden" };
-
-  const kunde = getKunde(r.kundeId);
-  const empfaenger = (kunde as { email?: string } | null)?.email?.trim();
-  if (!empfaenger) return { ok: false, grund: "keine-empfaenger-email" };
-
-  const vorlage = opts.config.emailVorlageId
-    ? getVorlage(opts.config.emailVorlageId)
-    : getStandardVorlage("mahnung");
-  if (!vorlage) return { ok: false, grund: "keine-vorlage" };
-
-  const firma = FirmaSchema.parse(getSetting("firma") ?? {});
-  const neueFrist = berechneNeueFrist(opts.config, opts.heute);
-
-  const ctx = {
-    beleg: { nummer: r.nummer, neueFrist, gebuehr: opts.config.gebuehr },
-    kunde: kunde ?? {},
-    firma,
-    mahnung: { stufe: opts.stufe, bezeichnung: opts.config.bezeichnung, neueFrist },
-  };
-  const betreff = renderPlaceholder(vorlage.betreff, ctx);
-  const bodyHtml = renderPlaceholder(vorlage.bodyHtml, ctx);
-
-  const idempotenzKey = `mahnung-${r.id}-stufe-${opts.stufe}`;
-  const enq = enqueueVersand({
-    empfaengerTo: empfaenger,
-    betreff,
-    bodyHtml,
-    belegArt: "rechnung",
-    belegId: r.id,
-    vorlageId: vorlage.id,
-    idempotenzKey,
-  });
-
-  const vorgang: MahnVorgang = {
-    stufe: opts.stufe,
-    versendetAm: new Date().toISOString(),
-    neueFrist,
-    gebuehr: opts.config.gebuehr,
-    emailVersandId: enq.row.id,
-  };
-  const bestand = ((r.mahnungen as MahnVorgang[] | undefined) ?? []).filter(
-    (m) => m.stufe !== opts.stufe,
-  );
-  updateRechnung(r.id, { mahnungen: [...bestand, vorgang] } as Record<string, unknown>);
-
-  record({
-    art: "mahnung.erstellt",
-    bezugArt: "rechnung",
-    bezugId: r.id,
-    titel: `Mahnung Stufe ${opts.stufe} für Rechnung ${r.nummer}`,
-    beschreibung: `Versand eingereiht (${empfaenger}), Frist ${neueFrist}`,
-  });
-  emit("mahnung:erstellt", { rechnungId: r.id, stufe: opts.stufe });
-  return { ok: true, emailVersandId: enq.row.id };
+  return { ok: false, grund: "auto-versand-deaktiviert" };
 }
 
 /** Hauptlauf: prüft alle offenen Rechnungen einmal. Idempotent — keine doppelten Sends durch idempotenzKey. */
