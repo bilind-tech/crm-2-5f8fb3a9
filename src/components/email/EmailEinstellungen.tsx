@@ -582,7 +582,10 @@ export function SmtpTab() {
     setStatus({ state: "unknown" });
     verify.mutate(undefined, {
       onSuccess: (res) => {
-        if (res.ok) {
+        if (res.demo) {
+          setStatus({ state: "demo", nachricht: res.error, code: res.errorCode });
+          toast.info("Demo-Modus", { description: res.error });
+        } else if (res.ok) {
           setStatus({ state: "ok", latencyMs: res.latencyMs });
           toast.success(`Verbindung erfolgreich${res.latencyMs ? ` (${res.latencyMs} ms)` : ""}`);
         } else {
@@ -606,7 +609,8 @@ export function SmtpTab() {
     }
     sendTest.mutate(adr, {
       onSuccess: (res) => {
-        if (res.ok) toast.success(`Test-Mail an ${adr} versendet`);
+        if (res.demo) toast.info("Demo-Modus — nicht versendet", { description: res.error });
+        else if (res.ok) toast.success(`Test-Mail an ${adr} versendet`);
         else toast.error(`Test-Mail fehlgeschlagen: ${res.error ?? "Unbekannt"}`);
       },
       onError: (e: unknown) =>
