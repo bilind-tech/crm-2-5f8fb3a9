@@ -131,19 +131,19 @@ function anrede(k: Kunde, ap?: Ansprechpartner) {
 
 // ───────── Header / Footer ─────────────────────────────────────────────────
 
-function header(absender: string, logo: string | null) {
+function header(firma: Firmendaten, logo: string | null) {
   return {
     margin: [55, 35, 55, 0] as [number, number, number, number],
     columns: [
       {
         width: "*",
         stack: [
-          { text: absender, fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 22, 0, 0] },
+          { text: absenderzeile(firma), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 22, 0, 0] },
         ],
       },
       logo
         ? { width: 150, image: logo, fit: [150, 70], alignment: "right" }
-        : { width: 150, text: "MY CLEAN CENTER", bold: true, fontSize: 16, color: COLOR_TEXT, alignment: "right" },
+        : { width: 150, text: (firma.firmenname || "MY CLEAN CENTER").toUpperCase(), bold: true, fontSize: 16, color: COLOR_TEXT, alignment: "right" },
     ],
   };
 }
