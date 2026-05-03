@@ -1,6 +1,6 @@
 // Detail-Ansicht eines Protokolls: Meta links, Live-PDF-Vorschau rechts.
 // Aktionen: Drucken, PDF herunterladen, Bearbeiten, Abschließen, Löschen.
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatches, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, Download, FileCheck2, Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -14,13 +14,21 @@ import {
 import { PdfPreviewCard } from "@/components/pdf/PdfPreviewCard";
 import { PrintButton } from "@/components/pdf/PrintButton";
 import {
-  useAbschliessenProtokoll, useDeleteProtokoll, useFirmendaten, useKunde, useObjekte, useProtokoll,
+  useAbschliessenProtokoll, useDeleteProtokoll, useDokument, useFirmendaten, useKunde, useObjekte, useProtokoll,
 } from "@/hooks/useApi";
 import { useProtokollPdf } from "@/hooks/useProtokollPdf";
+import { useDokumentBlobUrl } from "@/hooks/useDokumentBlobUrl";
 import { downloadBlob, protokollDateiname, protokollTitel } from "@/lib/pdf/werkzeugePdf";
 import { blobToDataUrl } from "@/lib/dokumente/blobToDataUrl";
 
-export const Route = createFileRoute("/protokolle/$id")({ component: Page });
+export const Route = createFileRoute("/protokolle/$id")({ component: RouteShell });
+
+function RouteShell() {
+  const matches = useMatches();
+  const isChild = matches.some((m) => m.routeId === "/protokolle/$id/bearbeiten");
+  if (isChild) return <Outlet />;
+  return <Page />;
+}
 
 function Page() {
   const router = useRouter();
