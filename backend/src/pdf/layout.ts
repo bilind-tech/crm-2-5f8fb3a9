@@ -250,10 +250,9 @@ function defaultIntroRechnung(_r: ApiRechnung, intro?: string): string {
   if (intro) return intro;
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
-function defaultOutroRechnung(r: ApiRechnung, outro?: string): string {
+function defaultOutroRechnung(_r: ApiRechnung, outro?: string): string {
   if (outro) return outro;
-  const tage = ziel(r);
-  return `Wir möchten Sie bitten, den Rechnungsbetrag innerhalb von ${tage} Tagen nach Rechnungszustellung auf unser unten genanntes Bankkonto zu überweisen.`;
+  return "Vielen Dank für Ihren Auftrag.";
 }
 function ziel(r: ApiRechnung): number {
   if (!r.rechnungsdatum || !r.faelligkeitsdatum) return 14;
