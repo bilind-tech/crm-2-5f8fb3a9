@@ -300,7 +300,7 @@ export function EmailVersandDialog({
     <Dialog open={open} onOpenChange={(o) => phase === "idle" && onOpenChange(o)}>
       <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto bg-background p-0">
         {/* Hero Header */}
-        <div className="relative overflow-hidden border-b border-border bg-gradient-to-br from-primary/8 via-background to-background px-6 pb-5 pt-6">
+        <div className="relative overflow-hidden border-b border-border bg-background px-6 pb-5 pt-6">
           <div className="flex items-start gap-4">
             <div className="grid h-14 w-14 shrink-0 place-content-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
               <Mail className="h-7 w-7 text-primary" strokeWidth={1.75} />
