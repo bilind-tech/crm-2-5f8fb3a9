@@ -207,15 +207,30 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const sizeBytes = statSync(tmpFile).size;
-      audit({ userId: req.user?.id, action: "backup.upload", detail: { uploadId, sizeBytes }, ip: req.ip });
+
+      // SHA256 der hochgeladenen Datei berechnen — Frontend zeigt das im Restore-Dialog
+      const archiveSha = await new Promise<string>((resolve, reject) => {
+        const h = crypto.createHash("sha256");
+        const s = createReadStream(tmpFile);
+        s.on("data", (c) => h.update(c));
+        s.on("end", () => resolve(h.digest("hex")));
+        s.on("error", reject);
+      });
+
+      audit({ userId: req.user?.id, action: "backup.upload", detail: { uploadId, sizeBytes, sha256: archiveSha }, ip: req.ip });
 
       return {
         uploadId,
         fileName: data.filename ?? `upload-${uploadId}.tar.gz`,
         sizeBytes,
+        sha256: archiveSha,
         version: m.manifest.appVersion,
         schemaVersion: m.manifest.schemaVersion,
         vermutetesDatum: m.manifest.createdAt,
+        // Frontend nutzt das, um einen gelben Versions-Mismatch-Hinweis zu zeigen
+        versionMismatch: m.manifest.appVersion !== config.version
+          ? { backupVersion: m.manifest.appVersion, systemVersion: config.version }
+          : null,
       };
     });
 
