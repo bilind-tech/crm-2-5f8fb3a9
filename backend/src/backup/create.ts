@@ -119,7 +119,7 @@ export async function createBackup(opts: {
 
     // --- 2. SQLite Online-Backup ---
     setBackupPhase(id, "snapshot-db", 10, "DB-Snapshot");
-    const dbDest = path.join(workDir, "db", "mycleancenter.db");
+    const dbDest = path.join(workDir, "db", DB_FILENAME);
     await getDatabase().backup(dbDest);
     const dbBytes = statSync(dbDest).size;
     const dbSha = await sha256OfFile(dbDest);
