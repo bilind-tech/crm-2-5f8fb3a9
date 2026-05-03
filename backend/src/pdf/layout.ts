@@ -279,6 +279,7 @@ interface BuildArgs {
   titel: string;
   meta: { label: string; wert: string }[];
   metaVariant: "box" | "plain";
+  metaNote?: string;
   positionen: ApiPosition[];
   rabattGesamt: number;
   steuersatz: number;
