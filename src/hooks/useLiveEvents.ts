@@ -56,12 +56,31 @@ export function useLiveEvents(enabled: boolean): void {
 
         case "email:gesendet":
         case "email:fehler":
-        case "drive:hochgeladen":
-        case "drive:fehler":
           qc.invalidateQueries({ queryKey: ["email"] });
-          qc.invalidateQueries({ queryKey: ["drive"] });
           qc.invalidateQueries({ queryKey: ["aktivitaeten"] });
           break;
+
+        case "drive:hochgeladen":
+        case "drive:upload-changed":
+          qc.invalidateQueries({ queryKey: ["drive", "uploads"] });
+          qc.invalidateQueries({ queryKey: ["einstellungen", "google-drive"] });
+          qc.invalidateQueries({ queryKey: ["aktivitaeten"] });
+          break;
+
+        case "drive:fehler": {
+          qc.invalidateQueries({ queryKey: ["drive", "uploads"] });
+          qc.invalidateQueries({ queryKey: ["einstellungen", "google-drive"] });
+          qc.invalidateQueries({ queryKey: ["aktivitaeten"] });
+          const d = data as { final?: boolean };
+          if (d?.final) {
+            const now = Date.now();
+            if (now - lastDriveErrToast > 60_000) {
+              lastDriveErrToast = now;
+              toast.warning("Drive-Upload fehlgeschlagen — bitte in Einstellungen prüfen");
+            }
+          }
+          break;
+        }
 
         case "backup:erstellt":
         case "backup:fehler":
