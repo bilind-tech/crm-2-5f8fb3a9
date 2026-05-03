@@ -172,12 +172,12 @@ export async function restoreFromArchive(opts: RestoreOptions): Promise<{ ok: tr
     }
 
     const freshDb = path.join(workDir, "db");
-    const freshDbFile = path.join(freshDb, "mycleancenter.db");
+    const freshDbFile = path.join(freshDb, DB_FILENAME);
     const freshUploads = path.join(workDir, "uploads");
     const freshKeys = path.join(workDir, "keys");
     const freshKeyFile = path.join(freshKeys, "master.key");
     if (!existsSync(freshDb)) throw new Error("db/ fehlt im Backup");
-    if (!existsSync(freshDbFile)) throw new Error("db/mycleancenter.db fehlt im Backup");
+    if (!existsSync(freshDbFile)) throw new Error(`db/${DB_FILENAME} fehlt im Backup`);
 
     // SHA256 der entpackten DB gegen Manifest verifizieren — VOR jedem Swap
     const actualDbSha = await sha256OfFile(freshDbFile);
