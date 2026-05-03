@@ -1560,7 +1560,13 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     if (belegTyp) liste = liste.filter((v) => v.belegTyp === belegTyp);
     result = liste.sort((a, b) => (b.versendetAm ?? "").localeCompare(a.versendetAm ?? ""));
   } else if (m === "POST" && match(path, "/email/versand")) {
-    const v = body as Partial<EmailVersand> & { mahnStufe?: MahnStufe };
+    const v = body as Partial<EmailVersand> & { mahnStufe?: MahnStufe; idempotenzKey?: string };
+    // Idempotenz: gleicher Key → bestehenden Eintrag zurückgeben (kein zweiter Versand).
+    if (v.idempotenzKey) {
+      const dup = d.emailVersand.find((e) => (e as EmailVersand & { idempotenzKey?: string }).idempotenzKey === v.idempotenzKey);
+      if (dup) { result = dup; persist(); }
+    }
+    if (!result) {
     // Mock: 90% Erfolg, 10% zufälliger Fehler — Spinner bleibt sichtbar
     await new Promise((r) => setTimeout(r, 1200));
     const erfolgreich = Math.random() > 0.1;
