@@ -192,12 +192,13 @@ function leistungstabelle(positionen: Position[]) {
           ? "Pauschal"
           : `${p.menge.toLocaleString("de-DE")} ${p.einheit}`);
       body.push([
-        { text: ausf, fontSize: 9, bold: true },
+        { text: ausf, fontSize: 9, bold: true, id: `pos:${p.id}` },
         beschreibungBlock(p.beschreibung || ""),
         { text: eur(summe(p)), fontSize: 9, alignment: "right", bold: true },
       ]);
     });
     return {
+      id: "tabelle",
       table: { headerRows: 1, widths: [90, "*", 70], body },
       layout: {
         hLineWidth: () => 0.5,
@@ -222,7 +223,7 @@ function leistungstabelle(positionen: Position[]) {
   ];
   positionen.forEach((p, i) => {
     body.push([
-      { text: String(i + 1), fontSize: 9 },
+      { text: String(i + 1), fontSize: 9, id: `pos:${p.id}` },
       beschreibungBlock(p.beschreibung || ""),
       { text: p.menge.toLocaleString("de-DE"), fontSize: 9, alignment: "right" },
       { text: p.einheit, fontSize: 9 },
@@ -231,6 +232,7 @@ function leistungstabelle(positionen: Position[]) {
     ]);
   });
   return {
+    id: "tabelle",
     table: { headerRows: 1, widths: [22, "*", 40, 40, 60, 60], body },
     layout: {
       hLineWidth: () => 0.5,
