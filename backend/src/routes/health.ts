@@ -65,6 +65,8 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       version: config.version,
       schemaVersion: getSchemaVersion(),
       uptimeSec: Math.floor((Date.now() - startTime) / 1000),
+      db: { ok: true, wal: isWalActive(db), path: config.dbPath },
+      masterKey: { present: existsSync(config.keyPath) },
       counts: { user: userCnt, session: sessCnt, audit: auditCnt, backup: visible.length },
       disk: {
         dataDir: config.dataDir,
