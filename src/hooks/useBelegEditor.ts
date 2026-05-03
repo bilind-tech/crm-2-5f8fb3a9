@@ -85,11 +85,13 @@ export function useBelegEditor<T extends Angebot | Rechnung>(
         await updateRechnung.mutateAsync(payload as Partial<Rechnung>);
       }
       lastSavedRef.current = stableStringify(draft);
+      // PDF-Cache (React Query) verwerfen → Detailseite holt neue Version.
+      invalidatePdf(kind, draft.id);
       if (!opts?.silent) toast.success("Gespeichert", { duration: 1500 });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen");
     }
-  }, [draft, isDirty, kind, updateAngebot, updateRechnung]);
+  }, [draft, isDirty, kind, updateAngebot, updateRechnung, invalidatePdf]);
 
   // Autosave nach 1.5s ohne Änderung — silent (kein Toast).
   useEffect(() => {
