@@ -268,7 +268,7 @@ function Page() {
                   >
                     <Mail className="h-4 w-4" />
                   </button>
-                  {r.status === "bezahlt" ? (
+                  {istVollBezahlt(r) ? (
                     <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-success/30 bg-success/10 px-3 text-sm font-medium text-success">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>Bezahlt</span>
@@ -388,7 +388,7 @@ function Page() {
                       >
                         <Mail className="h-4 w-4" />
                       </button>
-                      {r.status === "bezahlt" ? (
+                      {istVollBezahlt(r) ? (
                         <span className="inline-flex h-8 items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2.5 text-xs font-medium text-success">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           <span>Bezahlt</span>
