@@ -8,7 +8,7 @@
 import type { Dokument, DokumentTyp } from "@/lib/api/types";
 import { getBackendUrl, isBackendUrlExplicit } from "@/lib/api/backendUrl";
 import { piApi, PiApiError, postWithProgress } from "@/lib/api/piClient";
-import { mockBackend } from "@/lib/mock/backend";
+import { mockBackend } from "@/lib/belege/summen";
 
 export const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
 export const ACCEPT_PATTERN = "image/*,application/pdf";

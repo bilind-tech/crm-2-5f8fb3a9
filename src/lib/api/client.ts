@@ -7,7 +7,7 @@
 // - Wenn der User EINE URL gespeichert hat: ApiError "backend-offline" hochwerfen,
 //   damit die UI den Offline-Zustand anzeigen kann statt klammheimlich Mock-Daten zu nehmen.
 
-import { mockBackend } from "@/lib/mock/backend";
+import { mockBackend } from "@/lib/belege/summen";
 import { piApi, PiApiError } from "@/lib/api/piClient";
 import { isBackendUrlExplicit } from "@/lib/api/backendUrl";
 
