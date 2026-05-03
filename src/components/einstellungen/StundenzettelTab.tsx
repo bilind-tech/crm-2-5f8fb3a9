@@ -87,6 +87,9 @@ export function StundenzettelTab() {
                 URL muss mit http:// oder https:// beginnen.
               </p>
             )}
+            {valid && serverError && (
+              <p className="text-xs text-destructive">{serverError}</p>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
