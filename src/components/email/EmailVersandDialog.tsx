@@ -113,6 +113,7 @@ export function EmailVersandDialog({
   const { data: mahnEinstellungen } = useMahnEinstellungen();
   const { data: smtp } = useSmtp();
   const send = useSendEmail();
+  const demoModus = !isBackendUrlExplicit();
 
   // Harte Voraussetzung: ohne SMTP kein Versand. UI muss das klar zeigen
   // und den Senden-Button sperren — sonst entsteht ein falsches Erfolgs-Signal.
