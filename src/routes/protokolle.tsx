@@ -1,24 +1,25 @@
 // Liste aller Protokolle.
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Plus, FileText, KeyRound, Loader2, Search } from "lucide-react";
-import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useProtokolle, useCreateProtokoll, useKunden } from "@/hooks/useApi";
+import { SlideOver } from "@/components/ui/slide-over";
+import { UebergabeProtokollForm } from "@/components/forms/UebergabeProtokollForm";
+import { SchluesselProtokollForm } from "@/components/forms/SchluesselProtokollForm";
+import { useProtokolle, useKunden } from "@/hooks/useApi";
 import type { Protokoll, ProtokollKind } from "@/lib/api/types";
 
 export const Route = createFileRoute("/protokolle")({ component: Page });
 
 function Page() {
-  const navigate = useNavigate();
   const [tab, setTab] = useState<"alle" | ProtokollKind>("alle");
   const [q, setQ] = useState("");
+  const [openForm, setOpenForm] = useState<null | ProtokollKind>(null);
   const list = useProtokolle();
   const kundenQ = useKunden();
-  const create = useCreateProtokoll();
 
   const kundenById = useMemo(() => {
     const m = new Map<string, string>();
