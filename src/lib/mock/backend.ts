@@ -86,6 +86,7 @@ interface DB {
   angebote: Angebot[];
   rechnungen: Rechnung[];
   dokumente: Dokument[];
+  protokolle?: Protokoll[];
   notizen: Notiz[];
   aktivitaeten: Aktivitaet[];
   benachrichtigungen: Benachrichtigung[];
