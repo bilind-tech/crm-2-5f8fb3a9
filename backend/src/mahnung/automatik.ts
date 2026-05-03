@@ -61,20 +61,8 @@ export function ladeMahnEinstellungen(): MahnEinstellungenBackend {
   };
 }
 
-function renderPlaceholder(text: string, ctx: Record<string, unknown>): string {
-  return text.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-    const path = key.trim().split(".");
-    let v: unknown = ctx;
-    for (const p of path) {
-      if (v && typeof v === "object" && p in (v as Record<string, unknown>)) {
-        v = (v as Record<string, unknown>)[p];
-      } else {
-        return "";
-      }
-    }
-    return v == null ? "" : String(v);
-  });
-}
+// (renderPlaceholder entfernt — Auto-Versand ist deaktiviert.)
+
 
 interface VersendeOpts {
   rechnungId: string;
