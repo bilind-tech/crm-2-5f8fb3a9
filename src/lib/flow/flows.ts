@@ -27,7 +27,8 @@ export interface FlowResult {
 
 export function angebotFlow(a: Angebot, hatRechnung = false): FlowResult {
   const status = a.status;
-  const versendet = status !== "entwurf";
+  // Nur „echt versendet": versendetAm wird ausschließlich beim realen Sende-Vorgang gesetzt.
+  const versendet = !!a.versendetAm;
   const angenommen = status === "angenommen";
   const abgelehnt = status === "abgelehnt";
   const abgelaufen = status === "abgelaufen";
@@ -109,7 +110,8 @@ export function rechnungFlow(r: Rechnung): FlowResult {
   const bezahlt = r.zahlungen.reduce((a, z) => a + z.betrag, 0);
   const offen = Math.max(0, s.brutto - bezahlt);
 
-  const istVersendet = status !== "entwurf";
+  // Nur „echt versendet": versendetAm wird ausschließlich beim realen Sende-Vorgang gesetzt.
+  const istVersendet = !!r.versendetAm;
   const istUeberfaellig = status === "ueberfaellig";
   const istBezahlt = status === "bezahlt" || (offen <= 0.001 && bezahlt > 0);
   const istTeilbezahlt = bezahlt > 0 && !istBezahlt;
