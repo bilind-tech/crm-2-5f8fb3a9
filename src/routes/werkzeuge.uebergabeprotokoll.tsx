@@ -20,6 +20,7 @@ import type { Kunde, Objekt } from "@/lib/api/types";
 import {
   downloadBlob,
   generateUebergabeprotokollPdf,
+  nextProtokollNummer,
   safeFilename,
   type ProtokollArt,
 } from "@/lib/pdf/werkzeugePdf";
