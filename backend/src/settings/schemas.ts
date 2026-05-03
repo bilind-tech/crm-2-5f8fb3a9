@@ -76,6 +76,23 @@ export const BackupPlanSchema = z.object({
 export const GoogleDriveSchema = z.object({
   clientId: z.string().trim().max(500).default(""),
   rootFolderName: z.string().trim().min(1).max(100).default("mycleancenter.cm"),
+  unterordnerSchema: z.object({
+    rechnungen: z.string().trim().min(1).max(200).default("Rechnungen/{YYYY}/{MM}"),
+    angebote: z.string().trim().min(1).max(200).default("Angebote/{YYYY}/{MM}"),
+    dokumente: z.string().trim().min(1).max(200).default("Dokumente/{YYYY}/{MM}"),
+  }).default({
+    rechnungen: "Rechnungen/{YYYY}/{MM}",
+    angebote: "Angebote/{YYYY}/{MM}",
+    dokumente: "Dokumente/{YYYY}/{MM}",
+  }),
+  dateinameSchema: z.object({
+    rechnung: z.string().trim().min(1).max(200).default("{nummer} {kunde} {leistung} {MM}-{YYYY}"),
+    angebot: z.string().trim().min(1).max(200).default("{nummer} {kunde} {leistung} {MM}-{YYYY}"),
+  }).default({
+    rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+    angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+  }),
+  autoUpload: z.coerce.boolean().default(true),
 });
 
 export const GoogleDriveSecretSchema = z.object({
