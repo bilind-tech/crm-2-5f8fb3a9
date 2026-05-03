@@ -8,8 +8,9 @@
 //
 // Drive-Fehler markieren das lokale Backup NIEMALS als failed.
 // =============================================================================
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
+import * as tar from "tar";
 import { getDatabase } from "../db/index.js";
 import { audit } from "../auth/audit.js";
 import { categoryDir } from "./paths.js";
@@ -18,6 +19,7 @@ import { ensureFolderPath, uploadStream } from "../drive/folders.js";
 import { loadDriveSettings } from "../drive/oauth.js";
 import { getSetting } from "../settings/store.js";
 import { BackupPlanSchema } from "../settings/schemas.js";
+import { config } from "../config.js";
 import type { BackupCategory } from "./types.js";
 
 function setDriveStatus(
