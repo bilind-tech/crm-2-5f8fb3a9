@@ -307,6 +307,8 @@ export async function belegeRoutes(app: FastifyInstance): Promise<void> {
       }
       audit({ userId: req.user?.id, action: "rechnung.inkasso", detail: { id: r.id }, ip: req.ip });
       return r;
+    });
+
     // ============================================================
     // BELEGNUMMERN — Reservierung & Import-Scan
     // ============================================================
