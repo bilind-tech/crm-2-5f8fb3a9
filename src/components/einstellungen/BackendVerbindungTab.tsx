@@ -95,10 +95,14 @@ export function BackendVerbindungTab() {
                     {health.db.ok ? "OK" : "Fehler"}
                     {health.db.wal ? " · WAL" : ""}
                   </dd>
-                  <dt>Master-Key</dt>
-                  <dd className="text-foreground">
-                    {health.masterKey.present ? "vorhanden" : "fehlt"}
-                  </dd>
+                  {health.masterKey && (
+                    <>
+                      <dt>Master-Key</dt>
+                      <dd className="text-foreground">
+                        {health.masterKey.present ? "vorhanden" : "fehlt"}
+                      </dd>
+                    </>
+                  )}
                   <dt>Uptime</dt>
                   <dd className="text-foreground">
                     {Math.floor(health.uptimeSec / 60)} min
