@@ -271,6 +271,7 @@ function Page() {
           status={pdf.status}
           errorMessage={pdf.error}
           drive={r.drive}
+          pdfUrl={pdf.url}
           viewButton={<PdfViewButton kind="rechnung" beleg={r} variant="icon-text" label="PDF ansehen" />}
         />
       </div>
