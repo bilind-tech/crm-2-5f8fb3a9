@@ -37,7 +37,7 @@ import {
   useDeleteEmailSignatur,
   useSmtp,
   useUpdateSmtp,
-  useTestSmtp,
+  // useTestSmtp entfernt — Schnelltest durch verify ersetzt.
   useVerifySmtp,
   useSendTestMail,
 } from "@/hooks/useApi";
@@ -510,7 +510,7 @@ function SignaturDialog({
 export function SmtpTab() {
   const { data: smtp } = useSmtp();
   const update = useUpdateSmtp();
-  const test = useTestSmtp();
+  // Schnelltest entfernt — Verbindung-prüfen (verify) ist die robuste Variante.
   const verify = useVerifySmtp();
   const sendTest = useSendTestMail();
   const [form, setForm] = useState({
