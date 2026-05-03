@@ -21,7 +21,7 @@ import { useUmsatz } from "@/hooks/useApi";
 import { formatEUR } from "@/lib/format";
 
 type ChartZeitraum = "6m" | "12m" | "jahr" | "letztesJahr" | "quartal";
-type ChartTyp = "bar" | "line" | "area";
+type ChartTyp = "bar" | "area";
 type Wert = "brutto" | "netto";
 
 interface State {
