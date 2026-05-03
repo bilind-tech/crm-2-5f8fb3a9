@@ -302,6 +302,20 @@ function Page() {
         </div>
       )}
 
+      {/* Weitere Steuer-Termine (manuell) */}
+      {offeneManuell.length > 0 && (
+        <div>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Weitere Steuer-Termine
+          </h2>
+          <div className="space-y-2">
+            {offeneManuell.map((p) => (
+              <PostenZeile key={p.id} posten={p} onClick={() => setDetailDialog(p)} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Bereits bezahlt */}
       {bezahlte.length > 0 && (
         <div>
