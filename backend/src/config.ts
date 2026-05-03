@@ -16,7 +16,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   dataDir: process.env.DATA_DIR ?? DEFAULT_DATA_DIR,
   get dbPath() {
-    return path.join(this.dataDir, "db", "mycleancenter.db");
+    return path.join(this.dataDir, "db", DB_FILENAME);
   },
   get dbDir() {
     return path.join(this.dataDir, "db");
