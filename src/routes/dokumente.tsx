@@ -49,6 +49,13 @@ function Page() {
   const uploadRef = useRef<DokumentUploadPanelHandle>(null);
   const uploadPanelRef = useRef<HTMLDivElement>(null);
 
+  // Aus globaler Suche: gewünschtes Dokument öffnen, sobald die Liste geladen ist.
+  useEffect(() => {
+    if (!focus || alle.length === 0) return;
+    const dok = alle.find((d) => d.id === focus);
+    if (dok) setViewing(dok);
+  }, [focus, alle]);
+
   const handlePickFiles = () => {
     uploadPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     uploadRef.current?.openPicker();
