@@ -1,101 +1,83 @@
-# Plan 5 — Werkzeuge-Seite (Übergabe-/Abnahmeprotokoll + Schlüsselübergabe)
+# Plan 6 — „Drucken"-Button überall
 
-Neue Sammelseite in der Sidebar (unter „Stundenzettel"), die als Hub für **kleine PDF-Werkzeuge** dient. Heute zwei Funktionen, später beliebig erweiterbar (FAQ-Aushang, Auftrag, Reinigungsnachweis, …). Reines Frontend für jetzt — die echten Vorlagen-Layouts und der finale Mail-Anhang-Pfad kommen, sobald du mir die Vorlagen schickst.
+Ziel: Auf jeder Seite, die ein PDF erzeugt (Angebot, Rechnung, Übergabeprotokoll, Schlüsselübergabe), gibt es genau **einen** Button „Drucken", der **mit einem Klick** den Druck-Dialog öffnet — egal wie viele Seiten das PDF hat. Schnell, kein zusätzlicher Download-Schritt für den Nutzer, kein Tab-Wirrwarr.
 
-## A. Sidebar + Route
+## Strategie (technisch)
 
-- Neuer Sidebar-Eintrag „Werkzeuge" mit Icon `Wrench`, direkt **unter** „Stundenzettel" in der Gruppe „Vertrieb & Abrechnung". Naming-Vorschlag: **„Werkzeuge"** (alternativ „Vorlagen & Tools"). Sag Bescheid, falls ein anderer Name besser passt.
-- Neue Route `src/routes/werkzeuge.tsx` für die Hub-Seite.
-- Neue Routen für die einzelnen Werkzeuge:
-  - `src/routes/werkzeuge.uebergabeprotokoll.tsx`
-  - `src/routes/werkzeuge.schluesseluebergabe.tsx`
+Browser können **PDF-Blobs nicht direkt drucken** — `window.print()` druckt immer das gerade aktive Dokument. Robuster, browserübergreifender Weg:
 
-## B. Hub-Seite `/werkzeuge`
+1. PDF als **Blob** erzeugen / besorgen (haben wir schon: `useAngebotPdf`, `useRechnungPdf`, `generateUebergabeprotokollPdf`, `generateSchluesseluebergabePdf`).
+2. Blob → `URL.createObjectURL(blob)`.
+3. **Verstecktes `<iframe>`** in den DOM hängen (`position: fixed; left: -9999px`), `src = blobUrl`, `onload` → `iframe.contentWindow.print()`.
+4. Nach `print()` wird der native Druck-Dialog des Browsers geöffnet (Vorschau + alle Seiten).
+5. Cleanup: nach `afterprint` (oder Timeout fallback) iframe entfernen + `revokeObjectURL`.
 
-Bewusst **ohne** die 4 KPI-Kacheln, die die Belege-Listen oben tragen — du willst hier keine Zähler. Stattdessen:
+**Fallback**, falls der Browser Drucken aus einem Cross-Origin/blob-iframe verbietet (Safari iOS):
+- `window.open(blobUrl, "_blank")` → neuer Tab → User klickt dort einmal auf Drucken.
+- Vorher per Feature-Detection erkennen (User-Agent ist Mist; wir versuchen iframe-Print, fangen Fehler ab und fallen automatisch auf neuer Tab zurück).
 
-- Klassischer `PageHeader` „Werkzeuge" + kurzer Untertitel („PDF-Werkzeuge und schnelle Helfer für den Alltag").
-- Suchfeld („Werkzeug suchen …") — wirkt clientseitig auf die Karten, nützlich sobald 5+ Tools drin sind.
-- Gruppierte Karten-Sektionen (extensible). Start-Sektionen:
-  - **„PDF-Vorlagen"** → Karten: *Übergabe-/Abnahmeprotokoll*, *Schlüsselübergabe*
-  - **„Mehr folgt"** → leere Sektion mit gestricheltem Platzhalter („Hier kommen weitere Werkzeuge."). Sobald wir was Neues haben, fällt der Platzhalter raus.
-- Jede Werkzeug-Karte: Icon (`FileSignature` / `KeyRound`), Titel, 1–2-Zeilen-Beschreibung, Button „Öffnen" → Route. Konsistent mit dem bestehenden Card-Stil (`rounded-2xl border bg-card shadow-sm`, kein Gradient, keine Sparkles).
+Das deckt alle Browser ab und respektiert genau deine Vorgabe: erste Wahl gleicher Tab, Fallback neuer Tab — beides funktioniert auch bei mehrseitigen PDFs.
 
-Datenmodell intern als Liste von `WerkzeugDefinition { id, gruppe, titel, beschreibung, icon, route }` — neue Werkzeuge sind dann ein 5-Zeilen-Eintrag plus Route. Keine Backend-Tabelle nötig.
+## Zentrale Hilfsfunktion
 
-## C. Übergabe-/Abnahmeprotokoll `/werkzeuge/uebergabeprotokoll`
+Eine neue Datei `src/lib/pdf/printBlob.ts`:
 
-Schlankes Formular auf einer Seite (kein Wizard):
+- `printPdfBlob(blob: Blob, opts?: { fileName?: string }): Promise<void>`
+- Versucht **iframe-Drucken**. Bei Fehler oder Safari-iOS automatisch `window.open` Fallback.
+- Räumt URL und iframe in `afterprint` / nach 60s sicher auf, damit der Speicher nicht voll läuft.
 
-1. **Kunde** auswählen (Combobox aus `useKunden()`, mit Suche). Optional: Objekt aus `useObjekte()` — falls der gewählte Kunde mehrere hat, gefiltert.
-2. **Art** (Radio): „Übergabe" / „Abnahme" / „Übergabe & Abnahme".
-3. **Datum** (Default: heute), **Uhrzeit** (Default: jetzt).
-4. **Anwesende Personen** (zwei Felder: Auftraggeber-Vertreter, Auftragnehmer-Vertreter). Vorausgefüllt aus Kunde-Hauptkontakt + Firmendaten.
-5. **Leistungsumfang** (Textarea, vorausgefüllt mit „Endreinigung / Unterhaltsreinigung / …" — frei änderbar).
-6. **Mängel / Bemerkungen** (Textarea, leer).
-7. **Akzeptiert** (Checkbox „Abnahme erfolgt ohne Vorbehalt").
-8. **Unterschriften** — zwei Felder „Name in Druckbuchstaben" für jetzt; echte Touch-Unterschriften setzen wir später drauf, wenn du das willst.
+## Wo der Button hinkommt
 
-Sticky Action-Bar unten:
-- **„PDF erstellen"** (primary) — generiert das PDF (siehe E unten).
-- **„PDF + per E-Mail senden"** — öffnet den bestehenden `EmailVersandDialog` mit Kontext `allgemein` und dem PDF als Anhang. Kunde, Empfänger und Absenderfirma sind vorausgefüllt; du kannst Vorlage/Signatur wählen wie gewohnt.
+| Stelle | Komponente | Vorgehen |
+|---|---|---|
+| Angebot-Detail (`/angebote/$id`) | `src/routes/angebote.$id.tsx` | „Drucken"-Button neben dem bestehenden „PDF"-Button. Holt Blob aus `useAngebotPdf(a)` und ruft `printPdfBlob`. |
+| Rechnung-Detail (`/rechnungen/$id`) | `src/routes/rechnungen.$id.tsx` | analog mit `useRechnungPdf(r)`. |
+| Übergabe-/Abnahmeprotokoll (`/werkzeuge/uebergabeprotokoll`) | `src/routes/werkzeuge.uebergabeprotokoll.tsx` | Neuer dritter Action-Button „Drucken" — erzeugt Blob via `generateUebergabeprotokollPdf` und ruft `printPdfBlob` direkt (kein Download). |
+| Schlüsselübergabe (`/werkzeuge/schluesseluebergabe`) | `src/routes/werkzeuge.schluesseluebergabe.tsx` | analog. |
+| `PdfViewerDialog` (Vorschau-Dialog für Beleg-PDFs) | `src/components/pdf/PdfViewerDialog.tsx` | Bestehender Dialog bekommt zusätzlich „Drucken" — wer schon im Vorschau-Dialog ist, kann von dort direkt drucken. |
+| Listen (`/angebote`, `/rechnungen`) | optional Folge-PR | **Bewusst NICHT in diesem Plan** — Liste hat schon den Eye-Button, mehr Druck-Eintritte erhöhen Klickfehler. Sag Bescheid, wenn du es trotzdem dort willst. |
 
-## D. Schlüsselübergabe `/werkzeuge/schluesseluebergabe`
+Ein gemeinsamer kleiner Wrapper `src/components/pdf/PrintButton.tsx`:
+- Props: `getBlob: () => Promise<Blob>`, optional `label`, `variant`, `size`.
+- Zeigt einen Button mit Drucker-Icon (`Printer` aus lucide-react).
+- Klick → Loader-Spinner anzeigen, `getBlob()` awaiten, `printPdfBlob` rufen.
+- Toast bei Fehler („Drucken fehlgeschlagen").
+- Disabled solange Blob nicht bereit.
 
-Gleiches Layout-Muster:
+Damit hat jede der oben genannten Seiten **eine Zeile**, die den Button einsetzt — keine doppelte Logik, kein doppelter Cleanup.
 
-1. **Kunde** + (optional) Objekt.
-2. **Datum / Uhrzeit**.
-3. **Richtung**: Radio „Ausgabe an Kunden" / „Rücknahme von Kunden".
-4. **Schlüsselliste** — dynamische Tabelle mit Spalten: *Bezeichnung*, *Anzahl*, *Schlüssel-Nr.*, *Bemerkung*. Buttons „+ Schlüssel hinzufügen" / Zeile löschen. Mindestens eine Zeile vorgegeben.
-5. **Pfand** (optional, EUR-Feld).
-6. **Empfangsbestätigung** (Checkbox + zwei Namensfelder Auftraggeber/Auftragnehmer).
+## UX-Details
 
-Sticky Action-Bar wie oben (PDF / PDF + Mail).
-
-## E. PDF-Generierung — Plan, nicht Implementierung
-
-Layout wartet auf deine Vorlagen. **Sobald du mir die zwei Vorlagen schickst** (am liebsten als PDF oder Foto), baue ich:
-- Pro Werkzeug ein React-PDF-Template in `src/lib/pdf/werkzeuge/uebergabeprotokoll.tsx` und `…/schluesseluebergabe.tsx` mit `@react-pdf/renderer` (gleicher Stack wie die Beleg-PDFs in `src/lib/pdf/`).
-- Felder werden 1:1 aus dem Formular eingesetzt (Kunde, Datum, Tabellen, etc.).
-- Header mit Firmendaten/Logo aus `useFirmendaten()` — also automatisch konsistent mit Rechnungs-/Angebots-Look.
-- Dateiname-Schema: `Uebergabeprotokoll_{Kunde}_{YYYY-MM-DD}.pdf` bzw. `Schluesseluebergabe_{Kunde}_{YYYY-MM-DD}.pdf`.
-
-In **diesem** Plan baue ich zunächst das **Frontend-Gerüst** (Hub + beide Formulare + lokales PDF-Stub mit Platzhalter-Layout, Download funktioniert sofort). Echte Vorlagen-Treue folgt im nächsten Schritt nach deiner Vorlage.
-
-## F. Speicherung / Historie — bewusst rausgelassen
-
-Du hattest nichts dazu gesagt. Mein Vorschlag: für jetzt **kein** Backend-Speicher — das PDF wird erzeugt, runtergeladen und (optional) per Mail verschickt. Kein neuer DB-Tabellen-Wildwuchs vor Pi-Auslieferung. Sobald du sagst „die sollen auch in Dokumenten auftauchen", erweitern wir's auf die `dokumente`-Tabelle (gleicher Drive-Sync-Pfad wie Rechnung/Angebot).
-
-## G. E-Mail-Anhang — kleiner Vorbehalt
-
-Der bestehende `EmailVersandDialog`-Pfad erwartet, dass das PDF beim Backend liegt (Beleg-PDF). Für ein frei generiertes PDF braucht der Versand-Endpunkt einen kleinen Erweiterungspunkt (PDF blob → upload → versand). **Im aktuellen Plan**: Button „PDF + per E-Mail senden" lädt das PDF zuerst herunter, öffnet dann den Mail-Dialog mit Hinweis „PDF bitte anhängen (Download lief gerade)". Sobald der Backend-Adapter steht (kleiner Folge-Plan), wird der Anhang automatisch.
+- Beleg-Detailseiten: Beim ersten Aufruf von `useAngebotPdf` wird der Blob ohnehin gebaut/geladen. Der Print-Button kann den **bereits gecachten Blob** wiederverwenden — Druck ist quasi instantan, sobald die Seite geladen hat.
+- Werkzeuge: Bisher erzeugt der „PDF erstellen"-Button den Blob, lädt ihn herunter und ist fertig. Der neue „Drucken"-Button erzeugt den Blob **und ruft direkt Druck**, ohne Download-Datei im Downloads-Ordner abzulegen. Der Download bleibt als separater Button erhalten.
+- Visuell: Drucker-Icon + Text „Drucken". Variant `outline` wie die anderen Sekundär-Aktionen in der Header-Action-Bar, damit es sich konsistent einreiht. Keine Sparkles, keine Gradients (wie in Memory festgehalten).
+- Loading: kleiner Spinner im Button, solange Blob baut (max ~1–2 s im Mock, instant aus Cache).
 
 ## Geänderte / neue Dateien
 
 | Datei | Änderung |
 |---|---|
-| `src/components/layout/AppSidebar.tsx` | Eintrag „Werkzeuge" unter Stundenzettel |
-| `src/routes/werkzeuge.tsx` | **neu** — Hub-Seite, gruppierte Karten, Suche |
-| `src/routes/werkzeuge.uebergabeprotokoll.tsx` | **neu** — Formular |
-| `src/routes/werkzeuge.schluesseluebergabe.tsx` | **neu** — Formular |
-| `src/components/werkzeuge/WerkzeugCard.tsx` | **neu** — Karten-Komponente |
-| `src/components/werkzeuge/KundenObjektPicker.tsx` | **neu** — Combobox Kunde + Objekt |
-| `src/lib/werkzeuge/registry.ts` | **neu** — `WerkzeugDefinition[]` |
-| `src/lib/pdf/werkzeuge/uebergabeprotokoll.tsx` | **neu** — Stub-PDF (Platzhalter-Layout) |
-| `src/lib/pdf/werkzeuge/schluesseluebergabe.tsx` | **neu** — Stub-PDF (Platzhalter-Layout) |
+| `src/lib/pdf/printBlob.ts` | **neu** — `printPdfBlob` mit iframe-Strategie + Fallback |
+| `src/components/pdf/PrintButton.tsx` | **neu** — wiederverwendbarer Button-Wrapper |
+| `src/components/pdf/PdfViewerDialog.tsx` | „Drucken"-Action ergänzen |
+| `src/routes/angebote.$id.tsx` | PrintButton in Header-Actions |
+| `src/routes/rechnungen.$id.tsx` | PrintButton in Header-Actions |
+| `src/routes/werkzeuge.uebergabeprotokoll.tsx` | PrintButton in Sticky-Bar |
+| `src/routes/werkzeuge.schluesseluebergabe.tsx` | PrintButton in Sticky-Bar |
+
+Keine neuen Backend-Routen, keine Migrations, keine neuen Dependencies — `lucide-react` hat `Printer` schon.
 
 ## Akzeptanzkriterien
 
-1. In der Sidebar erscheint **„Werkzeuge"** direkt unter „Stundenzettel".
-2. `/werkzeuge` zeigt zwei Karten ohne KPI-Kacheln-Header. Suche filtert die Karten clientseitig.
-3. „Übergabe-/Abnahmeprotokoll" und „Schlüsselübergabe" haben jeweils ein eigenes Formular mit Kunden-Auswahl (vorausgefüllter Hauptkontakt) und einer „PDF erstellen"-Aktion, die ein gültiges PDF herunterlädt.
-4. „PDF + per E-Mail senden" öffnet den vorhandenen E-Mail-Versand-Dialog mit Empfänger = Kunden-Hauptmail (für jetzt mit dem Hinweis aus G).
-5. Eine neue Werkzeug-Karte hinzufügen = Eintrag in `registry.ts` + neue Route, sonst nichts.
-6. Keine neuen Backend-Endpoints, keine Migrations, kein Auto-Mail-Trigger.
+1. Auf `/angebote/:id` und `/rechnungen/:id` erscheint ein **„Drucken"**-Button neben „PDF". Ein Klick öffnet ohne Tab-Wechsel den nativen Druck-Dialog mit allen Seiten des PDFs.
+2. Auf `/werkzeuge/uebergabeprotokoll` und `/werkzeuge/schluesseluebergabe` ist der Button in der Sticky-Action-Bar verfügbar — ein Klick erzeugt das PDF und öffnet sofort den Druck-Dialog (kein Download nötig).
+3. Funktioniert in Chrome, Edge, Firefox **im selben Tab** über das versteckte iframe.
+4. In Safari (insbesondere iOS), wo iframe-Druck eingeschränkt ist, fällt es automatisch auf einen **neuen Tab** zurück, der den nativen Druck-Dialog des Geräts öffnet.
+5. Mehrseitige PDFs werden vollständig gedruckt (kein Abschneiden).
+6. Nach dem Druck: keine zurückbleibenden iframes/Object-URLs (Speicher sauber).
 
 ## Risiko
 
-Niedrig. Reines Frontend, keine Daten-Mutationen außerhalb von „PDF runterladen". Bestehende Routen bleiben unangetastet.
+Niedrig. Reine Frontend-Erweiterung. Bestehende Download-/Mail-/Bearbeiten-Buttons bleiben unverändert. Maximaler Schaden bei Bugs: Druck öffnet sich nicht — der Nutzer hat noch immer den vorhandenen „PDF"-Download-Button als Alternative.
 
-Sag „Go" für die Frontend-Umsetzung. Sobald du mir die zwei Vorlagen schickst, mache ich daraus den passgenauen PDF-Layout-Plan (separat).
+Sag „Go", dann setze ich Plan 6 um.

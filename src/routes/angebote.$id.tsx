@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { PdfPreviewCard } from "@/components/pdf/PdfPreviewCard";
+import { PrintButton } from "@/components/pdf/PrintButton";
 import { angebotFlow } from "@/lib/flow/flows";
 import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
@@ -136,6 +137,7 @@ function Page() {
                 </a>
               </Button>
             )}
+            <PrintButton url={pdf.url} variant="outline" size="default" />
             <Button asChild variant="outline" className="rounded-lg">
               <Link to="/angebote/$id/bearbeiten" params={{ id: a.id }}>
                 <Pencil className="mr-1.5 h-4 w-4" /> PDF bearbeiten

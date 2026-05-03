@@ -16,6 +16,7 @@ import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
 import { MahnSektion } from "@/components/mahnung/MahnSektion";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { PdfPreviewCard } from "@/components/pdf/PdfPreviewCard";
+import { PrintButton } from "@/components/pdf/PrintButton";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { DauerauftragVerwaltungCard } from "@/components/dauerauftrag/DauerauftragVerwaltungCard";
@@ -107,6 +108,7 @@ function Page() {
                 </a>
               </Button>
             )}
+            <PrintButton url={pdf.url} variant="outline" size="default" />
             <Button asChild variant="outline" className="rounded-lg">
               <Link to="/rechnungen/$id/bearbeiten" params={{ id: r.id }}>
                 <Pencil className="mr-1.5 h-4 w-4" /> PDF bearbeiten
