@@ -82,6 +82,9 @@ export function LivePdfPreview(props: Props) {
     return () => clearTimeout(t);
   }, [rendering]);
 
+  // Pending-URL: erst tauschen, wenn neue PDF erfolgreich geladen ist (atomarer Swap → kein Flackern).
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+
   // Debounced PDF-Build — alte URL bleibt bis neue geladen ist (kein Flicker).
   useEffect(() => {
     let cancelled = false;
@@ -95,11 +98,11 @@ export function LivePdfPreview(props: Props) {
             : await generateRechnungPdf(draft as Rechnung, kunde, firma, ansprechpartner);
         if (cancelled) return;
         const newUrl = URL.createObjectURL(result.blob);
-        setPdfUrl((prev) => {
+        setHotspots(result.hotspots);
+        setPendingUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return newUrl;
         });
-        setHotspots(result.hotspots);
         setViewerError(null);
       } catch (e) {
         console.error(e);
@@ -119,6 +122,7 @@ export function LivePdfPreview(props: Props) {
   useEffect(() => {
     return () => {
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      if (pendingUrl) URL.revokeObjectURL(pendingUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
