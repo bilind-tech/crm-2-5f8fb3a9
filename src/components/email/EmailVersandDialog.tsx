@@ -368,6 +368,30 @@ export function EmailVersandDialog({
           </div>
         </div>
 
+        {/* SMTP-Warn-Banner — Versand ist ohne Konfiguration unmöglich */}
+        {!smtpKonfiguriert && (
+          <div className="mx-6 mt-4 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                E-Mail-Versand nicht möglich — SMTP nicht konfiguriert
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Hinterlege zuerst Server, Benutzer und Passwort, sonst kann keine
+                Mail an Kunden gesendet werden.
+              </p>
+              <Link
+                to="/einstellungen"
+                hash="email"
+                onClick={() => onOpenChange(false)}
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <Settings className="h-3 w-3" /> Zu E-Mail-Einstellungen
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Send-Overlay (Animation während Versand & nach Erfolg) */}
         {phase !== "idle" && <SendOverlay phase={phase} empfaenger={anChips} />}
 
