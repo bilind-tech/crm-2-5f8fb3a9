@@ -1327,34 +1327,39 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     void _strip;
     result = safe;
   } else if (m === "POST" && match(path, "/einstellungen/smtp/test")) {
-    // Schneller TCP-/Konfig-Check (kein echter Versand).
-    if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
-      result = { erfolg: false, nachricht: "Bitte zuerst alle Felder inkl. Passwort speichern." };
-    } else {
-      result = { erfolg: true, nachricht: "Konfiguration plausibel (Mock)." };
-    }
+    // Demo-Modus: kein echter SMTP-Test im Browser möglich.
+    result = {
+      erfolg: false,
+      demo: true,
+      nachricht:
+        "Demo-Modus — SMTP wird erst auf dem Pi-Backend tatsächlich geprüft. Im Browser kann keine echte Verbindung aufgebaut werden.",
+    };
   } else if (m === "POST" && match(path, "/email/verify")) {
-    // Vollständige SMTP-Verbindungsprüfung (verify) — Mock simuliert Latenz + Fehlercodes.
-    await new Promise((r) => setTimeout(r, 600));
-    if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
-      result = { ok: false, errorCode: "EAUTH", error: "Zugangsdaten unvollständig — bitte Server, Benutzer und Passwort speichern." };
-    } else {
-      result = { ok: true, latencyMs: 240 + Math.floor(Math.random() * 180) };
-    }
+    // Demo-Modus: ehrliche Antwort statt Fake-Erfolg.
+    await new Promise((r) => setTimeout(r, 400));
+    result = {
+      ok: false,
+      demo: true,
+      errorCode: "EDEMO",
+      error:
+        "Demo-Modus — eine echte SMTP-Verbindung ist erst nach Pi-Deployment möglich. Eingaben werden lokal gespeichert.",
+    };
   } else if (m === "POST" && match(path, "/email/test")) {
-    // Mock: simuliert eine echte Test-Mail. Erfordert vollständige SMTP-Konfig.
-    await new Promise((r) => setTimeout(r, 500));
+    // Demo-Modus: KEINE Fake-Erfolg-Mail mehr — sonst denkt der User, es ginge raus.
+    await new Promise((r) => setTimeout(r, 400));
     const an = (body as { an?: string } | undefined)?.an?.trim();
     if (!an) {
       result = { ok: false, errorCode: "EINPUT", error: "Empfängeradresse fehlt." };
-    } else if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
-      result = { ok: false, errorCode: "ECONFIG", error: "SMTP nicht konfiguriert — bitte Server, Benutzer und Passwort speichern." };
-    } else if (!d.smtp.absenderEmail) {
-      result = { ok: false, errorCode: "ECONFIG", error: "Absender-E-Mail fehlt." };
     } else {
-      logAktivitaet("einstellung_geaendert", `Test-Mail an ${an} (Mock — kein realer Versand)`);
-      result = { ok: true, messageId: `mock-${Date.now()}@local` };
+      result = {
+        ok: false,
+        demo: true,
+        errorCode: "EDEMO",
+        error:
+          "Demo-Modus — Test-Mails werden im Browser NICHT real versendet. Aktiv erst nach Pi-Deployment.",
+      };
     }
+
   } else if (m === "GET" && match(path, "/einstellungen/nummernkreise")) {
     result = d.nummernkreise;
   } else if (m === "PATCH" && match(path, "/einstellungen/nummernkreise")) {
@@ -1581,11 +1586,10 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
       if (dup) { result = dup; persist(); }
     }
     if (!result) {
-    // Pre-Check: SMTP MUSS vollständig konfiguriert sein, sonst kann keine Mail raus.
-    // Niemals einen Fake-Erfolg zurückliefern, wenn die Voraussetzungen fehlen.
-    const smtpFehlt =
-      !d.smtp.server?.trim() || !d.smtp.benutzer?.trim() || !d.smtp.passwortGesetzt;
-    if (smtpFehlt) {
+      // Demo-Modus: NIEMALS einen Fake-Versand simulieren. Echtes Versenden
+      // passiert ausschließlich auf dem Pi-Backend. Wir liefern eine ehrliche
+      // Fehlermeldung mit demo-Flag, damit die UI einen neutralen Hinweis zeigt.
+      await new Promise((r) => setTimeout(r, 400));
       const eintrag: EmailVersand = {
         id: uuid(),
         belegTyp: v.belegTyp ?? "allgemein",
@@ -1602,101 +1606,12 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
         status: "failed",
         versendetAm: now(),
         fehlerGrund:
-          "SMTP ist nicht konfiguriert. Bitte unter Einstellungen → E-Mail Server, Benutzer und Passwort hinterlegen.",
+          "Demo-Modus — die Mail wurde NICHT versendet. Realer Versand ist erst nach Pi-Deployment möglich.",
         messageId: undefined,
       };
       // Bewusst KEIN Eintrag in d.emailVersand, KEIN Statuswechsel am Beleg, KEIN Aktivitätslog.
-      // Sonst würde der Versuch in der Versand-Historie als "fehlgeschlagen" auftauchen,
-      // obwohl der User noch gar keine Konfiguration vorgenommen hat.
-      result = eintrag;
-    } else {
-    // Mock: 90% Erfolg, 10% zufälliger Fehler — Spinner bleibt sichtbar
-    await new Promise((r) => setTimeout(r, 1200));
-    const erfolgreich = Math.random() > 0.1;
-    const moeglicheFehler = [
-      "SMTP-Verbindung fehlgeschlagen — Server nicht erreichbar.",
-      "Empfänger-Adresse wurde vom Server abgelehnt.",
-      "Authentifizierung fehlgeschlagen — Passwort prüfen.",
-    ];
-    const eintrag: EmailVersand = {
-      id: uuid(),
-      belegTyp: v.belegTyp ?? "allgemein",
-      belegId: v.belegId,
-      kundeId: v.kundeId,
-      empfaenger: v.empfaenger ?? [],
-      cc: v.cc ?? [],
-      bcc: v.bcc ?? [],
-      betreff: v.betreff ?? "",
-      koerperHtml: v.koerperHtml ?? "",
-      vorlageId: v.vorlageId,
-      signaturId: v.signaturId,
-      anhaenge: v.anhaenge ?? [],
-      status: erfolgreich ? "sent" : "failed",
-      versendetAm: now(),
-      fehlerGrund: erfolgreich
-        ? undefined
-        : moeglicheFehler[Math.floor(Math.random() * moeglicheFehler.length)],
-      messageId: erfolgreich ? `<${uuid()}@mock.local>` : undefined,
-    };
-    d.emailVersand.unshift(eintrag);
-
-    // Bei Erfolg: Beleg-Status hochziehen + ggf. MahnVorgang anlegen
-    if (erfolgreich && eintrag.belegId) {
-      if (eintrag.belegTyp === "angebot") {
-        const a = d.angebote.find((x) => x.id === eintrag.belegId);
-        if (a && a.status === "entwurf") {
-          a.status = "versendet";
-          a.versendetAm = now();
-        }
-      } else if (eintrag.belegTyp === "rechnung") {
-        const r = d.rechnungen.find((x) => x.id === eintrag.belegId);
-        if (r) {
-          if (r.status === "entwurf") {
-            r.status = "versendet";
-            r.versendetAm = now();
-          }
-          // Mahnung? → MahnVorgang anlegen
-          if (v.mahnStufe) {
-            const stufeConfig = d.mahnung.stufen.find((s) => s.stufe === v.mahnStufe);
-            if (stufeConfig) {
-              const vorgang: MahnVorgang = {
-                id: uuid(),
-                rechnungId: r.id,
-                stufe: v.mahnStufe,
-                versendetAm: now(),
-                neueFrist: berechneNeueFrist(stufeConfig),
-                gebuehr: stufeConfig.gebuehr,
-                emailVersandId: eintrag.id,
-              };
-              if (!r.mahnungen) r.mahnungen = [];
-              r.mahnungen.push(vorgang);
-              // Pause aufheben (sie wurde durch aktive Mahnung übersteuert)
-              r.mahnPausiertBis = undefined;
-            }
-          }
-        }
-      }
+      throw new ApiError(eintrag.fehlerGrund ?? "Demo-Modus", 503, { ...eintrag, demo: true });
     }
-
-    if (erfolgreich) {
-      const istMahnung = !!v.mahnStufe;
-      logAktivitaet(
-        eintrag.belegTyp === "rechnung" ? "rechnung_versendet" : "angebot_versendet",
-        istMahnung
-          ? `Mahnung Stufe ${v.mahnStufe} an ${eintrag.empfaenger.join(", ")} versendet · ${eintrag.betreff}`
-          : `E-Mail an ${eintrag.empfaenger.join(", ")} versendet · ${eintrag.betreff}`,
-        eintrag.belegId ? { typ: eintrag.belegTyp, id: eintrag.belegId } : undefined,
-      );
-    }
-
-    persist();
-    if (!erfolgreich) {
-      throw new ApiError(eintrag.fehlerGrund ?? "Versand fehlgeschlagen", 502, eintrag);
-    }
-    (eintrag as EmailVersand & { idempotenzKey?: string }).idempotenzKey = v.idempotenzKey;
-    result = eintrag;
-    } // end else (smtp ok)
-    } // end if (!result)
   }
 
   // ---- Mahnwesen ----

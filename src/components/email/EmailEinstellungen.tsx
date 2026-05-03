@@ -5,7 +5,8 @@
 import { useEffect, useState } from "react";
 import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Star, Check, AlertCircle, Loader2, Eye, Code2, Zap, Send, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Plus, Trash2, Pencil, Star, Check, AlertCircle, Loader2, Eye, Code2, Zap, Send, ShieldCheck, ShieldAlert, Info } from "lucide-react";
+import { isBackendUrlExplicit } from "@/lib/api/backendUrl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -513,6 +514,7 @@ export function SmtpTab() {
   // Schnelltest entfernt — Verbindung-prüfen (verify) ist die robuste Variante.
   const verify = useVerifySmtp();
   const sendTest = useSendTestMail();
+  const demoModus = !isBackendUrlExplicit();
   const [form, setForm] = useState({
     server: smtp?.server ?? "",
     port: smtp?.port ?? 587,
@@ -523,7 +525,7 @@ export function SmtpTab() {
     passwort: "",
   });
   const [status, setStatus] = useState<{
-    state: "unknown" | "ok" | "error";
+    state: "unknown" | "ok" | "error" | "demo";
     nachricht?: string;
     code?: string;
     latencyMs?: number;
@@ -580,7 +582,10 @@ export function SmtpTab() {
     setStatus({ state: "unknown" });
     verify.mutate(undefined, {
       onSuccess: (res) => {
-        if (res.ok) {
+        if (res.demo) {
+          setStatus({ state: "demo", nachricht: res.error, code: res.errorCode });
+          toast.info("Demo-Modus", { description: res.error });
+        } else if (res.ok) {
           setStatus({ state: "ok", latencyMs: res.latencyMs });
           toast.success(`Verbindung erfolgreich${res.latencyMs ? ` (${res.latencyMs} ms)` : ""}`);
         } else {
@@ -604,7 +609,8 @@ export function SmtpTab() {
     }
     sendTest.mutate(adr, {
       onSuccess: (res) => {
-        if (res.ok) toast.success(`Test-Mail an ${adr} versendet`);
+        if (res.demo) toast.info("Demo-Modus — nicht versendet", { description: res.error });
+        else if (res.ok) toast.success(`Test-Mail an ${adr} versendet`);
         else toast.error(`Test-Mail fehlgeschlagen: ${res.error ?? "Unbekannt"}`);
       },
       onError: (e: unknown) =>
@@ -614,6 +620,21 @@ export function SmtpTab() {
 
   return (
     <div className="space-y-4">
+      {/* Demo-Modus-Hinweis (nur im Lovable-Preview ohne Pi-Backend-URL) */}
+      {demoModus && (
+        <div className="flex items-start gap-2 rounded-xl border border-primary/40 bg-primary/5 p-4 text-sm">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <div className="space-y-0.5">
+            <p className="font-medium text-foreground">Demo-Modus — kein echter SMTP-Test, kein realer Versand</p>
+            <p className="text-muted-foreground">
+              Du arbeitest gerade ohne Pi-Backend. Eingaben werden lokal im Browser gespeichert,
+              aber „Verbindung prüfen" und „Test-Mail" können hier nicht real ausgeführt werden.
+              Sobald der Pi läuft und die Backend-URL eingetragen ist, funktioniert alles sofort.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Manual-Only Hinweis */}
       <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -633,11 +654,15 @@ export function SmtpTab() {
             "flex items-start gap-2 rounded-xl border p-4 text-sm",
             status.state === "ok"
               ? "border-success/40 bg-success/5"
-              : "border-destructive/40 bg-destructive/5",
+              : status.state === "demo"
+                ? "border-primary/40 bg-primary/5"
+                : "border-destructive/40 bg-destructive/5",
           )}
         >
           {status.state === "ok" ? (
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+          ) : status.state === "demo" ? (
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           ) : (
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           )}
@@ -645,7 +670,9 @@ export function SmtpTab() {
             <p className="font-medium text-foreground">
               {status.state === "ok"
                 ? `Verbindung OK${status.latencyMs ? ` · ${status.latencyMs} ms` : ""}`
-                : "Verbindung fehlgeschlagen"}
+                : status.state === "demo"
+                  ? "Demo-Modus — keine echte Prüfung"
+                  : "Verbindung fehlgeschlagen"}
             </p>
             {status.nachricht && (
               <p className="text-muted-foreground">
