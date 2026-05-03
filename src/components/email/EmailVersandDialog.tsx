@@ -307,9 +307,18 @@ export function EmailVersandDialog({
         },
         onError: (e: unknown) => {
           setPhase("idle");
+          const err = e as { message?: string; status?: number; body?: { error?: string; message?: string; demo?: boolean } };
+          // Demo-Modus: ehrlicher Hinweis, kein roter „Fehler"-Toast.
+          if (err?.body?.demo) {
+            toast.info("Demo-Modus — nicht versendet", {
+              description:
+                err?.body?.message ??
+                "Im Browser wird nichts real verschickt. Aktiv erst nach Pi-Deployment.",
+            });
+            return;
+          }
           // Backend (Pi) liefert HTTP 412 + { error: "smtp-not-configured", message }
           // wenn SMTP nicht konfiguriert ist. Zeige die exakte Server-Message.
-          const err = e as { message?: string; status?: number; body?: { error?: string; message?: string } };
           const isSmtpFehlt = err?.body?.error === "smtp-not-configured" || err?.status === 412;
           if (isSmtpFehlt) {
             toast.error("SMTP nicht konfiguriert", {
