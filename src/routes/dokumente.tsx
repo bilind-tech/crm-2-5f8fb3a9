@@ -32,6 +32,7 @@ export const Route = createFileRoute("/dokumente")({
 });
 
 function Page() {
+  const { focus } = Route.useSearch();
   const { data: alle = [] } = useDokumente();
   const { data: kunden = [] } = useKunden();
   const [filter, setFilter] = useState("alle");
