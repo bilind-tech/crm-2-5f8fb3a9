@@ -26,6 +26,10 @@ import { dokumenteRoutes } from "./routes/dokumente.js";
 import { startFristenScheduler } from "./dokumente/fristen-cron.js";
 import { mahnungRoutes } from "./routes/mahnung.js";
 import { startMahnScheduler } from "./mahnung/cron.js";
+import { driveRoutes } from "./routes/drive.js";
+import { startDriveWorker } from "./drive/upload-worker.js";
+import { wireDriveAutoEnqueue } from "./drive/auto-enqueue.js";
+import { wireDokumenteDriveAutoEnqueue } from "./dokumente/drive-wireup.js";
 import { purgeExpiredSessions as purgeExpiredUploadSessions } from "./dokumente/repo.js";
 import { reapStaleLock } from "./system/runner.js";
 import { purgeExpiredPakete } from "./system/repo.js";
@@ -143,6 +147,7 @@ async function main(): Promise<void> {
   await app.register(steuernRoutes);
   await app.register(dokumenteRoutes);
   await app.register(mahnungRoutes);
+  await app.register(driveRoutes);
 
   // Frontend-Statics — nur wenn FRONTEND_DIR existiert (Prod / Pi-Bundle).
   // Im Dev läuft das Frontend separat über Vite, daher hier kein Fehler.
@@ -196,6 +201,9 @@ async function main(): Promise<void> {
   wirePdfCacheInvalidation();
   // Aktivitäts/Benachrichtigungs-Übersetzung der Bus-Events
   wireAktivitaet();
+  // Drive-Auto-Enqueue (Belege + Dokumente)
+  wireDriveAutoEnqueue();
+  wireDokumenteDriveAutoEnqueue();
 
   // Touch-Throttle aus DB warmladen → kein Update-Sturm nach Restart
   const warmed = warmTouchCacheFromDb();
@@ -208,6 +216,8 @@ async function main(): Promise<void> {
   startScheduler();
   // Belege-Scheduler (überfällig-Markierung) starten
   startBelegeScheduler();
+  // Drive-Upload Worker (Cron-basiert, jede Minute)
+  startDriveWorker();
   // Dokumente-Frist-Cron (täglich nach 07:00 Pi-Zeit)
   startFristenScheduler();
   // Mahn-Automatik (Cron) STILLGELEGT — niemals automatischer Mail-Versand.
