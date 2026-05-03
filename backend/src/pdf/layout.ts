@@ -369,13 +369,22 @@ export function rechnungDocDef(args: {
   const { rechnung, kunde, firma, ansprechpartner, logoDataUrl } = args;
   const opts = (rechnung.optionen ?? {}) as { eigenesIntro?: string; eigenesOutro?: string };
   const intro = defaultIntroRechnung(rechnung, opts.eigenesIntro || rechnung.introText);
-  const outro = defaultOutroRechnung(rechnung, opts.eigenesOutro || rechnung.outroText);
+  const t = totals(rechnung.positionen, rechnung.rabattGesamt, rechnung.steuersatz);
+  let tage = 14;
+  if (rechnung.rechnungsdatum && rechnung.faelligkeitsdatum) {
+    const d1 = new Date(rechnung.rechnungsdatum.includes("T") ? rechnung.rechnungsdatum : rechnung.rechnungsdatum + "T00:00:00Z").getTime();
+    const d2 = new Date(rechnung.faelligkeitsdatum.includes("T") ? rechnung.faelligkeitsdatum : rechnung.faelligkeitsdatum + "T00:00:00Z").getTime();
+    const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+    if (diff > 0) tage = diff;
+  }
+  const zahlungsSatz = `Wir möchten Sie bitten, den Rechnungsbetrag in Höhe von ${eur(t.brutto)} innerhalb von ${tage} Tagen nach Rechnungszustellung auf unser unten genanntes Bankkonto zu überweisen.`;
+  const customOutro = opts.eigenesOutro || rechnung.outroText;
+  const outro = customOutro ? customOutro : zahlungsSatz;
   const meta: { label: string; wert: string }[] = [
-    { label: "Rechnung-Nr.", wert: rechnung.nummer },
-    { label: "Rechnungsdatum", wert: dt(rechnung.rechnungsdatum) },
-    { label: "Fällig am", wert: dt(rechnung.faelligkeitsdatum) },
+    { label: "Rechnung-Nr.:", wert: rechnung.nummer },
+    { label: "Rechnungsdatum:", wert: dt(rechnung.rechnungsdatum) },
   ];
-  const metaNote = `Bitte überweisen Sie den Rechnungsbetrag bis zum ${dt(rechnung.faelligkeitsdatum)} unter Angabe der Rechnungsnummer ${rechnung.nummer} auf unser unten angegebenes Konto.`;
+  const metaNote = "Bei Zahlung bitte\ndie Rechnungs-Nr. angeben";
   return buildDoc({
     firma, kunde, ansprechpartner, logoDataUrl,
     titel: "Rechnung",
