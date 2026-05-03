@@ -65,7 +65,10 @@ export async function buildSteuerExport(input: ExportInput): Promise<Blob> {
       let ust19 = 0;
       let ust7 = 0;
       for (const p of r.positionen) {
-        const netto = p.menge * p.einzelpreis * (1 - (p.rabatt ?? 0) / 100);
+        const netto =
+          p.modus === "pauschal"
+            ? p.pauschalpreisNetto ?? 0
+            : p.menge * p.einzelpreisNetto * (1 - (p.rabatt ?? 0) / 100);
         const stUst = netto * (p.steuersatz / 100);
         if (Math.abs(p.steuersatz - 19) < 0.5) ust19 += stUst;
         else if (Math.abs(p.steuersatz - 7) < 0.5) ust7 += stUst;
