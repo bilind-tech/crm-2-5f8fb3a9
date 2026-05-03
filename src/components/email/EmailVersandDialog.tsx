@@ -370,8 +370,25 @@ export function EmailVersandDialog({
           </div>
         </div>
 
+        {/* Demo-Modus-Banner — ehrlicher Hinweis dass kein Versand stattfindet */}
+        {demoModus && (
+          <div className="mx-6 mt-4 flex items-start gap-3 rounded-xl border border-primary/40 bg-primary/5 p-3.5">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                Demo-Modus — kein realer Versand
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Du arbeitest gerade ohne Pi-Backend. Der Versand wird simuliert,
+                aber es geht keine echte Mail raus. Sobald der Pi läuft und die
+                Backend-URL hinterlegt ist, funktioniert der Versand sofort.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* SMTP-Warn-Banner — Versand ist ohne Konfiguration unmöglich */}
-        {!smtpKonfiguriert && (
+        {!smtpKonfiguriert && !demoModus && (
           <div className="mx-6 mt-4 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <div className="min-w-0 flex-1 space-y-1">
