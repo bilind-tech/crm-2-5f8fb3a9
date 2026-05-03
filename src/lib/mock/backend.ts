@@ -28,6 +28,8 @@ import type {
   DauerauftragFrequenz,
   DauerauftragSonderposition,
   Dokument,
+  Protokoll,
+  ProtokollKind,
   UploadSession,
   EmailSignatur,
   EmailVersand,
@@ -84,6 +86,7 @@ interface DB {
   angebote: Angebot[];
   rechnungen: Rechnung[];
   dokumente: Dokument[];
+  protokolle?: Protokoll[];
   notizen: Notiz[];
   aktivitaeten: Aktivitaet[];
   benachrichtigungen: Benachrichtigung[];
@@ -268,6 +271,21 @@ function simuliereDriveSync(dok: Dokument) {
     };
     persist();
   }, 1500);
+}
+
+function nextProtokollNummerMock(kuerzel: "PR" | "SU"): string {
+  const t = new Date();
+  const mm = String(t.getMonth() + 1).padStart(2, "0");
+  const yy = String(t.getFullYear()).slice(-2);
+  const d2 = load();
+  d2.zaehler = d2.zaehler ?? { kunde: 0, objekt: 0, angebot: 0, rechnung: 0, dauerauftrag: 0 };
+  const key = `protokoll:${kuerzel}:${yy}${mm}`;
+  // Speichere Zähler in zaehlerProKunde-Map (umgewidmet als generische Map)
+  d2.zaehlerProKunde = d2.zaehlerProKunde ?? {};
+  d2.zaehlerProKunde[key] = d2.zaehlerProKunde[key] ?? { _: 0 };
+  d2.zaehlerProKunde[key]._ = (d2.zaehlerProKunde[key]._ ?? 0) + 1;
+  const n = d2.zaehlerProKunde[key]._;
+  return `${kuerzel}${mm}${yy}/${String(n).padStart(2, "0")}`;
 }
 
 function nextNumber(praefix: string, n: number): string {
@@ -1910,6 +1928,104 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     const lauf = startRollbackMock(d, version);
     persist();
     result = lauf;
+  }
+
+
+  // ─── Protokolle (Übergabe/Abnahme + Schlüsselübergabe) ───────────────
+  else if (m === "GET" && match(path.split("?")[0], "/protokolle")) {
+    if (!d.protokolle) d.protokolle = [];
+    const q = query(path);
+    const kind = q.get("kind");
+    const kundeId = q.get("kundeId");
+    let liste = [...d.protokolle];
+    if (kind) liste = liste.filter((p) => p.kind === kind);
+    if (kundeId) liste = liste.filter((p) => p.kundeId === kundeId);
+    liste.sort((a, b) => (a.erstelltAm < b.erstelltAm ? 1 : -1));
+    result = liste;
+  } else if (m === "POST" && match(path, "/protokolle")) {
+    if (!d.protokolle) d.protokolle = [];
+    const p = body as Partial<Protokoll> & { kind: ProtokollKind };
+    const nummer = nextProtokollNummerMock(p.kind === "schluessel" ? "SU" : "PR");
+    const heute = now().slice(0, 10);
+    const t = new Date();
+    const uhr = `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+    const base = {
+      id: uuid(),
+      nummer,
+      status: "entwurf" as const,
+      kundeId: p.kundeId,
+      objektId: p.objektId,
+      datum: p.datum ?? heute,
+      uhrzeit: p.uhrzeit ?? uhr,
+      vertreterAuftraggeber: p.vertreterAuftraggeber ?? "",
+      vertreterAuftragnehmer: p.vertreterAuftragnehmer ?? d.firmendaten.geschaeftsfuehrer ?? d.firmendaten.firmenname ?? "",
+      erstelltAm: now(),
+      aktualisiertAm: now(),
+    };
+    const neu: Protokoll = p.kind === "schluessel"
+      ? { ...base, kind: "schluessel", richtung: (p as Partial<Protokoll> & { richtung?: "ausgabe" | "ruecknahme" }).richtung ?? "ausgabe", schluessel: (p as Partial<Protokoll> & { schluessel?: never[] }).schluessel ?? [{ bezeichnung: "", anzahl: 1, schluesselNr: "", bemerkung: "" }], pfandEur: (p as Partial<Protokoll> & { pfandEur?: number }).pfandEur, bestaetigt: (p as Partial<Protokoll> & { bestaetigt?: boolean }).bestaetigt ?? true }
+      : { ...base, kind: "uebergabe", art: (p as Partial<Protokoll> & { art?: "uebergabe" | "abnahme" | "beides" }).art ?? "uebergabe", leistungsumfang: (p as Partial<Protokoll> & { leistungsumfang?: string }).leistungsumfang ?? "Endreinigung gemäß Auftrag.", bemerkungen: (p as Partial<Protokoll> & { bemerkungen?: string }).bemerkungen ?? "", ohneVorbehalt: (p as Partial<Protokoll> & { ohneVorbehalt?: boolean }).ohneVorbehalt ?? true };
+    d.protokolle.unshift(neu);
+    logAktivitaet("dokument_hochgeladen", `Protokoll ${nummer} angelegt`, { typ: "dokument", id: neu.id });
+    persist();
+    result = neu;
+  } else if (matchRoute(m, path, "GET", "/protokolle/:id")) {
+    if (!d.protokolle) d.protokolle = [];
+    const id = match(path, "/protokolle/:id")!.id;
+    const p = d.protokolle.find((x) => x.id === id);
+    if (!p) throw new ApiError("Protokoll nicht gefunden", 404);
+    result = p;
+  } else if (matchRoute(m, path, "PATCH", "/protokolle/:id")) {
+    if (!d.protokolle) d.protokolle = [];
+    const id = match(path, "/protokolle/:id")!.id;
+    const p = d.protokolle.find((x) => x.id === id);
+    if (!p) throw new ApiError("Protokoll nicht gefunden", 404);
+    Object.assign(p, body, { aktualisiertAm: now() });
+    persist();
+    result = p;
+  } else if (matchRoute(m, path, "DELETE", "/protokolle/:id")) {
+    if (!d.protokolle) d.protokolle = [];
+    const id = match(path, "/protokolle/:id")!.id;
+    d.protokolle = d.protokolle.filter((x) => x.id !== id);
+    persist();
+    return undefined as T;
+  } else if (matchRoute(m, path, "POST", "/protokolle/:id/abschliessen")) {
+    if (!d.protokolle) d.protokolle = [];
+    const id = match(path, "/protokolle/:id/abschliessen")!.id;
+    const p = d.protokolle.find((x) => x.id === id);
+    if (!p) throw new ApiError("Protokoll nicht gefunden", 404);
+    const { dokumentId, dateiname, mimeType, groesseBytes, url } = (body ?? {}) as { dokumentId?: string; dateiname: string; mimeType: string; groesseBytes: number; url: string };
+    // Vorhandenes verlinktes Dokument überschreiben oder neu anlegen
+    let dok = p.dokumentId ? d.dokumente.find((x) => x.id === p.dokumentId) : undefined;
+    const kunde = p.kundeId ? d.kunden.find((k) => k.id === p.kundeId) : undefined;
+    const kundeName = kunde ? (kunde.firmenname || [kunde.vorname, kunde.nachname].filter(Boolean).join(" ") || kunde.nummer) : "—";
+    const titel = `${p.kind === "schluessel" ? "Schlüsselübergabe" : "Übergabe-/Abnahmeprotokoll"} ${p.nummer} – ${kundeName} – ${p.datum}`;
+    if (dok) {
+      Object.assign(dok, { titel, dateiname, mimeType, groesseBytes, url, dokumentdatum: p.datum });
+    } else {
+      const neuDok: Dokument = {
+        id: dokumentId ?? uuid(),
+        titel,
+        typ: "protokoll",
+        kundeId: p.kundeId,
+        objektId: p.objektId,
+        dateiname,
+        mimeType,
+        groesseBytes,
+        url,
+        dokumentdatum: p.datum,
+        steuerrelevant: false,
+        hochgeladenAm: now(),
+        quelle: "upload",
+      };
+      d.dokumente.unshift(neuDok);
+      p.dokumentId = neuDok.id;
+      dok = neuDok;
+    }
+    p.status = "abgeschlossen";
+    p.aktualisiertAm = now();
+    persist();
+    result = p;
   }
 
   // ─── Steuern (Step 10) ───────────────────────────────────────────────

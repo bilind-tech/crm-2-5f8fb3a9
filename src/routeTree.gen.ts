@@ -13,6 +13,7 @@ import { Route as WerkzeugeRouteImport } from './routes/werkzeuge'
 import { Route as StundenzettelRouteImport } from './routes/stundenzettel'
 import { Route as SteuernRouteImport } from './routes/steuern'
 import { Route as RechnungenRouteImport } from './routes/rechnungen'
+import { Route as ProtokolleRouteImport } from './routes/protokolle'
 import { Route as ObjekteRouteImport } from './routes/objekte'
 import { Route as KundenRouteImport } from './routes/kunden'
 import { Route as EinstellungenRouteImport } from './routes/einstellungen'
@@ -25,6 +26,7 @@ import { Route as WerkzeugeUebergabeprotokollRouteImport } from './routes/werkze
 import { Route as WerkzeugeSchluesseluebergabeRouteImport } from './routes/werkzeuge.schluesseluebergabe'
 import { Route as RechnungenNeuRouteImport } from './routes/rechnungen.neu'
 import { Route as RechnungenIdRouteImport } from './routes/rechnungen.$id'
+import { Route as ProtokolleIdRouteImport } from './routes/protokolle.$id'
 import { Route as ObjekteNeuRouteImport } from './routes/objekte.neu'
 import { Route as ObjekteIdRouteImport } from './routes/objekte.$id'
 import { Route as KundenNeuRouteImport } from './routes/kunden.neu'
@@ -32,6 +34,7 @@ import { Route as KundenIdRouteImport } from './routes/kunden.$id'
 import { Route as AngeboteNeuRouteImport } from './routes/angebote.neu'
 import { Route as AngeboteIdRouteImport } from './routes/angebote.$id'
 import { Route as RechnungenIdBearbeitenRouteImport } from './routes/rechnungen.$id.bearbeiten'
+import { Route as ProtokolleIdBearbeitenRouteImport } from './routes/protokolle.$id.bearbeiten'
 import { Route as MUploadSessionRouteImport } from './routes/m.upload.$session'
 import { Route as AngeboteIdBearbeitenRouteImport } from './routes/angebote.$id.bearbeiten'
 
@@ -53,6 +56,11 @@ const SteuernRoute = SteuernRouteImport.update({
 const RechnungenRoute = RechnungenRouteImport.update({
   id: '/rechnungen',
   path: '/rechnungen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProtokolleRoute = ProtokolleRouteImport.update({
+  id: '/protokolle',
+  path: '/protokolle',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ObjekteRoute = ObjekteRouteImport.update({
@@ -117,6 +125,11 @@ const RechnungenIdRoute = RechnungenIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => RechnungenRoute,
 } as any)
+const ProtokolleIdRoute = ProtokolleIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ProtokolleRoute,
+} as any)
 const ObjekteNeuRoute = ObjekteNeuRouteImport.update({
   id: '/neu',
   path: '/neu',
@@ -152,6 +165,11 @@ const RechnungenIdBearbeitenRoute = RechnungenIdBearbeitenRouteImport.update({
   path: '/bearbeiten',
   getParentRoute: () => RechnungenIdRoute,
 } as any)
+const ProtokolleIdBearbeitenRoute = ProtokolleIdBearbeitenRouteImport.update({
+  id: '/bearbeiten',
+  path: '/bearbeiten',
+  getParentRoute: () => ProtokolleIdRoute,
+} as any)
 const MUploadSessionRoute = MUploadSessionRouteImport.update({
   id: '/m/upload/$session',
   path: '/m/upload/$session',
@@ -171,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
+  '/protokolle': typeof ProtokolleRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
@@ -181,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
   '/objekte/neu': typeof ObjekteNeuRoute
+  '/protokolle/$id': typeof ProtokolleIdRouteWithChildren
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
   '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
@@ -188,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/werkzeuge/': typeof WerkzeugeIndexRoute
   '/angebote/$id/bearbeiten': typeof AngeboteIdBearbeitenRoute
   '/m/upload/$session': typeof MUploadSessionRoute
+  '/protokolle/$id/bearbeiten': typeof ProtokolleIdBearbeitenRoute
   '/rechnungen/$id/bearbeiten': typeof RechnungenIdBearbeitenRoute
 }
 export interface FileRoutesByTo {
@@ -198,6 +219,7 @@ export interface FileRoutesByTo {
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
+  '/protokolle': typeof ProtokolleRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
@@ -207,6 +229,7 @@ export interface FileRoutesByTo {
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
   '/objekte/neu': typeof ObjekteNeuRoute
+  '/protokolle/$id': typeof ProtokolleIdRouteWithChildren
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
   '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
@@ -214,6 +237,7 @@ export interface FileRoutesByTo {
   '/werkzeuge': typeof WerkzeugeIndexRoute
   '/angebote/$id/bearbeiten': typeof AngeboteIdBearbeitenRoute
   '/m/upload/$session': typeof MUploadSessionRoute
+  '/protokolle/$id/bearbeiten': typeof ProtokolleIdBearbeitenRoute
   '/rechnungen/$id/bearbeiten': typeof RechnungenIdBearbeitenRoute
 }
 export interface FileRoutesById {
@@ -225,6 +249,7 @@ export interface FileRoutesById {
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
+  '/protokolle': typeof ProtokolleRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
@@ -235,6 +260,7 @@ export interface FileRoutesById {
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
   '/objekte/neu': typeof ObjekteNeuRoute
+  '/protokolle/$id': typeof ProtokolleIdRouteWithChildren
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
   '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
@@ -242,6 +268,7 @@ export interface FileRoutesById {
   '/werkzeuge/': typeof WerkzeugeIndexRoute
   '/angebote/$id/bearbeiten': typeof AngeboteIdBearbeitenRoute
   '/m/upload/$session': typeof MUploadSessionRoute
+  '/protokolle/$id/bearbeiten': typeof ProtokolleIdBearbeitenRoute
   '/rechnungen/$id/bearbeiten': typeof RechnungenIdBearbeitenRoute
 }
 export interface FileRouteTypes {
@@ -254,6 +281,7 @@ export interface FileRouteTypes {
     | '/einstellungen'
     | '/kunden'
     | '/objekte'
+    | '/protokolle'
     | '/rechnungen'
     | '/steuern'
     | '/stundenzettel'
@@ -264,6 +292,7 @@ export interface FileRouteTypes {
     | '/kunden/neu'
     | '/objekte/$id'
     | '/objekte/neu'
+    | '/protokolle/$id'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
     | '/werkzeuge/schluesseluebergabe'
@@ -271,6 +300,7 @@ export interface FileRouteTypes {
     | '/werkzeuge/'
     | '/angebote/$id/bearbeiten'
     | '/m/upload/$session'
+    | '/protokolle/$id/bearbeiten'
     | '/rechnungen/$id/bearbeiten'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -281,6 +311,7 @@ export interface FileRouteTypes {
     | '/einstellungen'
     | '/kunden'
     | '/objekte'
+    | '/protokolle'
     | '/rechnungen'
     | '/steuern'
     | '/stundenzettel'
@@ -290,6 +321,7 @@ export interface FileRouteTypes {
     | '/kunden/neu'
     | '/objekte/$id'
     | '/objekte/neu'
+    | '/protokolle/$id'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
     | '/werkzeuge/schluesseluebergabe'
@@ -297,6 +329,7 @@ export interface FileRouteTypes {
     | '/werkzeuge'
     | '/angebote/$id/bearbeiten'
     | '/m/upload/$session'
+    | '/protokolle/$id/bearbeiten'
     | '/rechnungen/$id/bearbeiten'
   id:
     | '__root__'
@@ -307,6 +340,7 @@ export interface FileRouteTypes {
     | '/einstellungen'
     | '/kunden'
     | '/objekte'
+    | '/protokolle'
     | '/rechnungen'
     | '/steuern'
     | '/stundenzettel'
@@ -317,6 +351,7 @@ export interface FileRouteTypes {
     | '/kunden/neu'
     | '/objekte/$id'
     | '/objekte/neu'
+    | '/protokolle/$id'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
     | '/werkzeuge/schluesseluebergabe'
@@ -324,6 +359,7 @@ export interface FileRouteTypes {
     | '/werkzeuge/'
     | '/angebote/$id/bearbeiten'
     | '/m/upload/$session'
+    | '/protokolle/$id/bearbeiten'
     | '/rechnungen/$id/bearbeiten'
   fileRoutesById: FileRoutesById
 }
@@ -335,6 +371,7 @@ export interface RootRouteChildren {
   EinstellungenRoute: typeof EinstellungenRoute
   KundenRoute: typeof KundenRouteWithChildren
   ObjekteRoute: typeof ObjekteRouteWithChildren
+  ProtokolleRoute: typeof ProtokolleRouteWithChildren
   RechnungenRoute: typeof RechnungenRouteWithChildren
   SteuernRoute: typeof SteuernRoute
   StundenzettelRoute: typeof StundenzettelRoute
@@ -370,6 +407,13 @@ declare module '@tanstack/react-router' {
       path: '/rechnungen'
       fullPath: '/rechnungen'
       preLoaderRoute: typeof RechnungenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/protokolle': {
+      id: '/protokolle'
+      path: '/protokolle'
+      fullPath: '/protokolle'
+      preLoaderRoute: typeof ProtokolleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/objekte': {
@@ -456,6 +500,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RechnungenIdRouteImport
       parentRoute: typeof RechnungenRoute
     }
+    '/protokolle/$id': {
+      id: '/protokolle/$id'
+      path: '/$id'
+      fullPath: '/protokolle/$id'
+      preLoaderRoute: typeof ProtokolleIdRouteImport
+      parentRoute: typeof ProtokolleRoute
+    }
     '/objekte/neu': {
       id: '/objekte/neu'
       path: '/neu'
@@ -504,6 +555,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/rechnungen/$id/bearbeiten'
       preLoaderRoute: typeof RechnungenIdBearbeitenRouteImport
       parentRoute: typeof RechnungenIdRoute
+    }
+    '/protokolle/$id/bearbeiten': {
+      id: '/protokolle/$id/bearbeiten'
+      path: '/bearbeiten'
+      fullPath: '/protokolle/$id/bearbeiten'
+      preLoaderRoute: typeof ProtokolleIdBearbeitenRouteImport
+      parentRoute: typeof ProtokolleIdRoute
     }
     '/m/upload/$session': {
       id: '/m/upload/$session'
@@ -574,6 +632,30 @@ const ObjekteRouteChildren: ObjekteRouteChildren = {
 const ObjekteRouteWithChildren =
   ObjekteRoute._addFileChildren(ObjekteRouteChildren)
 
+interface ProtokolleIdRouteChildren {
+  ProtokolleIdBearbeitenRoute: typeof ProtokolleIdBearbeitenRoute
+}
+
+const ProtokolleIdRouteChildren: ProtokolleIdRouteChildren = {
+  ProtokolleIdBearbeitenRoute: ProtokolleIdBearbeitenRoute,
+}
+
+const ProtokolleIdRouteWithChildren = ProtokolleIdRoute._addFileChildren(
+  ProtokolleIdRouteChildren,
+)
+
+interface ProtokolleRouteChildren {
+  ProtokolleIdRoute: typeof ProtokolleIdRouteWithChildren
+}
+
+const ProtokolleRouteChildren: ProtokolleRouteChildren = {
+  ProtokolleIdRoute: ProtokolleIdRouteWithChildren,
+}
+
+const ProtokolleRouteWithChildren = ProtokolleRoute._addFileChildren(
+  ProtokolleRouteChildren,
+)
+
 interface RechnungenIdRouteChildren {
   RechnungenIdBearbeitenRoute: typeof RechnungenIdBearbeitenRoute
 }
@@ -624,6 +706,7 @@ const rootRouteChildren: RootRouteChildren = {
   EinstellungenRoute: EinstellungenRoute,
   KundenRoute: KundenRouteWithChildren,
   ObjekteRoute: ObjekteRouteWithChildren,
+  ProtokolleRoute: ProtokolleRouteWithChildren,
   RechnungenRoute: RechnungenRouteWithChildren,
   SteuernRoute: SteuernRoute,
   StundenzettelRoute: StundenzettelRoute,
