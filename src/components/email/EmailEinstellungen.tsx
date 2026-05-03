@@ -38,6 +38,8 @@ import {
   useSmtp,
   useUpdateSmtp,
   useTestSmtp,
+  useVerifySmtp,
+  useSendTestMail,
 } from "@/hooks/useApi";
 import type { EmailVorlage, EmailSignatur, EmailKontext } from "@/lib/api/types";
 import { ALLE_PLATZHALTER } from "@/lib/email/placeholders";
