@@ -1,5 +1,6 @@
 // Detail-Dialog für einen Steuerposten: Berechnungsgrundlage transparent zeigen.
 
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   Dialog,
@@ -7,12 +8,22 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
-import { Receipt, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Receipt, FileText, CheckCircle2, Pencil, Trash2 } from "lucide-react";
 import { useRechnungen, useDokumente, useKunden } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { STEUER_ART_LABEL } from "@/lib/steuern/berechnung";
+import {
+  useBezahltMarkierungen,
+  useManuellePosten,
+  type BezahltMarkierung,
+} from "@/lib/steuern/store";
 import type { SteuerPosten } from "@/lib/steuern/types";
+import { SteuerAlsBezahltDialog } from "./SteuerAlsBezahltDialog";
+import { ManuellerPostenDialog } from "./ManuellerPostenDialog";
+import { toast } from "sonner";
 
 interface Props {
   posten: SteuerPosten | null;
