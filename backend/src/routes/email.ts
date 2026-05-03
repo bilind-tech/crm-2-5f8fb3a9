@@ -8,11 +8,11 @@ import {
   type EmailKontext,
 } from "../email/templates.js";
 import {
-  enqueueVersand, getById, listVersand, retry, abbrechen,
+  enqueueVersand, getById, listVersand, abbrechen,
   type EmailVersandStatus,
 } from "../email/versand-repo.js";
-import { tickEmailQueue } from "../email/worker.js";
-import { getTransport, getFromAddress, loadSmtpRuntime } from "../email/transport.js";
+import { sendNow, translateSmtpError } from "../email/worker.js";
+import { getTransport, getFromAddress, loadSmtpRuntime, verifyTransport } from "../email/transport.js";
 
 const KONTEXTE = ["rechnung", "angebot", "mahnung", "allgemein"] as const;
 
@@ -108,27 +108,82 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     scoped.post("/email/versand", async (req, reply) => {
       const p = VersandSchema.safeParse(req.body);
       if (!p.success) { reply.status(422); return { error: "validation", issues: p.error.issues }; }
-      const { row, created } = enqueueVersand(p.data);
-      // Sofort versuchen zu senden, damit der User schnelles Feedback bekommt
-      if (created) void tickEmailQueue(1).catch(() => undefined);
-      reply.status(created ? 201 : 200);
-      return row;
+
+      // Anti-Flood: globaler Token-Bucket + per-Idempotenz-Key Cooldown.
+      if (!sendBudget.tryTake()) {
+        reply.status(429);
+        return { error: "rate-limit", hint: "Maximal 30 E-Mails pro Minute." };
+      }
+      if (!keyCooldown.tryTake(p.data.idempotenzKey)) {
+        reply.status(429);
+        return { error: "rate-limit", hint: "Bitte kurz warten — gleicher Versand wurde gerade ausgelöst." };
+      }
+
+      // Idempotenz-Eintrag (oder bestehende Zeile) holen.
+      const { row, created } = enqueueVersand({ ...p.data, quelle: "manuell" });
+
+      // Bereits gesendet? Dann existierende Zeile zurückgeben (Doppelklick-Schutz).
+      if (!created && (row.status === "gesendet" || row.status === "sending")) {
+        reply.status(200);
+        return row;
+      }
+
+      // SYNCHRON senden — der User wartet auf das Ergebnis. Kein Hintergrund-Worker.
+      const result = await sendNow(row);
+      const after = getById(row.id);
+      reply.status(result.ok ? 201 : 502);
+      return {
+        ...(after ?? row),
+        sendOk: result.ok,
+        sendError: result.ok ? undefined : result.error,
+        sendErrorCode: result.ok ? undefined : result.errorCode,
+      };
     });
     scoped.post<{ Params: { id: string } }>("/email/versand/:id/retry", async (req, reply) => {
-      if (!retry(req.params.id)) { reply.status(404); return { error: "not-found" }; }
-      void tickEmailQueue(1).catch(() => undefined);
-      return getById(req.params.id);
+      const existing = getById(req.params.id);
+      if (!existing) { reply.status(404); return { error: "not-found" }; }
+      if (existing.status === "gesendet") return existing;
+      if (!sendBudget.tryTake()) {
+        reply.status(429);
+        return { error: "rate-limit" };
+      }
+      const result = await sendNow(existing);
+      const after = getById(existing.id);
+      reply.status(result.ok ? 200 : 502);
+      return {
+        ...(after ?? existing),
+        sendOk: result.ok,
+        sendError: result.ok ? undefined : result.error,
+        sendErrorCode: result.ok ? undefined : result.errorCode,
+      };
     });
     scoped.post<{ Params: { id: string } }>("/email/versand/:id/abbrechen", async (req, reply) => {
       if (!abbrechen(req.params.id)) { reply.status(404); return { error: "not-found" }; }
       return getById(req.params.id);
     });
 
-    // ---- Echter Test-Versand ----
+    // ---- Verbindungstest (kein Versand!) ----
+    scoped.post("/email/verify", async () => {
+      if (!loadSmtpRuntime()) return { ok: false, error: "SMTP nicht konfiguriert", errorCode: "NOT_CONFIGURED" };
+      try {
+        const r = await verifyTransport();
+        return { ok: true, latencyMs: r.latencyMs };
+      } catch (e) {
+        const err = e as { code?: string; message?: string };
+        return {
+          ok: false,
+          errorCode: err.code ?? "UNKNOWN",
+          error: translateSmtpError(err.code ?? "UNKNOWN", err.message ?? String(e)),
+        };
+      }
+    });
+
+    // ---- Echter Test-Versand (genau eine Mail an die eingegebene Adresse) ----
     scoped.post("/email/test", async (req, reply) => {
       const p = z.object({ an: z.string().trim().email() }).safeParse(req.body);
       if (!p.success) { reply.status(422); return { error: "validation" }; }
       if (!loadSmtpRuntime()) { reply.status(400); return { error: "smtp-nicht-konfiguriert" }; }
+      if (!sendBudget.tryTake()) { reply.status(429); return { error: "rate-limit" }; }
       try {
         const t = getTransport();
         const from = getFromAddress();
@@ -140,9 +195,50 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
         });
         return { ok: true, messageId: info.messageId };
       } catch (e) {
-        reply.status(500);
-        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+        const err = e as { code?: string; message?: string };
+        reply.status(502);
+        return {
+          ok: false,
+          errorCode: err.code ?? "UNKNOWN",
+          error: translateSmtpError(err.code ?? "UNKNOWN", err.message ?? String(e)),
+        };
       }
     });
   });
 }
+
+// --- Anti-Flood: einfache In-Memory-Buckets, prozesslokal. ---
+class TokenBucket {
+  private tokens: number;
+  private last: number;
+  constructor(private capacity: number, private refillPerMs: number) {
+    this.tokens = capacity;
+    this.last = Date.now();
+  }
+  tryTake(): boolean {
+    const now = Date.now();
+    this.tokens = Math.min(this.capacity, this.tokens + (now - this.last) * this.refillPerMs);
+    this.last = now;
+    if (this.tokens < 1) return false;
+    this.tokens -= 1;
+    return true;
+  }
+}
+class KeyCooldown {
+  private map = new Map<string, number>();
+  constructor(private cooldownMs: number) {}
+  tryTake(key: string): boolean {
+    const now = Date.now();
+    const last = this.map.get(key) ?? 0;
+    if (now - last < this.cooldownMs) return false;
+    this.map.set(key, now);
+    if (this.map.size > 1000) {
+      // Aufräumen
+      for (const [k, t] of this.map) if (now - t > 60_000) this.map.delete(k);
+    }
+    return true;
+  }
+}
+// 30 Mails / Minute global, 5 s Cooldown pro idempotenzKey.
+const sendBudget = new TokenBucket(30, 30 / 60_000);
+const keyCooldown = new KeyCooldown(5_000);
