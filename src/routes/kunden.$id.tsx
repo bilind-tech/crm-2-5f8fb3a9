@@ -76,6 +76,13 @@ function Page() {
             <Button variant="outline" className="rounded-lg">
               <Archive className="mr-1.5 h-4 w-4" /> Archivieren
             </Button>
+            <Button
+              variant="outline"
+              className="rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setOpenDelete(true)}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" /> Löschen
+            </Button>
           </>
         }
       />
