@@ -421,25 +421,6 @@ function renderChart(
       </BarChart>
     );
   }
-  if (state.typ === "line") {
-    return (
-      <LineChart data={data} onClick={(e) => onKlick(e?.activePayload?.[0]?.payload ?? {})}>
-        {grid}
-        {xAxis}
-        {yAxis}
-        {tooltip}
-        <Line
-          type="monotone"
-          dataKey={aktiv}
-          stroke={farbeAktiv}
-          strokeWidth={2}
-          dot={{ r: 3, fill: farbeAktiv }}
-          activeDot={{ r: 5, style: cursorStyle }}
-        />
-        <Line type="monotone" dataKey={inaktiv} stroke="transparent" dot={false} />
-      </LineChart>
-    );
-  }
   // area
   return (
     <AreaChart data={data} onClick={(e) => onKlick(e?.activePayload?.[0]?.payload ?? {})}>
