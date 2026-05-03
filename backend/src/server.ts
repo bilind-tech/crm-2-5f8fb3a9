@@ -216,6 +216,8 @@ async function main(): Promise<void> {
   startScheduler();
   // Belege-Scheduler (überfällig-Markierung) starten
   startBelegeScheduler();
+  // Drive-Upload Worker (Cron-basiert, jede Minute)
+  startDriveWorker();
   // Dokumente-Frist-Cron (täglich nach 07:00 Pi-Zeit)
   startFristenScheduler();
   // Mahn-Automatik (Cron) STILLGELEGT — niemals automatischer Mail-Versand.
