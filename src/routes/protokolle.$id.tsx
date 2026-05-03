@@ -55,7 +55,7 @@ function Page() {
     );
   }
 
-  const dateiname = protokollDateiname(p, kundeQ.data);
+  const dateiname = protokollDateiname(p, kundeQ.data, objekt);
   const kundenName = kundeQ.data
     ? (kundeQ.data.firmenname || [kundeQ.data.vorname, kundeQ.data.nachname].filter(Boolean).join(" "))
     : "—";
