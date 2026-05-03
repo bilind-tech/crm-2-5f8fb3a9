@@ -153,6 +153,8 @@ export function BackendVerbindungTab() {
           <code> NODE_ENV=production</code>.
         </p>
       </div>
+
+      <MockDataResetCard />
     </div>
   );
 }
