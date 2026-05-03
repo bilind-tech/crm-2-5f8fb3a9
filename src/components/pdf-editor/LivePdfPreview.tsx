@@ -78,6 +78,7 @@ export function LivePdfPreview(props: Props) {
           return newUrl;
         });
         setHotspots(result.hotspots);
+        setViewerError(null);
       } catch (e) {
         console.error(e);
         if (!cancelled) setBuildError(e instanceof Error ? e.message : "PDF konnte nicht erzeugt werden.");
