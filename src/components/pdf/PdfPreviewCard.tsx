@@ -69,10 +69,10 @@ export function PdfPreviewCard({
           <div className="flex h-[40vh] items-center justify-center text-sm text-muted-foreground">
             {status === "loading" ? (
               <span className="inline-flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> PDF wird erzeugt …
+                <Loader2 className="h-4 w-4 animate-spin" /> PDF wird erstellt …
               </span>
             ) : status === "error" ? (
-              <span className="text-destructive">{errorMessage || "PDF konnte nicht erzeugt werden"}</span>
+              <span className="text-destructive">{errorMessage || "PDF konnte nicht erstellt werden"}</span>
             ) : (
               <span>Noch keine Vorschau</span>
             )}
