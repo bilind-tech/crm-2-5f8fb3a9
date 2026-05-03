@@ -96,7 +96,7 @@ export function HotspotInlineEditor({ fieldId, draft, set, onOpenAdvanced, onClo
               <Input
                 placeholder="Einheit"
                 value={pos.einheit}
-                onChange={(e) => updatePos({ einheit: e.target.value })}
+                onChange={(e) => updatePos({ einheit: e.target.value as Position["einheit"] })}
                 className="text-sm"
               />
               <Input
