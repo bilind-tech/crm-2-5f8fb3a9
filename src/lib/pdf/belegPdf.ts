@@ -493,6 +493,9 @@ export async function generateAngebotPdf(
   firma: Firmendaten,
   ansprechpartner?: Ansprechpartner,
 ): Promise<PdfBuildResult> {
+  const cacheKey = "a:" + angebot.id + ":" + semanticPdfKey([angebot, kunde, firma, ansprechpartner ?? null]);
+  const cached = lruGet(cacheKey);
+  if (cached) return cached;
   const meta = [
     { label: "Angebot-Nr.", wert: angebot.nummer },
     { label: "Angebotsdatum", wert: dt(angebot.erstelltAm) },
@@ -519,7 +522,9 @@ export async function generateAngebotPdf(
     tracker.pageBreakBefore,
   );
   const result = await renderPdf(doc, []);
-  return { blob: result.blob, hotspots: tracker.build() };
+  const out = { blob: result.blob, hotspots: tracker.build() };
+  lruSet(cacheKey, out);
+  return out;
 }
 
 export async function generateRechnungPdf(
@@ -528,8 +533,10 @@ export async function generateRechnungPdf(
   firma: Firmendaten,
   ansprechpartner?: Ansprechpartner,
 ): Promise<PdfBuildResult> {
+  const cacheKey = "r:" + rechnung.id + ":" + semanticPdfKey([rechnung, kunde, firma, ansprechpartner ?? null]);
+  const cached = lruGet(cacheKey);
+  if (cached) return cached;
   const meta = [
-    { label: "Rechnung-Nr.:", wert: rechnung.nummer },
     { label: "Rechnungsdatum:", wert: dt(rechnung.rechnungsdatum) },
   ];
   const opts: BuildOptions = {
