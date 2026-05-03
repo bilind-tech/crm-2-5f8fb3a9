@@ -1,5 +1,6 @@
-// Tab "Google Drive": Verbindung + Ordner-/Dateinamen-Schemata + Auto-Upload.
-import { useEffect, useState } from "react";
+// Tab "Google Drive": Verbindung + Ordner-/Dateinamen-Schemata + Auto-Upload
+// + Synchronisations-Status (Upload-Queue mit Retry).
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Cloud,
@@ -9,6 +10,10 @@ import {
   Loader2,
   Link as LinkIcon,
   RefreshCw,
+  Copy,
+  ExternalLink,
+  RotateCcw,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,11 +32,16 @@ import {
   useConnectGoogleDrive,
   useDisconnectGoogleDrive,
   useTestGoogleDrive,
+  useDriveUploads,
+  useRetryDriveUpload,
+  type DriveUpload,
 } from "@/hooks/useApi";
 import type { GoogleDriveEinstellungen } from "@/lib/api/types";
 import { Field, Section, StickySaveBar } from "./_shared";
 import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useConfirm } from "@/hooks/useConfirm";
+import { getBackendUrl } from "@/lib/api/backendUrl";
+import { cn } from "@/lib/utils";
 
 const PFAD_PLATZHALTER = ["{YYYY}", "{MM}"];
 const DATEI_PLATZHALTER = ["{nummer}", "{kunde}", "{leistung}", "{MM}", "{YYYY}", "{datum}"];
