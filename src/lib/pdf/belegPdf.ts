@@ -475,6 +475,7 @@ export async function generateAngebotPdf(
     `Angebot ${angebot.titel || ""}`.trim(),
     meta,
     "plain",
+    undefined,
     { positionen: angebot.positionen, rabattGesamt: angebot.rabattGesamt, steuersatz: angebot.steuersatz },
     defaultIntroAngebot(angebot, opts),
     defaultOutroAngebot(angebot, opts),
