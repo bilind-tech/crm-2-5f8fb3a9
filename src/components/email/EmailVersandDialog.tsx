@@ -26,6 +26,7 @@ import {
   Settings,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isBackendUrlExplicit } from "@/lib/api/backendUrl";
 
 import {
   Dialog,
