@@ -170,59 +170,8 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // Google Drive
-  app.get("/einstellungen/google-drive", async () => {
-    const base = loadArea("googleDrive");
-    const sec = getSettingMeta(SENSITIVE_KEYS.googleClientSecret);
-    const tok = getSettingMeta(SENSITIVE_KEYS.googleRefreshToken);
-    return {
-      ...(base as object),
-      clientSecretIsSet: sec.exists,
-      refreshTokenIsSet: tok.exists,
-      connected: tok.exists,
-    };
-  });
-  app.patch("/einstellungen/google-drive", async (req, reply) => {
-    const body = { ...((req.body ?? {}) as Record<string, unknown>) };
-    const secrets = GoogleDriveSecretSchema.safeParse({
-      clientSecret: body.clientSecret,
-      refreshToken: body.refreshToken,
-    });
-    if (!secrets.success) {
-      reply.status(422);
-      return { error: "validation", issues: secrets.error.issues };
-    }
-    if (secrets.data.clientSecret) {
-      setSetting(SENSITIVE_KEYS.googleClientSecret, secrets.data.clientSecret, { encrypt: true });
-    }
-    if (secrets.data.refreshToken) {
-      setSetting(SENSITIVE_KEYS.googleRefreshToken, secrets.data.refreshToken, { encrypt: true });
-    }
-    delete body.clientSecret;
-    delete body.refreshToken;
-    delete body.clientSecretIsSet;
-    delete body.refreshTokenIsSet;
-    delete body.connected;
-    const r = patchArea("googleDrive", body);
-    if (!r.ok) {
-      reply.status(r.status);
-      return { error: r.error, issues: r.issues };
-    }
-    audit({ userId: req.user?.id, action: "settings.google-drive.patch", ip: req.ip });
-    const sec = getSettingMeta(SENSITIVE_KEYS.googleClientSecret);
-    const tok = getSettingMeta(SENSITIVE_KEYS.googleRefreshToken);
-    return {
-      ...(r.value as object),
-      clientSecretIsSet: sec.exists,
-      refreshTokenIsSet: tok.exists,
-      connected: tok.exists,
-    };
-  });
-  app.post("/einstellungen/google-drive/disconnect", async (req) => {
-    deleteSetting(SENSITIVE_KEYS.googleRefreshToken);
-    audit({ userId: req.user?.id, action: "settings.google-drive.disconnect", ip: req.ip });
-    return { ok: true };
-  });
+  // Google Drive: Routen liegen in routes/drive.ts (echter OAuth-Flow + Settings).
+
 
   // Sessions
   app.get("/einstellungen/sitzungen", async (req) => {
