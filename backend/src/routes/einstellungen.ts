@@ -180,23 +180,20 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
     audit({ userId: req.user?.id, action: "settings.smtp.password-clear", ip: req.ip });
     return { ok: true };
   });
+  // Reiner TCP-Reachability-Check (alt). Echte Auth/TLS-Prüfung -> POST /email/verify.
   app.post("/einstellungen/smtp/test", async () => {
     const cfg = loadArea("smtp") as { host: string; port: number };
-    if (!cfg.host) return { ok: false, error: "host fehlt" };
-    return await new Promise<{ ok: boolean; latencyMs?: number; error?: string }>((resolve) => {
+    if (!cfg.host) return { ok: false, erfolg: false, nachricht: "Host fehlt" };
+    return await new Promise<{ ok: boolean; erfolg: boolean; nachricht: string; latencyMs?: number }>((resolve) => {
       const t0 = Date.now();
       const sock = createConnection({ host: cfg.host, port: cfg.port, timeout: 4000 });
-      const done = (res: { ok: boolean; latencyMs?: number; error?: string }): void => {
-        try {
-          sock.destroy();
-        } catch {
-          /* ignore */
-        }
-        resolve(res);
+      const done = (res: { ok: boolean; nachricht: string; latencyMs?: number }): void => {
+        try { sock.destroy(); } catch { /* ignore */ }
+        resolve({ ...res, erfolg: res.ok });
       };
-      sock.once("connect", () => done({ ok: true, latencyMs: Date.now() - t0 }));
-      sock.once("timeout", () => done({ ok: false, error: "Timeout" }));
-      sock.once("error", (e) => done({ ok: false, error: e.message }));
+      sock.once("connect", () => done({ ok: true, latencyMs: Date.now() - t0, nachricht: `Server erreichbar (${Date.now() - t0} ms) — für Auth/TLS bitte „Verbindung prüfen"` }));
+      sock.once("timeout", () => done({ ok: false, nachricht: "Timeout — Server nicht erreichbar" }));
+      sock.once("error", (e) => done({ ok: false, nachricht: e.message }));
     });
   });
 
