@@ -1,16 +1,23 @@
-// Restore-Flow:
+// =============================================================================
+// Restore-Flow
+// =============================================================================
+// ABSOLUTE REGEL: Daten werden NIEMALS außerhalb dieses kontrollierten Flows
+// verändert. Vor jedem Restore wird automatisch ein Sicherheits-Backup erstellt.
+// Bei jedem Fehler ab dem ersten Swap → vollständiger Rollback aus old/.
+//
+// Schritte:
 //   1. Sicherheits-Backup (pre-restore)
 //   2. Wartungsmodus an
 //   3. tar.gz nach tmp/restore-<id>/ entpacken
-//   4. Manifest validieren (kein Schema-Downgrade)
+//   4. Manifest validieren (kein Schema-Downgrade) + db-Datei via SHA256 prüfen
 //   5. DB sauber schließen
-//   6. Atomarer Swap von db/, uploads/, keys/ — alte Stände nach tmp/restore-<id>/old/
+//   6. Atomarer Swap von db/, uploads/ und (optional) keys/ — alte Stände nach old/
 //   7. DB neu öffnen → Migrationen
 //   8. Wartungsmodus aus
-//
-// Bei jedem Fehler ab Schritt 6: Rollback aus old/, Wartungsmodus bleibt an.
+// =============================================================================
 
 import {
+  createReadStream,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -19,6 +26,7 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import * as tar from "tar";
 import { config } from "../config.js";
 import {
@@ -40,6 +48,27 @@ import {
 } from "./progress.js";
 
 const RESTORE_TMP_PREFIX = "restore-";
+
+async function sha256OfFile(file: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const h = crypto.createHash("sha256");
+    const s = createReadStream(file);
+    s.on("data", (c) => h.update(c));
+    s.on("end", () => resolve(h.digest("hex")));
+    s.on("error", reject);
+  });
+}
+
+function filesEqual(a: string, b: string): boolean {
+  try {
+    const ba = readFileSync(a);
+    const bb = readFileSync(b);
+    return ba.length === bb.length && ba.equals(bb);
+  } catch {
+    return false;
+  }
+}
+
 
 function ensureDir(p: string): void {
   if (!existsSync(p)) mkdirSync(p, { recursive: true, mode: 0o700 });
