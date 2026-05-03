@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { FileText, Loader2, AlertCircle } from "lucide-react";
 import { DriveStatusBadge } from "./DriveStatusBadge";
+import { PdfCanvasViewer } from "./PdfCanvasViewer";
 import type { DriveSyncInfo } from "@/lib/api/types";
 
 interface Props {
@@ -9,15 +10,26 @@ interface Props {
   errorMessage?: string | null;
   drive?: DriveSyncInfo;
   viewButton: ReactNode;
-  /** Wenn vorhanden, wird die PDF inline als kleine Vorschau eingebettet. */
+  /** Wenn vorhanden, wird die PDF inline als kleine Vorschau (Seite 1) eingebettet. */
   pdfUrl?: string | null;
+  /** Datei­name für Download-Fallback im Viewer. */
+  fileName?: string;
 }
 
 /**
  * Kompakter Vorschau-Block auf Detailseiten.
- * Zeigt eine echte PDF-Vorschau (per nativer Browser-Anzeige), sobald die Blob-URL bereitsteht.
+ * Rendert die erste Seite der PDF zuverlässig per Canvas (PDF.js),
+ * unabhängig vom nativen Browser-PDF-Plugin.
  */
-export function PdfPreviewCard({ title, status, errorMessage, drive, viewButton, pdfUrl }: Props) {
+export function PdfPreviewCard({
+  title,
+  status,
+  errorMessage,
+  drive,
+  viewButton,
+  pdfUrl,
+  fileName,
+}: Props) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div className="flex items-start gap-4 p-5">
@@ -46,18 +58,13 @@ export function PdfPreviewCard({ title, status, errorMessage, drive, viewButton,
 
       <div className="border-t border-border bg-muted/30">
         {pdfUrl && status !== "error" ? (
-          <object
-            data={pdfUrl}
-            type="application/pdf"
-            className="block h-[70vh] w-full"
-            aria-label={title}
-          >
-            <iframe
-              src={pdfUrl}
-              title={title}
-              className="h-[70vh] w-full border-0"
-            />
-          </object>
+          <PdfCanvasViewer
+            pdfUrl={pdfUrl}
+            fileName={fileName ?? `${title}.pdf`}
+            className="block max-h-[70vh] w-full overflow-y-auto"
+            firstPageOnly
+            maxWidth={720}
+          />
         ) : (
           <div className="flex h-[40vh] items-center justify-center text-sm text-muted-foreground">
             {status === "loading" ? (
