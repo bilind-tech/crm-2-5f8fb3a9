@@ -1,32 +1,48 @@
-# Finale Backend-Härtung — Status
+# Finaler Backend-Härtungs-Pass — Status
 
-## ✅ Umgesetzt (Block A + B + Teile von C)
+## ✅ Umgesetzt
 
-### Block A — Kritisch
-- ✅ `emailRoutes` in `server.ts` registriert (Import + register).
-- ✅ systemd-Unit korrigiert: `TZ=Europe/Berlin`, `CORS_ORIGINS=http://mycleancenter.local:8787`, `GOOGLE_OAUTH_REDIRECT` hartkodiert.
-- ✅ Rate-Limit 5/min auf `/backup/upload`, `/backup/:id/restore`, `/backup/upload/:uploadId/restore`.
+### K1 — DB-Pfad-Konstante
+- `backend/src/config.ts`: `DB_FILENAME = "mycleancenter.db"` exportiert.
+- `backup/create.ts` und `backup/restore.ts` nutzen die Konstante.
 
-### Block B — Sicherheit
-- ✅ Helmet mit restriktiver CSP (default-src 'self', kein inline-script, frame-ancestors 'none').
-- ✅ Roter Sicherheits-Disclaimer im Backup-Tab beim Drive-Spiegel-Switch (Master-Key-Warnung + 2FA-Empfehlung).
-- ✅ `markSetupComplete()` löscht `setup.token` von der Platte.
-- ✅ `purgeExpiredSessions()` räumt `lastTouchedAt`-Cache mit auf.
-- ✅ `MAX_FAILS` von 5 auf 10 (LAN-Single-User: alle Geräte hinter derselben IP).
+### K2 — Restore: Inverse Daten-Guard
+- `system/data-guard.ts`: neue `assertInsideDataDir(path, op)` Funktion.
+- `backup/restore.ts`: `swapDir()` und `rollbackSwap()` rufen sie auf — Restore kann nicht versehentlich außerhalb von `dataDir` schreiben (Defense-in-Depth gegen tar-slip).
 
-### Block C — Polish
-- ✅ `npm ci`-Timeout im Update-Runner auf 10 min erhöht.
+### K3 — Drive-Backup OHNE Master-Key (Variante A)
+- `backup/drive-mirror.ts`: vor jedem Drive-Upload wird das Archiv entpackt, `keys/master.key` entfernt und neu gepackt. Lokales Backup bleibt vollständig (für lokales Restore mit verschlüsselten Settings).
+- Wer aus Drive restored, muss SMTP-Passwort + Drive-Token einmalig neu eingeben — das ist ehrlicher und sicherer als Master-Key in der Cloud.
 
-## ⏭ Bewusst zurückgestellt
-- Drive-Backup OHNE Master-Key (echte Trennung): braucht eigenen Restore-Flow für den Key + UI-Wiederherstellungs-Code-Eingabe → größerer Eingriff, separater Pass nach Erst-Deploy. Der Disclaimer schließt die Lücke vorübergehend.
-- `safety` ↔ `pre-restore` Kategorien zusammenlegen, `wrangler.jsonc` löschen, Token-Last-Used-Anzeige → Polish, kann später.
-- Pi-Deployment-Doku in Memory schreiben → erst beim tatsächlichen Deploy zusammen mit dem User.
+### K4 — install.sh Setup-URL Box
+- ASCII-Box durch saubere 3-Zeilen-Ausgabe mit `═` ersetzt — bricht bei langen Tokens nicht mehr.
 
-## Pi-Deployment-Checkliste (kurz)
-1. Pi-OS-Lite, USB-SSD an `/var/lib/mycleancenter` via fstab (mit `nofail`).
-2. `sudo timedatectl set-timezone Europe/Berlin` (TZ in systemd reicht für den Service, OS-weit ist sauberer).
+### W5 — `/auth/setup` Rate-Limit
+- 5/min ergänzt → Bruteforce auf Setup-Token gedeckelt.
+
+### P3 — `wrangler.jsonc` gelöscht
+- War Cloudflare-Reststand, wir laufen auf dem Pi mit Fastify. Verhindert Verwechslung beim Deploy.
+
+## Nicht angefasst (bewusst)
+
+- K5 (FRONTEND_DIR): verifiziert in `scripts/build-release.ts` — Frontend liegt korrekt unter `dist/` Top-Level.
+- W2/W4: nur Doku-Hinweise, kein Code-Change.
+- P2 Test, P4 Kategorien: Polish, nach Erst-Deploy.
+- Mahn-/Mail-Pfad: drei Schichten Schutz (Cron deaktiviert + `quelle==="cron"` Guard + `enqueueVersand` wirft auf alles ≠ `manuell`). Nichts ändern.
+- Update-Runner: Daten-Guards sitzen, keine Refactoring nötig.
+
+## Pi-Deployment-Checkliste
+
+1. Pi-OS-Lite, USB-SSD an `/var/lib/mycleancenter` via fstab (`nofail`).
+2. `sudo timedatectl set-timezone Europe/Berlin`.
 3. Hostname `mycleancenter` + `avahi-daemon` aktiv → `mycleancenter.local`.
 4. `install.sh` ausführen → Setup-Token-URL aus Konsole nehmen → Passwort + Recovery-Code SOFORT aufschreiben.
-5. Drive verbinden in Einstellungen → erstes manuelles Backup → Restore-Test in Test-Umgebung.
-6. GitHub-PAT (Fine-grained, nur „Contents: Read") für Auto-Updates eintragen.
-7. Vor Go-Live: SMTP-Test senden, Mahn-Cron als deaktiviert verifizieren.
+5. Drive verbinden in Einstellungen → erstes manuelles Backup → Restore-Test in Test-Umgebung (Drive-Restore: SMTP/Drive-Token müssen neu eingegeben werden — by design).
+6. GitHub-PAT (Fine-grained, „Contents: Read") für Auto-Updates.
+7. Vor Go-Live: SMTP-Test senden, Mahn-Cron als deaktiviert verifizieren, KEIN WAN-Exposure ohne TLS-Reverse-Proxy (Cookies sind im LAN unverschlüsselt — akzeptiert für Single-User-LAN).
+
+## Sicherheits-Posture (kurz)
+- Code/Daten getrennt: `assertCodeAndDataSeparated()` Bootcheck + `assertNotInDataDir` (Update-Runner) + `assertInsideDataDir` (Restore-Flow). Beide Richtungen gegeneinander geschützt.
+- Backups: SHA256-Verify VOR Swap, Schema-Downgrade verboten, atomarer Rollback aus `old/`, Drive-Mirror schlüssel-frei.
+- Auth: argon2id, Lockout 10/15min, Rate-Limit auf login/recovery/setup/backup-write/restore.
+- Mails: drei Schutzschichten, kein automatischer Versand möglich.

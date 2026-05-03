@@ -1,5 +1,9 @@
 import path from "node:path";
 
+// Zentrale DB-Datei-Konstante. Backup, Restore und Live müssen denselben
+// Namen verwenden, sonst landet ein Restore in einer toten Datei.
+export const DB_FILENAME = "mycleancenter.db";
+
 const DEFAULT_DATA_DIR =
   process.env.NODE_ENV === "production"
     ? "/var/lib/mycleancenter"
@@ -12,7 +16,7 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   dataDir: process.env.DATA_DIR ?? DEFAULT_DATA_DIR,
   get dbPath() {
-    return path.join(this.dataDir, "db", "mycleancenter.db");
+    return path.join(this.dataDir, "db", DB_FILENAME);
   },
   get dbDir() {
     return path.join(this.dataDir, "db");

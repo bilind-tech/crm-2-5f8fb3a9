@@ -28,7 +28,7 @@ import {
 import path from "node:path";
 import crypto from "node:crypto";
 import * as tar from "tar";
-import { config } from "../config.js";
+import { config, DB_FILENAME } from "../config.js";
 import {
   closeDatabase,
   getSchemaVersion,
@@ -46,6 +46,7 @@ import {
   setRestorePhase,
   startRestoreProgress,
 } from "./progress.js";
+import { assertInsideDataDir } from "../system/data-guard.js";
 
 const RESTORE_TMP_PREFIX = "restore-";
 
@@ -82,8 +83,11 @@ function safeRm(p: string): void {
   }
 }
 
-/** Atomarer Verzeichnis-Swap: aktueller Stand → old, neuer Stand → live. */
+/** Atomarer Verzeichnis-Swap: aktueller Stand → old, neuer Stand → live.
+ *  Live-Pfad MUSS innerhalb dataDir liegen — Defense-in-Depth gegen
+ *  Pfad-Manipulation aus präparierten Backup-Archiven. */
 function swapDir(live: string, fresh: string, oldBackup: string): void {
+  assertInsideDataDir(live, "restore.swap.live");
   if (existsSync(live)) {
     renameSync(live, oldBackup);
   }
@@ -91,6 +95,7 @@ function swapDir(live: string, fresh: string, oldBackup: string): void {
 }
 
 function rollbackSwap(live: string, oldBackup: string): void {
+  assertInsideDataDir(live, "restore.rollback.live");
   try {
     safeRm(live);
     if (existsSync(oldBackup)) renameSync(oldBackup, live);
@@ -167,12 +172,12 @@ export async function restoreFromArchive(opts: RestoreOptions): Promise<{ ok: tr
     }
 
     const freshDb = path.join(workDir, "db");
-    const freshDbFile = path.join(freshDb, "mycleancenter.db");
+    const freshDbFile = path.join(freshDb, DB_FILENAME);
     const freshUploads = path.join(workDir, "uploads");
     const freshKeys = path.join(workDir, "keys");
     const freshKeyFile = path.join(freshKeys, "master.key");
     if (!existsSync(freshDb)) throw new Error("db/ fehlt im Backup");
-    if (!existsSync(freshDbFile)) throw new Error("db/mycleancenter.db fehlt im Backup");
+    if (!existsSync(freshDbFile)) throw new Error(`db/${DB_FILENAME} fehlt im Backup`);
 
     // SHA256 der entpackten DB gegen Manifest verifizieren — VOR jedem Swap
     const actualDbSha = await sha256OfFile(freshDbFile);

@@ -8,8 +8,9 @@
 //
 // Drive-Fehler markieren das lokale Backup NIEMALS als failed.
 // =============================================================================
-import { createReadStream, existsSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, rmSync } from "node:fs";
 import path from "node:path";
+import * as tar from "tar";
 import { getDatabase } from "../db/index.js";
 import { audit } from "../auth/audit.js";
 import { categoryDir } from "./paths.js";
@@ -18,6 +19,7 @@ import { ensureFolderPath, uploadStream } from "../drive/folders.js";
 import { loadDriveSettings } from "../drive/oauth.js";
 import { getSetting } from "../settings/store.js";
 import { BackupPlanSchema } from "../settings/schemas.js";
+import { config } from "../config.js";
 import type { BackupCategory } from "./types.js";
 
 function setDriveStatus(
@@ -62,6 +64,28 @@ function backupTargetFolder(date: Date): string {
   return `Backups/${yyyy}/${mm}`;
 }
 
+/**
+ * Erzeugt eine schlüssel-freie Kopie des Backups für den Drive-Upload.
+ * Master-Key bleibt NUR auf dem Pi. Wer aus Drive restored, muss SMTP-Passwort
+ * und Google-Drive-Token einmalig neu eingeben — Restore-UI erklärt das.
+ */
+async function buildKeyfreeArchive(srcArchive: string, backupId: string): Promise<string> {
+  const tmpDir = path.join(config.backupsTmpDir, `drive-${backupId}`);
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
+  mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
+  await tar.extract({ file: srcArchive, cwd: tmpDir });
+  // Master-Key entfernen
+  const keysDir = path.join(tmpDir, "keys");
+  if (existsSync(keysDir)) rmSync(keysDir, { recursive: true, force: true });
+  const out = path.join(config.backupsTmpDir, `drive-${backupId}.tar.gz`);
+  await tar.create(
+    { gzip: { level: 6 }, file: out, cwd: tmpDir, portable: true },
+    ["manifest.json", "db", "uploads"].filter((p) => existsSync(path.join(tmpDir, p))),
+  );
+  rmSync(tmpDir, { recursive: true, force: true });
+  return out;
+}
+
 /** Stößt einen Drive-Mirror an (async, ohne await im Aufrufer). */
 export async function mirrorBackupToDrive(
   backupId: string,
@@ -86,20 +110,24 @@ export async function mirrorBackupToDrive(
     return;
   }
 
+  let driveArchive: string | null = null;
   try {
+    // Master-Key NIE in die Cloud — Schlüssel-freie Kopie bauen
+    driveArchive = await buildKeyfreeArchive(file, backupId);
+
     const folderId = await ensureFolderPath(
       backupTargetFolder(new Date(row.completedAt ?? row.startedAt)),
     );
     const out = await uploadStream({
       parentFolderId: folderId,
       name: row.filename,
-      stream: createReadStream(file),
+      stream: createReadStream(driveArchive),
       mimeType: "application/gzip",
     });
     setDriveStatus(backupId, "synced", out.id);
     audit({
       action: "backup.drive.mirror.ok",
-      detail: { id: backupId, fileId: out.id },
+      detail: { id: backupId, fileId: out.id, keysExcluded: true },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -108,6 +136,10 @@ export async function mirrorBackupToDrive(
       action: "backup.drive.mirror.fail",
       detail: { id: backupId, error: msg },
     });
+  } finally {
+    if (driveArchive && existsSync(driveArchive)) {
+      try { rmSync(driveArchive, { force: true }); } catch { /* ignore */ }
+    }
   }
 }
 

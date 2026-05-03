@@ -15,7 +15,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import * as tar from "tar";
 import { getDatabase, getSchemaVersion } from "../db/index.js";
-import { config } from "../config.js";
+import { config, DB_FILENAME } from "../config.js";
 import { audit } from "../auth/audit.js";
 import { buildManifest } from "./manifest.js";
 import {
@@ -119,7 +119,7 @@ export async function createBackup(opts: {
 
     // --- 2. SQLite Online-Backup ---
     setBackupPhase(id, "snapshot-db", 10, "DB-Snapshot");
-    const dbDest = path.join(workDir, "db", "mycleancenter.db");
+    const dbDest = path.join(workDir, "db", DB_FILENAME);
     await getDatabase().backup(dbDest);
     const dbBytes = statSync(dbDest).size;
     const dbSha = await sha256OfFile(dbDest);
