@@ -10,19 +10,26 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { Angebot, Rechnung, Position } from "@/lib/api/types";
 import { metaForId } from "@/lib/pdf/fieldMap";
+import {
+  defaultIntroAngebot,
+  defaultIntroRechnung,
+  defaultOutroAngebot,
+  defaultOutroRechnung,
+} from "@/lib/pdf/belegPdf";
 
 type Draft = Angebot | Rechnung;
 
 interface Props {
   fieldId: string;
   draft: Draft;
+  kind: "angebot" | "rechnung";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   set: (key: any, value: any) => void;
   onOpenAdvanced: () => void;
   onClose: () => void;
 }
 
-export function HotspotInlineEditor({ fieldId, draft, set, onOpenAdvanced, onClose }: Props) {
+export function HotspotInlineEditor({ fieldId, draft, kind, set, onOpenAdvanced, onClose }: Props) {
   const meta = metaForId(fieldId);
   const firstRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
 
