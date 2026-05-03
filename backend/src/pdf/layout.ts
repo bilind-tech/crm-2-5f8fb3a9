@@ -72,17 +72,17 @@ function absenderzeile(f: FirmaForPdf): string {
 
 function header(f: FirmaForPdf, logoDataUrl: string | null) {
   return {
-    margin: [55, 35, 55, 0] as [number, number, number, number],
+    margin: [55, 30, 55, 0] as [number, number, number, number],
     columns: [
       {
         width: "*",
         stack: [
-          { text: absenderzeile(f), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 22, 0, 0] },
+          { text: absenderzeile(f), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 35, 0, 0] },
         ],
       },
       logoDataUrl
-        ? { width: 150, image: logoDataUrl, fit: [150, 70], alignment: "right" }
-        : { width: 150, text: f.firmenname.toUpperCase(), bold: true, fontSize: 16, color: COLOR_TEXT, alignment: "right" },
+        ? { width: 230, image: logoDataUrl, fit: [230, 100], alignment: "right" }
+        : { width: 230, text: f.firmenname.toUpperCase(), bold: true, fontSize: 18, color: COLOR_TEXT, alignment: "right" },
     ],
   };
 }
