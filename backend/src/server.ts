@@ -33,6 +33,9 @@ import { wireDokumenteDriveAutoEnqueue } from "./dokumente/drive-wireup.js";
 import { purgeExpiredSessions as purgeExpiredUploadSessions } from "./dokumente/repo.js";
 import { reapStaleLock } from "./system/runner.js";
 import { purgeExpiredPakete } from "./system/repo.js";
+import { assertCodeAndDataSeparated } from "./system/data-guard.js";
+import { cleanupOrphanRestoreTmp } from "./backup/cleanup.js";
+import { startBackupReconcileCron } from "./backup/cleanup.js";
 import { startBelegeScheduler } from "./belege/scheduler.js";
 import { wirePdfCacheInvalidation } from "./pdf/wireup.js";
 import { wireAktivitaet } from "./aktivitaet/wireup.js";
@@ -66,15 +69,20 @@ async function main(): Promise<void> {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 
+  // DATEN-SCHUTZ-WALL: erste Aktion nach Verzeichnis-Setup.
+  // Bricht den Boot ab, wenn Code- und Daten-Verzeichnis sich überschneiden.
+  assertCodeAndDataSeparated();
+
   const keyStatus = ensureMasterKey(config.keyPath);
   openDatabase(config.dbPath);
 
   // Wartungsmodus von der Platte laden (z. B. nach abgebrochenem Restore)
   loadMaintenanceFlagFromDisk();
 
-  // Backup-Geister beerdigen + Disk/DB synchronisieren
+  // Backup-Geister beerdigen + Disk/DB synchronisieren + verwaiste Restore-tmp aufräumen
   const zombies = reapZombies();
   const orphans = reconcileDiskState();
+  const restoreTmpRemoved = cleanupOrphanRestoreTmp();
 
   // CORS-Härtung: in Production darf "*" nicht stehen, sonst Bootabbruch.
   if (config.nodeEnv === "production") {
@@ -212,8 +220,10 @@ async function main(): Promise<void> {
   const staleLock = reapStaleLock();
   if (staleLock) app.log.warn("Stale System-Update Lock aufgeräumt");
 
-  // Backup-Scheduler starten
+  // Backup-Scheduler starten (täglicher Snapshot)
   startScheduler();
+  // Täglicher Reconcile-Cron (DB ↔ Disk-Konsistenz)
+  startBackupReconcileCron();
   // Belege-Scheduler (überfällig-Markierung) starten
   startBelegeScheduler();
   // Drive-Upload Worker (Cron-basiert, jede Minute)
@@ -235,6 +245,7 @@ async function main(): Promise<void> {
       sessionsWarmed: warmed,
       backupZombiesReaped: zombies,
       backupOrphansRemoved: orphans,
+      restoreTmpRemoved,
     },
     "MyCleanCenter backend ready",
   );

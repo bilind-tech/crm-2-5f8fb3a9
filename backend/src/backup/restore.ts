@@ -1,16 +1,23 @@
-// Restore-Flow:
+// =============================================================================
+// Restore-Flow
+// =============================================================================
+// ABSOLUTE REGEL: Daten werden NIEMALS außerhalb dieses kontrollierten Flows
+// verändert. Vor jedem Restore wird automatisch ein Sicherheits-Backup erstellt.
+// Bei jedem Fehler ab dem ersten Swap → vollständiger Rollback aus old/.
+//
+// Schritte:
 //   1. Sicherheits-Backup (pre-restore)
 //   2. Wartungsmodus an
 //   3. tar.gz nach tmp/restore-<id>/ entpacken
-//   4. Manifest validieren (kein Schema-Downgrade)
+//   4. Manifest validieren (kein Schema-Downgrade) + db-Datei via SHA256 prüfen
 //   5. DB sauber schließen
-//   6. Atomarer Swap von db/, uploads/, keys/ — alte Stände nach tmp/restore-<id>/old/
+//   6. Atomarer Swap von db/, uploads/ und (optional) keys/ — alte Stände nach old/
 //   7. DB neu öffnen → Migrationen
 //   8. Wartungsmodus aus
-//
-// Bei jedem Fehler ab Schritt 6: Rollback aus old/, Wartungsmodus bleibt an.
+// =============================================================================
 
 import {
+  createReadStream,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -19,6 +26,7 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import * as tar from "tar";
 import { config } from "../config.js";
 import {
@@ -40,6 +48,27 @@ import {
 } from "./progress.js";
 
 const RESTORE_TMP_PREFIX = "restore-";
+
+async function sha256OfFile(file: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const h = crypto.createHash("sha256");
+    const s = createReadStream(file);
+    s.on("data", (c) => h.update(c));
+    s.on("end", () => resolve(h.digest("hex")));
+    s.on("error", reject);
+  });
+}
+
+function filesEqual(a: string, b: string): boolean {
+  try {
+    const ba = readFileSync(a);
+    const bb = readFileSync(b);
+    return ba.length === bb.length && ba.equals(bb);
+  } catch {
+    return false;
+  }
+}
+
 
 function ensureDir(p: string): void {
   if (!existsSync(p)) mkdirSync(p, { recursive: true, mode: 0o700 });
@@ -111,7 +140,7 @@ export async function restoreFromArchive(opts: RestoreOptions): Promise<{ ok: tr
     }
     await tar.extract({ file: opts.archivePath, cwd: workDir });
 
-    // --- 4. Manifest validieren ---
+    // --- 4. Manifest validieren + DB-SHA prüfen ---
     setRestorePhase("validate", 35, "Manifest prüfen");
     const manifestPath = path.join(workDir, "manifest.json");
     if (!existsSync(manifestPath)) throw new Error("Manifest fehlt im Backup");
@@ -126,10 +155,38 @@ export async function restoreFromArchive(opts: RestoreOptions): Promise<{ ok: tr
       );
     }
 
+    // App-Version-Mismatch ist nur Warnung, kein Hard-Block
+    if (parsed.manifest.appVersion !== config.version) {
+      audit({
+        action: "restore.version-mismatch.warn",
+        detail: {
+          backupVersion: parsed.manifest.appVersion,
+          systemVersion: config.version,
+        },
+      });
+    }
+
     const freshDb = path.join(workDir, "db");
+    const freshDbFile = path.join(freshDb, "mycleancenter.db");
     const freshUploads = path.join(workDir, "uploads");
     const freshKeys = path.join(workDir, "keys");
+    const freshKeyFile = path.join(freshKeys, "master.key");
     if (!existsSync(freshDb)) throw new Error("db/ fehlt im Backup");
+    if (!existsSync(freshDbFile)) throw new Error("db/mycleancenter.db fehlt im Backup");
+
+    // SHA256 der entpackten DB gegen Manifest verifizieren — VOR jedem Swap
+    const actualDbSha = await sha256OfFile(freshDbFile);
+    if (actualDbSha !== parsed.manifest.dbSha256) {
+      throw new Error(
+        `DB-Datei beschädigt: SHA256 stimmt nicht mit Manifest überein (erwartet ${parsed.manifest.dbSha256.slice(0, 12)}…, erhalten ${actualDbSha.slice(0, 12)}…)`,
+      );
+    }
+
+    // Master-Key nur swappen wenn das Backup einen mitbringt UND er sich
+    // unterscheidet. Identische Keys werden nicht angefasst.
+    const shouldSwapKey =
+      existsSync(freshKeyFile) &&
+      !filesEqual(freshKeyFile, config.keyPath);
 
     // --- 5. DB schließen ---
     setRestorePhase("swap", 50, "Datenbank schließen");
@@ -146,9 +203,10 @@ export async function restoreFromArchive(opts: RestoreOptions): Promise<{ ok: tr
       uploadsSwapped = true;
     }
 
-    if (existsSync(freshKeys)) {
+    if (shouldSwapKey) {
       swapDir(config.keysDir, freshKeys, path.join(oldDir, "keys"));
       keysSwapped = true;
+      audit({ action: "restore.key.swapped" });
     }
 
     // --- 7. Migrationen ---
@@ -166,10 +224,14 @@ export async function restoreFromArchive(opts: RestoreOptions): Promise<{ ok: tr
       detail: {
         archivePath: path.basename(opts.archivePath),
         manifest: { app: parsed.manifest.appVersion, schema: parsed.manifest.schemaVersion },
+        keySwapped: keysSwapped,
       },
     });
 
-    // tmp aufräumen — old behalten wir 24h (manueller Restore-Rollback im Notfall)
+    // tmp aufräumen — old wird 24h behalten (manueller Restore-Rollback im Notfall).
+    // Persistente Aufräumung übernimmt cleanupOrphanRestoreTmp() beim nächsten Boot
+    // sowie der tägliche Reconcile-Cron — der setTimeout hier überlebt einen Restart nicht
+    // und ist nur ein Best-Effort-Sofort-Cleanup.
     setTimeout(() => safeRm(workDir), 24 * 60 * 60_000).unref?.();
 
     return { ok: true };
