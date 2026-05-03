@@ -83,7 +83,7 @@ export function PdfCanvasViewer({
       {!pdfUrl && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>PDF wird erzeugt …</span>
+          <span>PDF wird erstellt …</span>
         </div>
       )}
 
