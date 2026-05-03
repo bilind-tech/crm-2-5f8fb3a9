@@ -42,10 +42,13 @@ export function PdfViewerDialog({
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [viewerError, setViewerError] = useState<string | null>(null);
 
-  // Container-Breite messen für responsive PDF-Skalierung
+  // Reset Viewer-Fehler, wenn neue PDF reinkommt
   useEffect(() => {
-    if (!open) return;
+    setViewerError(null);
+    setNumPages(0);
+  }, [pdfUrl]);
     const el = containerRef.current;
     if (!el) return;
     const measure = () => setContainerWidth(el.clientWidth);
