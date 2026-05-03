@@ -300,16 +300,18 @@ class TokenBucket {
 }
 class KeyCooldown {
   private map = new Map<string, number>();
+  private lastSweep = 0;
   constructor(private cooldownMs: number) {}
   tryTake(key: string): boolean {
     const now = Date.now();
+    // billiger periodischer Sweep — höchstens 1× pro Minute.
+    if (now - this.lastSweep > 60_000) {
+      for (const [k, t] of this.map) if (now - t > Math.max(this.cooldownMs * 4, 60_000)) this.map.delete(k);
+      this.lastSweep = now;
+    }
     const last = this.map.get(key) ?? 0;
     if (now - last < this.cooldownMs) return false;
     this.map.set(key, now);
-    if (this.map.size > 1000) {
-      // Aufräumen
-      for (const [k, t] of this.map) if (now - t > 60_000) this.map.delete(k);
-    }
     return true;
   }
 }
