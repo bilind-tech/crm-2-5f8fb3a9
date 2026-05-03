@@ -173,74 +173,10 @@ function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; s
   };
 }
 
-function klassischTabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
-  const headerRow = [
-    { text: "Pos.", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Beschreibung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Menge", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-    { text: "Einheit", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
-    { text: "Einzelpreis", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-    { text: "Summe", bold: true, fontSize: 10, color: COLOR_TEXT, alignment: "right", margin: [0, 4, 0, 4] },
-  ];
-  const body: unknown[][] = [headerRow];
-  positionen.forEach((p, i) => {
-    body.push([
-      { text: String(i + 1), fontSize: 10 },
-      beschreibungBlock(p.beschreibung || ""),
-      { text: p.menge.toLocaleString("de-DE"), fontSize: 10, alignment: "right" },
-      { text: p.einheit, fontSize: 10 },
-      { text: eur(p.einzelpreisNetto), fontSize: 10, alignment: "right" },
-      { text: eur(summe(p)), fontSize: 10, alignment: "right" },
-    ]);
-  });
-  body.push([
-    { text: "Netto", colSpan: 5, fontSize: 10, alignment: "right" },
-    {}, {}, {}, {},
-    { text: eur(totalsT.netto), fontSize: 10, alignment: "right" },
-  ]);
-  body.push([
-    { text: `MwSt ${steuersatz}%`, colSpan: 5, fontSize: 10, alignment: "right" },
-    {}, {}, {}, {},
-    { text: eur(totalsT.steuer), fontSize: 10, alignment: "right" },
-  ]);
-  body.push([
-    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 5, fontSize: 10, alignment: "right", bold: true },
-    {}, {}, {}, {},
-    { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
-  ]);
-  const totalRows = body.length;
-  return {
-    table: {
-      headerRows: 1,
-      keepWithHeaderRows: 1,
-      dontBreakRows: true,
-      widths: [22, "*", 38, 38, 60, 60],
-      body,
-    },
-    layout: {
-      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0.4),
-      vLineWidth: () => 0.4,
-      hLineColor: () => COLOR_LINE,
-      vLineColor: () => COLOR_LINE,
-      paddingTop: () => 6,
-      paddingBottom: () => 6,
-      paddingLeft: () => 5,
-      paddingRight: () => 5,
-    },
-  };
-}
-
-function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
-  const hatPauschal = positionen.some((p) => p.modus === "pauschal");
-  return hatPauschal
-    ? pauschalTabelle(positionen, totalsT, steuersatz)
-    : klassischTabelle(positionen, totalsT, steuersatz);
-}
-
-function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain") {
+function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain", note?: string) {
   if (variant === "plain") {
     return {
-      width: 200,
+      width: 210,
       stack: meta.map((m) => ({
         text: `${m.label}: ${m.wert}`,
         fontSize: 10,
@@ -249,22 +185,37 @@ function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plai
       })),
     };
   }
+  const dataRows = meta.map((m) => [
+    { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
+    { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
+  ]);
+  const noteRows = note
+    ? [[
+        {
+          text: note,
+          fontSize: 9,
+          colSpan: 2,
+          margin: [0, 6, 0, 0],
+          border: [false, true, false, false],
+        },
+        {},
+      ]]
+    : [];
+  const body = [...dataRows, ...noteRows];
+  const totalRows = body.length;
   return {
-    width: 230,
+    width: 245,
     table: {
       widths: ["auto", "*"],
-      body: meta.map((m) => [
-        { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
-        { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
-      ]),
+      body,
     },
     layout: {
-      hLineWidth: (i: number, node: { table: { body: unknown[] } }) => (i === 0 || i === node.table.body.length ? 0.7 : 0),
+      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0),
       vLineWidth: (i: number, node: { table: { widths: unknown[] } }) => (i === 0 || i === node.table.widths.length ? 0.7 : 0),
       hLineColor: () => COLOR_TEXT,
       vLineColor: () => COLOR_TEXT,
-      paddingTop: () => 6,
-      paddingBottom: () => 6,
+      paddingTop: () => 5,
+      paddingBottom: () => 5,
       paddingLeft: () => 8,
       paddingRight: () => 8,
     },
