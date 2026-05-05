@@ -25,6 +25,7 @@ export function getBackendUrl(): string {
 /** True wenn der User explizit eine Backend-URL hinterlegt hat (oder VITE_API_BASE_URL gesetzt ist). */
 export function isBackendUrlExplicit(): boolean {
   if (typeof window === "undefined") return false;
+  if (import.meta.env.PROD) return true;
   if (window.localStorage.getItem(STORAGE_KEY)) return true;
   const fromEnv = (import.meta.env.VITE_API_BASE_URL ?? "").toString().trim();
   return fromEnv.length > 0;
