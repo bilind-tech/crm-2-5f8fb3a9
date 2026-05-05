@@ -96,7 +96,13 @@ ensure_node() {
     v="$(node --version)"
     ok "Node vorhanden: $v"
     if [[ ! "$v" =~ ^v(20|22|24) ]]; then
-      warn "Node-Version ist $v — empfohlen ist v20 LTS oder neuer."
+      warn "Node-Version ist $v — installiere Node.js 20 LTS."
+      if [[ $CHECK_ONLY -eq 1 ]]; then
+        return
+      fi
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      apt-get install -y nodejs
+      ok "Node.js aktualisiert: $(node --version)"
     fi
   else
     log "Installiere Node.js 20 LTS via NodeSource"
@@ -108,6 +114,17 @@ ensure_node() {
     apt-get install -y nodejs
     ok "Node.js installiert: $(node --version)"
   fi
+}
+
+ensure_build_tools() {
+  log "Installiere Systempakete für Build/Native-Module"
+  if [[ $CHECK_ONLY -eq 1 ]]; then
+    warn "[--check] apt-Pakete würden geprüft/installiert"
+    return
+  fi
+  apt-get update
+  apt-get install -y git curl ca-certificates unzip python3 make g++ build-essential
+  ok "Systempakete vorhanden"
 }
 
 install_systemd_unit() {
@@ -263,6 +280,7 @@ main() {
   log "MyCleanCenter Setup startet (CHECK_ONLY=$CHECK_ONLY${BOOTSTRAP_ZIP:+, BOOTSTRAP=$BOOTSTRAP_ZIP})"
   ensure_user
   ensure_dirs
+  ensure_build_tools
   ensure_node
   install_systemd_unit
   install_sudoers

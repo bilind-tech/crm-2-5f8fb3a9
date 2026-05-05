@@ -224,8 +224,9 @@ async function main(): Promise<void> {
     log("Frontend bauen");
     runPackageScript("build", ROOT);
     const frontendDist = path.join(ROOT, "dist");
+    const frontendClientDist = path.join(frontendDist, "client");
     if (!existsSync(frontendDist)) fail("Frontend-Build hat dist/ nicht erzeugt");
-    copyTree(frontendDist, path.join(stagingRoot, "dist"));
+    copyTree(existsSync(frontendClientDist) ? frontendClientDist : frontendDist, path.join(stagingRoot, "dist"));
     ok("Frontend kopiert");
   } else {
     log("Frontend übersprungen (--skip-frontend)");
@@ -253,6 +254,7 @@ async function main(): Promise<void> {
     writeFileSync(path.join(stagingRoot, "backend/package-lock.json"), readFileSync(lockPath));
   }
   copyTree(path.join(ROOT, "backend/src/db/migrations"), path.join(stagingRoot, "backend/src/db/migrations"));
+  copyTree(path.join(ROOT, "backend/src/db/migrations"), path.join(stagingRoot, "backend/dist/db/migrations"));
   copyTree(path.join(ROOT, "backend/deploy"), path.join(stagingRoot, "backend/deploy"));
   ok("Begleitdateien kopiert");
 
