@@ -280,8 +280,8 @@ main() {
   log "MyCleanCenter Setup startet (CHECK_ONLY=$CHECK_ONLY${BOOTSTRAP_ZIP:+, BOOTSTRAP=$BOOTSTRAP_ZIP})"
   ensure_user
   ensure_dirs
-  ensure_node
   ensure_build_tools
+  ensure_node
   install_systemd_unit
   install_sudoers
   install_logrotate
