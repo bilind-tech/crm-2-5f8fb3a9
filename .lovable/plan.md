@@ -1,148 +1,145 @@
-## Ziel
 
-Frontend final auf Produktionsbetrieb stellen: alle Demo-/Mock-/Schnell-Login-Spuren raus, der dezente Status-Punkt unten rechts entfernt (Pi-Status in der Sidebar bleibt), und der echte Erst-Setup-Flow auf dem Pi (Setup-Token → Passwort → Recovery-Code → verschlüsselter Login) durchgängig prüfen.
+# Plan: MyCleanCenter sauber neu auf Raspberry Pi 5
 
----
+Ziel: Ein System, das nach **einem** Befehl auf einem frisch geflashten Pi läuft, deine Daten unter allen Umständen schützt und nicht mehr durch SSR-Drift, Worker-Bundler oder fehlende Pakete kaputt geht.
 
-### Block 1 — Mock/Demo-Modus aus der App entfernen
+## Leitplanken (nicht verhandelbar)
 
-**1.1 Mock-Routing im API-Client abschalten**
-`src/lib/api/client.ts`
-- `USE_MOCK` und alle `mockBackend(...)`-Fallbacks entfernen.
-- `viaMockOrPi` → nur noch `viaPi` (bzw. direkt `piApi`).
-- Demo-Sonderfall in `viaPi` (kein `isBackendUrlExplicit()` → Mock) entfernen — bei fehlender URL wird stattdessen ein klarer Setup-Hinweis im UI gezeigt.
-- `api.isMock` Flag entfernen.
-
-**1.2 Mock-Auth-Modus aus Auth-Provider entfernen**
-`src/lib/auth.tsx`
-- `AuthMode` ohne `"mock-lock"`.
-- `refreshMe`: Wenn `!isBackendUrlExplicit()`, Modus → `"backend-offline"` (statt `mock-lock`) — der Offline-Screen führt den User in „Einstellungen → Backend-Verbindung" und zur Erst-Einrichtung.
-- `unlock(...)` (Mock-Pfad mit `/auth/unlock` + Pseudo-User „Demo") komplett raus.
-- `lock()`: nur noch echter `logout()` (Backend-Session beenden) — kein „mock-lock"-Sonderzweig mehr.
-
-**1.3 Mock-Module/-Seeds löschen**
-- Dateien entfernen: `src/lib/mock/backend.ts`, `src/lib/mock/seed.ts`, `src/lib/mock/scheduler.ts`.
-- Die noch davon abhängige Hilfsfunktion `summenRechnung` in ein neutrales Modul `src/lib/belege/summen.ts` verschieben (Datentypen aus `@/lib/api/types`, keine Mock-Abhängigkeit).
-- Alle Importe umbiegen: `kunden.$id.tsx`, `rechnungen.$id.tsx`, `angebote.$id.tsx`, `lib/email/placeholders.ts`, `lib/steuern/{export,berechnung}.ts`, `lib/flow/flows.ts`, `lib/mahnung/regeln.ts`, `components/forms/ZahlungErfassenDialog.tsx`, `components/dauerauftrag/RechnungAusDauerauftragDialog.tsx`.
-- `src/routes/__root.tsx`: `startScheduler()` aus `lib/mock/scheduler` entfernen.
-- `src/lib/dokument/upload.ts`: Mock-Fallback streichen, bei fehlendem Backend echten Fehler werfen.
-
-**1.4 Demo-Hinweise und Schnell-Login im LockScreen löschen**
-`src/components/layout/LockScreen.tsx`
-- `MockLockForm` (inkl. „Schnell-Login (DEV)"-Button mit hartcodiertem `040506`) komplett entfernen.
-- `LockScreen()`-Switch: Default-Zweig nicht mehr `MockLockForm`, sondern `BackendOfflineScreen` (denn ohne Pi-URL gibt es keinen sinnvollen anderen Zustand).
-- Demo-Hinweistext „Demo-Modus — kein Pi-Backend hinterlegt" entfernen.
-
-**1.5 Demo-Hinweise in Email-UI entfernen**
-- `src/components/email/EmailVersandDialog.tsx`: `demoModus`-Flag, Banner und Disable-Logik entfernen — Versand läuft immer gegen das Backend.
-- `src/components/email/EmailEinstellungen.tsx`: `demoModus`-Flag und zugehörige Hinweisbox entfernen.
-
-**1.6 „Demo-Daten löschen"-Karte entfernen**
-- Datei `src/components/einstellungen/MockDataResetCard.tsx` löschen.
-- `src/components/einstellungen/BackendVerbindungTab.tsx`: Import + `<MockDataResetCard />` raus.
-- Zusätzlich beim ersten Start einmalig im Browser alte `mcc_mock*`/`mcc.*`-LocalStorage-Keys aufräumen (außer `mcc.backend.url` und `mcc.session.*`) — schlichter Einmal-Cleanup in `src/main.tsx` oder `__root.tsx`.
-
-**1.7 Build-Flag entfernen**
-- `VITE_USE_MOCK` aus `.env`/`.env.example`/`vite-env.d.ts` löschen, alle Referenzen entfernen.
+1. **Daten sind heilig** — `/var/lib/mycleancenter/` wird durch Code-Updates niemals angefasst. Jedes Update und jeder Restore erstellen vorher ein Sicherheits-Backup.
+2. **Code und Daten getrennt** — Code unter `/opt/mycleancenter/releases/<ts>/`, Daten unter `/var/lib/mycleancenter/`. Atomar via Symlink `current →`.
+3. **Nur LAN, kein Internet** — kein SEO, kein Cloudflare, keine SSR. Hörbar nur auf `0.0.0.0:8787` im Heimnetz.
+4. **Single User** — kein Multi-Tenant, keine Rollen, ein Konto + Recovery-Code.
+5. **Niemals automatischer Mailversand** — Cron deaktiviert, nur User-Klick.
 
 ---
 
-### Block 2 — Status-Indikator unten rechts entfernen
+## 1. Architektur-Entscheidung
 
-**2.1 Roter/Grüner Punkt unten rechts weg**
-- `src/routes/__root.tsx`: Import + Render von `<BackendStatusIndicator />` entfernen.
-- Datei `src/components/layout/BackendStatusIndicator.tsx` löschen.
+**Frontend wird reine SPA**, gebaut mit Vite + `@vitejs/plugin-react` + TanStack **Router** (ohne TanStack **Start**). Kein SSR, kein Cloudflare-Worker-Bundle, keine `wrangler.jsonc` auf dem Pi.
 
-**2.2 Pi-Status in der Sidebar (unten links) bleibt**
-- `PiStatusIndikator` ist in der `AppSidebar` korrekt platziert und zeigt online/wartung/offline. Bleibt unverändert. (Damit gibt es nur noch EINEN Status — in der Sidebar — und kein doppeltes Signal mehr.)
-
----
-
-### Block 3 — Erst-Einrichtungs-Flow End-to-End verifizieren
-
-Ziel: nach `install.sh` auf dem Pi, beim ersten Aufruf der Web-UI muss exakt das hier passieren — ohne Mock-Umweg.
-
-**3.1 Frontend-Flow (Reihenfolge)**
-1. App lädt → `refreshMe()` ruft `GET /auth/me`.
-2. Backend hat noch keinen User → antwortet `409 already-setup` *(siehe 3.3)*.
-3. Auth-Provider schaltet Modus auf `"needs-setup"`.
-4. `LockScreen` rendert `SetupForm`: Eingabe von Setup-Token (aus `install.sh`-Output bzw. `keys/setup.token`) + neues Passwort (+ Bestätigung).
-5. `POST /auth/setup` → Server hashed Passwort mit **argon2id** (`backend/src/auth/password.ts`, 64 MB / t=3), erzeugt Recovery-Code, hashed diesen ebenfalls (`hashRecoveryCode`), legt User an, löscht `keys/setup.token`, setzt Session-Cookie (HttpOnly).
-6. Antwort enthält `recoveryCode` einmalig im Klartext → SetupForm zeigt großen Recovery-Code-Screen mit „Kopieren" + „Ich habe ihn sicher notiert"-Bestätigung. Erst dann wird der Screen geschlossen und der User ist eingeloggt (`mode=logged-in`).
-
-**3.2 Setup-Form-Verbesserungen vor Release**
-`SetupForm` in `LockScreen.tsx` prüfen/anpassen:
-- Pflicht-Bestätigung „Recovery-Code sicher notiert" muss vor dem Weiterleiten in die App geklickt werden.
-- Recovery-Code als Mono-Schrift, mit Copy-Button und Druck-Hinweis.
-- Mindestlänge Passwort durchsetzen (Backend nutzt schon Schema; Frontend spiegelt Anforderung).
-- Setup-Token-Feld mit Hinweis „aus dem Installationsausgabe-Fenster bzw. `keys/setup.token`".
-
-**3.3 Statuscode-Konvention prüfen**
-- `GET /auth/me` muss bei „kein User vorhanden" `409` liefern (Auth-Provider hängt davon ab → `needs-setup`). Aktuell ist der Code so im Frontend erwartet — Backend-Route in `backend/src/routes/auth.ts` einmal kurz gegenchecken und ggf. angleichen.
-
-**3.4 Backend-Verbindungs-Onboarding**
-- Wenn beim allerersten Frontend-Start noch keine Backend-URL gespeichert ist → `BackendOfflineScreen` zeigt einen zusätzlichen Primär-Button „Backend einrichten" → führt nach `Einstellungen → Backend-Verbindung`. Erst nach Setzen der URL und erfolgreichem `/health` wird auf den `SetupForm` gewechselt.
-
----
-
-### Block 4 — Sicherheits-Checks vor Pi-Upload
-
-**4.1 Auth & Krypto**
-- Passwort-Hash: argon2id, 64 MB / t=3 / p=1 — bestätigt in `backend/src/auth/password.ts`. ✓
-- Recovery-Code: argon2id-Hash in `recovery_hash`, Klartext nur einmal in der Setup-Antwort. ✓
-- Session-Cookies: HttpOnly + SameSite + (in HTTPS-Umgebung) Secure — in `setSessionCookie` einmal verifizieren.
-- Brute-Force: `lockout.ts` aktiv (`MAX_FAILS=10`), `/auth/setup` und `/auth/login` ratenbegrenzt.
-- Setup-Token: 24h TTL, nach Verbrauch sofort gelöscht (`unlinkSync`), Permissions 0600. ✓
-- Master-Key (`keys/master.key`): bleibt strikt lokal auf dem Pi — Drive-Backups bauen ein keyfreies Tarball (bereits umgesetzt).
-
-**4.2 Daten/Code-Trennung am Pi**
-- Code: `/opt/mycleancenter/current/`
-- Daten: `/var/lib/mycleancenter/` (DB, `keys/`, `backups/`, `tmp/`)
-- `assertInsideDataDir` aktiv für Restore-Pfade. ✓
-- systemd-Unit setzt `TZ=Europe/Berlin`, `CORS_ORIGINS`, `GOOGLE_OAUTH_REDIRECT`. ✓
-
-**4.3 Keine Auto-Mails**
-- 3-Schichten-Schutz aktiv (Cron auskommentiert, `runMahnAutomatik(quelle:"cron")` returnt sofort, `enqueueVersand` wirft bei `quelle ≠ "manuell"`). ✓ — bleibt unverändert.
-
----
-
-### Block 5 — Final-Check vor Pi-Deploy (Pflichtliste)
+**Backend (Fastify)** ist der einzige Server: liefert die statische SPA aus `dist/` und alle JSON-APIs. Genau ein Prozess, eine Portnummer (8787), eine systemd-Unit.
 
 ```text
-[ ] bun build läuft sauber, keine Mock-Importe mehr
-[ ] grep auf "mock", "Demo", "Schnell-Login", "040506" in src/  → 0 Treffer
-    (außer evtl. neutralen Tests)
-[ ] grep auf "BackendStatusIndicator" in src/                   → 0 Treffer
-[ ] LockScreen kennt nur noch:
-    needs-setup | logged-out | logged-in | backend-offline | loading
-[ ] /auth/me 409  → SetupForm
-[ ] SetupForm zeigt Recovery-Code, blockt bis "Notiert"-Klick
-[ ] /auth/login mit falschem Passwort → Lockout nach 10 Versuchen
-[ ] /auth/me 401  → LoginForm
-[ ] Sperren-Button in Sidebar → echter Logout (Cookie weg, /auth/me 401)
+Browser  ──HTTP──►  Fastify (8787)
+                     ├─ /assets/*, /index.html  (statische SPA)
+                     ├─ /auth, /kunden, /belege, ... (JSON API)
+                     └─ SPA-Fallback: alles andere → index.html
 ```
+
+Warum SPA statt SSR: Die letzten Crashes (`Cannot read properties of undefined (reading 'get')` in `router-core/ssr-server.js`, `HTTPError 500`, fehlendes `main-*.js`) kommen alle daher, dass das TanStack-Start-SSR-Bundle für Cloudflare Workers gebaut wird, aber unter normalem Node auf dem Pi läuft. Das ist eine Sackgasse. SPA hat keine SSR-Runtime und keine Worker-Abhängigkeiten.
+
+## 2. Frontend-Umbau
+
+- Zweite Vite-Konfig `vite.spa.config.ts` (parallel zur bestehenden Lovable-Konfig für die Cloud-Preview):
+  - `@vitejs/plugin-react`, `@tanstack/router-plugin/vite` (nur Router, nicht Start), `@tailwindcss/vite`, `vite-tsconfig-paths`
+  - `build.outDir = "dist"`, `build.rollupOptions.input = "index.html"`, deterministische Asset-Namen
+- Neue `index.html` im Projekt-Root mit `<div id="root">` und `<script type="module" src="/src/main.tsx">`
+- Neuer Client-Entry `src/main.tsx`: erstellt den Router via `createRouter({ routeTree })` und mountet ihn mit `ReactDOM.createRoot(...).render(<RouterProvider router={router} />)`
+- `src/routes/__root.tsx` verliert `shellComponent`/HTML-Shell — die HTML-Shell kommt jetzt aus `index.html`
+- Neues Script in `package.json`: `"build:spa": "vite build --config vite.spa.config.ts"`
+- Lovable-Cloud-Preview bleibt unangetastet (weiterhin TanStack-Start), nur das Pi-Bundle nutzt SPA
+
+## 3. Backend-Härtung
+
+- `backend/src/server.ts`: SPA-Fallback bleibt (ist schon korrekt), zusätzlich:
+  - Healthcheck `/health` antwortet IMMER, auch wenn Frontend fehlt
+  - Beim Boot: wenn `index.html` in `FRONTEND_DIR` fehlt, sauberer Log + 503 mit klarer Meldung — kein 500
+- `assertCodeAndDataSeparated()` bleibt als Wall vor dem ersten DB-Open
+- Alle Pfade kommen aus `config.ts` mit Default `/var/lib/mycleancenter/...`
+- Migrations laufen auf `openDatabase()` automatisch + idempotent
+
+## 4. Release-Bundler reparieren
+
+`scripts/build-release.ts`:
+- Ruft `bun run build:spa` (statt `vite build`) → liefert flaches `dist/index.html` + `dist/assets/*`
+- Entfernt `createSpaIndex()` komplett (nicht mehr nötig — Vite erzeugt korrektes `index.html`)
+- ZIP-Inhalt:
+  ```text
+  manifest.json            (signiert, HMAC mit master.key)
+  dist/                    (SPA: index.html + assets/)
+  backend/dist/            (kompiliertes Backend)
+  backend/package.json
+  backend/package-lock.json
+  backend/src/db/migrations/
+  backend/dist/db/migrations/
+  backend/deploy/          (install.sh, systemd, sudoers, logrotate)
+  ```
+- SHA256 + Größencheck wie bisher
+
+## 5. Pi-Installer (idempotent, ein Befehl)
+
+`backend/deploy/install.sh` wird so erweitert, dass ein **frischer Pi** mit genau einem Befehl läuft:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<dein-repo>/main/backend/deploy/bootstrap.sh | sudo bash
+```
+
+`bootstrap.sh` (neu, klein):
+1. apt update + git, curl, unzip, build-essential, python3
+2. Node 20 LTS via NodeSource
+3. Lädt das neueste Release-ZIP von GitHub Releases (oder nimmt ein lokal hochgeladenes)
+4. Ruft `install.sh --bootstrap=<zip>` auf
+
+`install.sh` (Erweiterungen):
+- Vor jedem Re-Install: prüft `/var/lib/mycleancenter/` und legt **Sicherheits-Backup** an (`backups/safety/pre-install-<ts>.tgz`)
+- Native Module explizit für ARM64 bauen: `npm rebuild better-sqlite3 @node-rs/argon2 --build-from-source` mit Fallback auf Prebuilt
+- Symlink `current → releases/<ts>/` atomar via `ln -sfn` + `mv`
+- Hält genau **einen** Vorgänger-Release vor (`releases/previous`) für Rollback
+- `chmod 0700 /var/lib/mycleancenter/keys` und `chown mycleancenter:mycleancenter` rekursiv auf Daten + Code
+- systemd-Unit + sudoers + logrotate werden installiert (idempotent)
+- `systemctl restart mycleancenter` + Healthcheck-Loop (max 30 s) gegen `/health`
+- Druckt am Ende die Setup-URL `http://<host>.local:8787/setup?token=…`
+
+## 6. Daten- und Backup-Sicherheit
+
+- **Tägliches SQLite-Snapshot** (bestehender Scheduler) auf `/var/lib/mycleancenter/backups/daily/`, Rotation daily/weekly/monthly
+- **Vor jedem System-Update** automatisches Sicherheits-Backup; Restore-Flow erzeugt zuerst ebenfalls ein Sicherheits-Backup
+- USB-SSD: `install.sh` prüft, ob `/var/lib/mycleancenter` auf der SSD liegt und warnt, wenn auf SD-Karte
+- Optionaler Drive-Mirror der Backups (existiert bereits) bleibt opt-in
+- Backups erscheinen in der UI nur mit `status="erfolg" AND abgeschlossenAm IS NOT NULL` (bereits umgesetzt)
+
+## 7. Stabilität & Beobachtbarkeit
+
+- `setErrorHandler` im Backend logt Stacktrace, antwortet sauberes JSON
+- Pino-Logs gehen via systemd in `journalctl -u mycleancenter`, plus logrotate für eigene App-Logs
+- `/health` liefert: `version`, `schemaVersion`, `dbOk`, `dataDirOk`, `frontendOk`, `uptime`
+- Jeder Start prüft DB-Integrität (`PRAGMA integrity_check`) — bei Fehler: read-only-Modus + lauter UI-Banner
+
+## 8. Vorgehen Schritt für Schritt
+
+```text
+[Code-Änderungen in Lovable]
+ 1. vite.spa.config.ts + index.html + src/main.tsx anlegen
+ 2. __root.tsx auf SPA-Modus umstellen (kein shellComponent)
+ 3. package.json: "build:spa" Script
+ 4. scripts/build-release.ts auf build:spa umstellen, createSpaIndex entfernen
+ 5. backend/src/server.ts: 503-statt-500 wenn Frontend fehlt, Healthcheck erweitern
+ 6. backend/deploy/install.sh: Sicherheits-Backup + ARM64-Rebuild + atomares Symlink-Switch
+ 7. backend/deploy/bootstrap.sh (neu) für One-Liner-Install
+ 8. Release bauen: bun run release  →  dist-release/mycleancenter-vX.Y.Z.zip
+
+[Auf dem Pi]
+ 9. Pi 5 mit Raspberry Pi OS Lite (64-bit) flashen, SSH aktivieren
+10. SSD anschließen, /var/lib/mycleancenter auf SSD mounten (fstab)
+11. ZIP via scp auf den Pi kopieren
+12. sudo bash install.sh --bootstrap=mycleancenter-vX.Y.Z.zip
+13. Browser: http://<host>.local:8787/setup?token=…  → Konto + Recovery-Code
+```
+
+## 9. Was passiert bei Problemen
+
+- Service startet nicht → `journalctl -u mycleancenter -n 100` zeigt echten Stacktrace
+- Update bricht ab → Symlink wird nicht umgelegt, alte Version läuft weiter
+- DB-Integrität verletzt → automatisch letztes Daily-Backup angeboten, kein Schreiben
+- Rollback: `ln -sfn /opt/mycleancenter/releases/previous /opt/mycleancenter/current && systemctl restart mycleancenter`
+
+## 10. Was bewusst NICHT im Plan ist
+
+- Kein Cloud-Deploy, kein Cloudflare, kein Wrangler auf dem Pi
+- Kein SSR, keine TanStack-Start-Runtime auf dem Pi
+- Keine Multi-User-Logik, keine Rollen, kein Auto-Mailversand
+- Keine Änderungen an deiner Lovable-Cloud-Preview (die bleibt wie sie ist zum Entwickeln)
 
 ---
 
-### Technische Detail-Notizen (für die Umsetzung)
-
-**Reihenfolge der Edits**, damit der Build zwischendurch grün bleibt:
-1. Zuerst `summenRechnung` in `src/lib/belege/summen.ts` extrahieren und alle Importer umstellen.
-2. Dann `src/lib/api/client.ts` entmocken.
-3. Dann `src/lib/auth.tsx` (Mode-Enum + `unlock` raus) und `LockScreen.tsx` (`MockLockForm` raus) gleichzeitig.
-4. Dann `MockDataResetCard` + `BackendStatusIndicator` löschen und Imports entfernen.
-5. Mock-Verzeichnis `src/lib/mock/` und `mockBackend`-Aufruf in `dokument/upload.ts` löschen.
-6. `VITE_USE_MOCK` aus Env-Dateien streichen.
-7. Demo-Hinweise in den Email-Komponenten bereinigen.
-
-**Auth-Status-Mapping nach Refactor:**
-
-| Backend-Antwort | AuthMode | Sichtbar |
-|---|---|---|
-| Keine Pi-URL gesetzt | `backend-offline` | „Backend einrichten"-Screen |
-| `/auth/me` Network-Fehler | `backend-offline` | OfflineScreen mit „Erneut prüfen" |
-| `/auth/me` 409 | `needs-setup` | SetupForm + Recovery-Code-Bildschirm |
-| `/auth/me` 401 | `logged-out` | LoginForm |
-| `/auth/me` 200 | `logged-in` | App |
-
-Nach diesem Plan ist das Frontend produktionsbereit, die App startet auf dem Pi sauber im Erst-Einrichtungs-Flow, das Passwort wird argon2id-gehasht gespeichert und der Recovery-Code wird genau einmal angezeigt.
+**Bereit zum Umsetzen?** Sag „Plan ok", dann setze ich Schritte 1–7 in einem Rutsch um, baue ein Release-ZIP und schicke dir die exakten Pi-Befehle für Schritt 9–13.
