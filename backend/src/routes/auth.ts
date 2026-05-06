@@ -41,12 +41,7 @@ import {
 const SINGLE_USERNAME = "owner";
 const SINGLE_KEY = "single-user"; // konstanter Lockout-Key (kein Username im UI)
 
-const PasswortPolicy = z
-  .string()
-  .min(12, "Mindestens 12 Zeichen")
-  .max(200)
-  .refine((s) => /[0-9]/.test(s), "Mindestens eine Ziffer")
-  .refine((s) => /[^A-Za-z0-9]/.test(s), "Mindestens ein Sonderzeichen");
+const PasswortPolicy = z.string().min(1, "Passwort darf nicht leer sein").max(200);
 
 const LoginSchema = z.object({
   password: z.string().min(1).max(500),
