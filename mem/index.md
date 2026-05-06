@@ -2,6 +2,7 @@
 
 ## Core
 Backend läuft später lokal auf Raspberry Pi (Pi 5, 8GB RAM) mit USB-SSD. Stack: Node.js + Fastify + SQLite (better-sqlite3 mit WAL-Mode). Nicht in Cloud deployen.
+Pi muss per IP UND per `.local` erreichbar sein: `mycleancenter-pi.local`, Alias `mycleancenter.local`, Timekeeper `timekeeper.local`.
 **Code/Daten strikt trennen:** Code in `/opt/mycleancenter/current/` (read-only zur Laufzeit), Daten in `/var/lib/mycleancenter/` (einziger Schreibort). Updates ersetzen NUR Code via atomarem Symlink-Switch, niemals Daten. Alter Code 1 Vorgänger-Ordner für Rollback. Jede Schreib-Operation MUSS via `path.join(process.env.DATA_DIR, ...)` laufen — keine hartkodierten Pfade.
 **ABSOLUTE REGEL:** Bei System-Updates UND Backup/Restore darf NIEMALS etwas am Daten-Verzeichnis verändert/gelöscht/überschrieben werden außerhalb des kontrollierten Restore-Flows. Vor jedem Update UND vor jedem Restore wird automatisch ein Sicherheits-Backup erstellt.
 **Credentials niemals in Lovable-Secrets / niemals im Code:** Strato SMTP, Google OAuth (Client ID/Secret/Refresh-Token), Stundenzettel-URL etc. werden vom User in der Einstellungen-UI eingegeben, mit AES-256-GCM (Master-Key aus `${DATA_DIR}/keys/master.key`, root:root 0600) verschlüsselt und in der `einstellungen`-Tabelle gespeichert. Master-Key wird beim ersten Backend-Start generiert und ist Teil der Daten (wird mitgebackupt — sonst sind Settings nach Restore unbrauchbar).
