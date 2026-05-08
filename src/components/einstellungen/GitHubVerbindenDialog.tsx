@@ -40,8 +40,8 @@ export function GitHubVerbindenDialog({ current, open, onClose }: Props) {
       toast.error("Repository im Format besitzer/repo angeben");
       return;
     }
-    if (!isEditingExisting && token.trim().length < 20) {
-      toast.error("Personal Access Token (mind. 20 Zeichen) ist erforderlich");
+    if (token.trim().length > 0 && token.trim().length < 20) {
+      toast.error("Personal Access Token zu kurz (mind. 20 Zeichen)");
       return;
     }
     verbinden.mutate(
@@ -115,7 +115,7 @@ export function GitHubVerbindenDialog({ current, open, onClose }: Props) {
 
           <div className="space-y-2">
             <Label htmlFor="gh-token">
-              Personal Access Token
+              Personal Access Token <span className="text-xs font-normal text-muted-foreground">(nur bei privaten Repos)</span>
               {isEditingExisting && (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   (leer lassen, um den vorhandenen Token zu behalten)
@@ -143,7 +143,10 @@ export function GitHubVerbindenDialog({ current, open, onClose }: Props) {
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
               <p className="font-medium text-foreground">
-                So holst du dir den Token (einmalig, ~2 min):
+                Public Repository? Token-Feld kann leer bleiben.
+              </p>
+              <p className="mt-1">
+                Nur nötig, wenn dein Repository privat ist. So holst du dir den Token (einmalig, ~2 min):
               </p>
               <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
                 <li>github.com → Settings → Developer settings → Personal access tokens</li>

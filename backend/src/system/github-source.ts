@@ -96,23 +96,29 @@ interface RemoteCommit {
   message: string;
 }
 
-async function ghFetch(url: string, token: string, accept = "application/vnd.github+json"): Promise<Response> {
-  const res = await fetch(url, {
-    headers: {
-      "Accept": accept,
-      "Authorization": `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": USER_AGENT,
-    },
-  });
+async function ghFetch(url: string, token: string | null, accept = "application/vnd.github+json"): Promise<Response> {
+  const headers: Record<string, string> = {
+    "Accept": accept,
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": USER_AGENT,
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(url, { headers });
   return res;
 }
 
-export async function fetchLatestCommit(repo: string, branch: string, token: string): Promise<RemoteCommit> {
+export async function fetchLatestCommit(repo: string, branch: string, token: string | null): Promise<RemoteCommit> {
   const url = `${GITHUB_API}/repos/${encodeURIComponent(repo.split("/")[0])}/${encodeURIComponent(repo.split("/")[1])}/commits/${encodeURIComponent(branch)}`;
   const res = await ghFetch(url, token);
-  if (res.status === 401 || res.status === 403) throw new GithubError("PAT ungültig oder fehlende Berechtigung", 401);
-  if (res.status === 404) throw new GithubError("Repository oder Branch nicht gefunden", 404);
+  if (res.status === 401 || res.status === 403) {
+    throw new GithubError(
+      token
+        ? "PAT ungültig oder fehlende Berechtigung"
+        : "Repository ist privat — bitte Personal Access Token hinterlegen",
+      401,
+    );
+  }
+  if (res.status === 404) throw new GithubError("Repository oder Branch nicht gefunden (oder privat ohne Token)", 404);
   if (!res.ok) throw new GithubError(`GitHub-Fehler ${res.status}`, 502);
   const data = (await res.json()) as { sha: string; commit: { message: string; committer: { date: string } } };
   return {
@@ -150,28 +156,27 @@ export async function buildStatus(opts: { refresh?: boolean } = {}): Promise<Git
     updateVerfuegbar: false,
   };
 
-  if (opts.refresh && status.tokenIsSet && settings.repo) {
-    const token = readEncryptedSecret(SENSITIVE_KEYS.githubToken);
-    if (token) {
-      try {
-        const c = await fetchLatestCommit(settings.repo, settings.branch, token);
-        writeStatusExtra({
-          remoteCommit: c.sha,
-          remoteCommitDate: c.date,
-          remoteCommitMessage: c.message,
-          letzteSynchronisation: new Date().toISOString(),
-          letzterFehler: null,
-        });
-        status.remoteCommit = c.sha;
-        status.remoteCommitDate = c.date;
-        status.remoteCommitMessage = c.message;
-        status.letzteSynchronisation = new Date().toISOString();
-        status.letzterFehler = null;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setGithubError(msg);
-        status.letzterFehler = msg;
-      }
+  if (opts.refresh && settings.repo) {
+    // Token ist optional — public Repos funktionieren ohne PAT.
+    const token = status.tokenIsSet ? readEncryptedSecret(SENSITIVE_KEYS.githubToken) : null;
+    try {
+      const c = await fetchLatestCommit(settings.repo, settings.branch, token);
+      writeStatusExtra({
+        remoteCommit: c.sha,
+        remoteCommitDate: c.date,
+        remoteCommitMessage: c.message,
+        letzteSynchronisation: new Date().toISOString(),
+        letzterFehler: null,
+      });
+      status.remoteCommit = c.sha;
+      status.remoteCommitDate = c.date;
+      status.remoteCommitMessage = c.message;
+      status.letzteSynchronisation = new Date().toISOString();
+      status.letzterFehler = null;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setGithubError(msg);
+      status.letzterFehler = msg;
     }
   }
 
@@ -203,8 +208,8 @@ export interface PreparedPackage {
 export async function prepareUpdateFromGithub(): Promise<PreparedPackage> {
   const settings = loadGithubSettings();
   if (!settings.repo) throw new GithubError("Kein Repository konfiguriert", 400);
+  // Token ist optional — public Repos funktionieren ohne PAT.
   const token = readEncryptedSecret(SENSITIVE_KEYS.githubToken);
-  if (!token) throw new GithubError("Kein PAT hinterlegt — bitte zuerst verbinden", 400);
 
   const commit = await fetchLatestCommit(settings.repo, settings.branch, token);
 

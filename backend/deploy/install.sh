@@ -19,20 +19,31 @@ readonly PRETTY_HOSTNAME="My Clean Center Pi"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SYSTEMD_UNIT="$SCRIPT_DIR/systemd/mycleancenter.service"
 readonly MDNS_ALIASES_UNIT="$SCRIPT_DIR/systemd/mycleancenter-mdns-aliases.service"
+readonly MDNS_ALIAS_UNIT="$SCRIPT_DIR/systemd/mycleancenter-mdns-alias.service"
 readonly SUDOERS_FILE="$SCRIPT_DIR/sudoers.d/mycleancenter"
 readonly LOGROTATE_FILE="$SCRIPT_DIR/logrotate.conf"
 
 CHECK_ONLY=0
 BOOTSTRAP_ZIP=""
+DOCTOR=0
+USE_SSD=""
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
+    --doctor) DOCTOR=1 ;;
+    --use-ssd=*) USE_SSD="${arg#--use-ssd=}" ;;
     --bootstrap=*) BOOTSTRAP_ZIP="${arg#--bootstrap=}" ;;
     -h|--help)
       cat <<EOF
-Usage: sudo $0 [--check] [--bootstrap=<release.zip>]
-  --check                  prüft Setup, ohne etwas zu ändern
-  --bootstrap=<release.zip> entpackt das Release-ZIP nach releases/initial/
+Usage: sudo $0 [--check] [--doctor] [--use-ssd=<mountpoint>] [--bootstrap=<release.zip>]
+  --check                   prüft Setup, ohne etwas zu ändern
+  --doctor                  führt nur die Diagnose aus (System, mDNS, SSD,
+                            Healthcheck, Ports, Backup) — ohne Änderungen
+  --use-ssd=<mountpoint>    legt /var/lib/mycleancenter als Symlink auf
+                            <mountpoint>/mycleancenter an (USB-SSD-Modus).
+                            Existierende Daten werden nach <mountpoint>
+                            verschoben (atomar via rsync + Symlink-Swap).
+  --bootstrap=<release.zip> entpackt das Release-ZIP nach releases/<stamp>/
                             und setzt den 'current'-Symlink
 EOF
       exit 0 ;;
@@ -49,6 +60,59 @@ require_root() {
     err "Bitte mit sudo ausführen: sudo $0"
     exit 1
   fi
+}
+
+# --- USB-SSD-Setup ---------------------------------------------------------
+# Wir verschieben /var/lib/mycleancenter NICHT, sondern legen es als Symlink
+# auf <mp>/mycleancenter an. Existierende Daten werden vorher per rsync
+# kopiert. Der bisherige Ordner wird in /var/lib/mycleancenter.sd-backup
+# umbenannt (nicht gelöscht — strikte Daten-Garantie).
+ensure_ssd() {
+  [[ -z "$USE_SSD" ]] && return 0
+  local mp="$USE_SSD"
+  if ! mountpoint -q "$mp"; then
+    err "USB-SSD-Mount nicht aktiv: $mp ist kein Mountpunkt."
+    err "Bitte zuerst mounten, z. B.: sudo mount /dev/sda1 $mp"
+    exit 1
+  fi
+  # Stelle sicher, dass mp NICHT auf der SD-Karte liegt (Root-Device).
+  local root_dev mp_dev
+  root_dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
+  mp_dev="$(findmnt -no SOURCE "$mp" 2>/dev/null || true)"
+  if [[ -n "$root_dev" && "$root_dev" == "$mp_dev" ]]; then
+    err "USB-SSD-Mount $mp liegt auf demselben Gerät wie / ($root_dev)."
+    err "Bitte echte USB-SSD verwenden, sonst landen Daten auf der SD-Karte."
+    exit 1
+  fi
+  local target="$mp/mycleancenter"
+  log "USB-SSD aktiv: $mp ($mp_dev) → Datenziel $target"
+  if [[ $CHECK_ONLY -eq 1 ]]; then
+    warn "[--check] SSD-Symlink würde gesetzt"
+    return 0
+  fi
+  mkdir -p "$target"
+  # Wenn DATA_DIR existiert und KEIN Symlink ist und Inhalte hat → migrieren.
+  if [[ -e "$DATA_DIR" && ! -L "$DATA_DIR" ]]; then
+    if [[ -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]]; then
+      log "Migriere bestehende Daten von $DATA_DIR nach $target (rsync, NICHT löschen)"
+      command -v rsync >/dev/null || apt-get install -y rsync
+      rsync -aHAX --info=stats1 "$DATA_DIR/" "$target/"
+    fi
+    mv "$DATA_DIR" "${DATA_DIR}.sd-backup-$(date +%Y%m%d-%H%M%S)"
+    ok "Original /var/lib/mycleancenter gesichert (NICHT gelöscht)"
+  fi
+  if [[ -L "$DATA_DIR" ]]; then
+    local cur
+    cur="$(readlink -f "$DATA_DIR")"
+    if [[ "$cur" != "$target" ]]; then
+      rm -f "$DATA_DIR"
+      ln -s "$target" "$DATA_DIR"
+    fi
+  else
+    ln -s "$target" "$DATA_DIR"
+  fi
+  chown -h "$APP_USER:$APP_GROUP" "$DATA_DIR" 2>/dev/null || true
+  ok "/var/lib/mycleancenter → $target (USB-SSD)"
 }
 
 ensure_user() {
@@ -170,6 +234,16 @@ ensure_mdns() {
     ok "mDNS-Alias-Dienst deaktiviert; kein Restart-Loop mehr"
   else
     ok "mDNS-Alias-Dienst ist nicht installiert"
+  fi
+
+  # Stabiler Alias `mycleancenter.local` via gehärtetem Single-Name-Service.
+  # StartLimitBurst=3 / RestartSec=60 → niemals wieder Hot-Loop.
+  if [[ -f "$MDNS_ALIAS_UNIT" ]]; then
+    install -m 0644 "$MDNS_ALIAS_UNIT" /etc/systemd/system/mycleancenter-mdns-alias.service
+    systemctl daemon-reload
+    systemctl enable mycleancenter-mdns-alias.service >/dev/null 2>&1 || true
+    systemctl restart mycleancenter-mdns-alias.service || warn "mDNS-Alias konnte nicht gestartet werden — IP-Zugriff bleibt möglich"
+    ok "mDNS-Alias mycleancenter.local aktiviert (gehärtet, kein Loop)"
   fi
 }
 
@@ -362,10 +436,105 @@ start_service() {
   warn "Service antwortet nicht auf /health — prüfe: journalctl -u $SERVICE_NAME -n 80"
 }
 
+# --- Doctor: rein lesende Diagnose -----------------------------------------
+run_doctor() {
+  log "MyCleanCenter Doctor — Diagnose (keine Änderungen)"
+
+  # 1) USB-SSD / Datenpfad
+  if [[ -L "$DATA_DIR" ]]; then
+    local target dev
+    target="$(readlink -f "$DATA_DIR")"
+    dev="$(findmnt -no SOURCE "$target" 2>/dev/null || true)"
+    ok "Datenpfad: $DATA_DIR → $target  (Gerät: ${dev:-?})"
+  elif [[ -d "$DATA_DIR" ]]; then
+    local dev root_dev
+    dev="$(findmnt -no SOURCE "$DATA_DIR" 2>/dev/null || true)"
+    root_dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
+    if [[ -n "$dev" && "$dev" == "$root_dev" ]]; then
+      warn "Datenpfad liegt auf der SD-Karte ($dev). Empfehlung: --use-ssd=/mnt/data"
+    else
+      ok "Datenpfad: $DATA_DIR (Gerät: ${dev:-?})"
+    fi
+  else
+    warn "Datenpfad fehlt: $DATA_DIR"
+  fi
+
+  # 2) Service-Status
+  if systemctl is-active --quiet "$SERVICE_NAME"; then
+    ok "Service $SERVICE_NAME läuft"
+  else
+    err "Service $SERVICE_NAME läuft NICHT (sudo journalctl -u $SERVICE_NAME -n 50)"
+  fi
+
+  # 3) Healthcheck
+  if curl -fsS "http://localhost:8787/health" >/dev/null 2>&1; then
+    ok "Healthcheck localhost:8787 ok"
+  else
+    err "Healthcheck localhost:8787 fehlgeschlagen"
+  fi
+
+  # 4) mDNS
+  if systemctl is-active --quiet avahi-daemon; then
+    ok "avahi-daemon läuft"
+  else
+    warn "avahi-daemon läuft nicht — .local-Auflösung deaktiviert"
+  fi
+  if systemctl is-active --quiet mycleancenter-mdns-alias.service 2>/dev/null; then
+    ok "mDNS-Alias mycleancenter.local aktiv"
+  else
+    warn "mDNS-Alias mycleancenter.local nicht aktiv (IP-Zugriff bleibt möglich)"
+  fi
+  # Restart-Loop-Check
+  local restarts
+  restarts="$(systemctl show mycleancenter-mdns-alias.service -p NRestarts --value 2>/dev/null || echo 0)"
+  if [[ "${restarts:-0}" =~ ^[0-9]+$ && "${restarts:-0}" -gt 5 ]]; then
+    err "mDNS-Alias-Restart-Counter: $restarts — vermutlich Loop. Bitte 'systemctl status mycleancenter-mdns-alias' prüfen"
+  fi
+
+  # 5) Ports
+  if ss -ltn 2>/dev/null | grep -q ':8787 '; then
+    ok "Port 8787 belegt (CRM)"
+  else
+    warn "Port 8787 ist frei — CRM antwortet nicht"
+  fi
+  if ss -ltn 2>/dev/null | grep -q ':8080 '; then
+    ok "Port 8080 belegt (vermutlich Stundenzettel)"
+  else
+    warn "Port 8080 ist frei — Stundenzettel-App noch nicht gestartet"
+  fi
+
+  # 6) System-Last
+  log "System-Last (uptime): $(uptime)"
+
+  # 7) IP / Hostname
+  local ip
+  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  log "Erreichbar voraussichtlich unter:"
+  [[ -n "$ip" ]] && log "  http://${ip}:8787"
+  log "  http://${STATIC_HOSTNAME}.local:8787"
+  log "  http://mycleancenter.local:8787"
+
+  # 8) Backup-Verzeichnis schreibbar?
+  if [[ -d "$DATA_DIR/backups/safety" ]]; then
+    if sudo -u "$APP_USER" test -w "$DATA_DIR/backups/safety" 2>/dev/null; then
+      ok "Backup-Verzeichnis ist beschreibbar"
+    else
+      err "Backup-Verzeichnis NICHT beschreibbar für $APP_USER"
+    fi
+  fi
+
+  log "Doctor fertig."
+}
+
 main() {
   require_root
   log "MyCleanCenter Setup startet (CHECK_ONLY=$CHECK_ONLY${BOOTSTRAP_ZIP:+, BOOTSTRAP=$BOOTSTRAP_ZIP})"
+  if [[ $DOCTOR -eq 1 ]]; then
+    run_doctor
+    exit 0
+  fi
   ensure_user
+  ensure_ssd
   ensure_dirs
   ensure_build_tools
   ensure_mdns
