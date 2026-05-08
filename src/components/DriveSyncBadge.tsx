@@ -2,7 +2,6 @@
 // Google Drive synchronisiert ist. Funktioniert auch ohne Drive-Verbindung —
 // dann steht dort „Nur lokal · Drive nicht verbunden" + Verbinden-Link.
 import { Cloud, CloudOff, CheckCircle2, AlertTriangle, Loader2, ExternalLink } from "lucide-react";
-import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useDriveUploads, useGoogleDrive, useRetryDriveUpload } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
@@ -48,13 +47,12 @@ export function DriveSyncBadge({ belegArt, belegId, compact = false, className }
         {!compact && (
           <>
             <span className="text-muted-foreground">·</span>
-            <Link
-              to="/einstellungen"
-              search={{ tab: "drive" } as never}
+            <a
+              href="/einstellungen?tab=drive"
               className="underline underline-offset-2 hover:text-foreground"
             >
               Drive verbinden
-            </Link>
+            </a>
           </>
         )}
       </Pill>
