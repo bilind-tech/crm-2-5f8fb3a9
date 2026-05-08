@@ -235,6 +235,16 @@ ensure_mdns() {
   else
     ok "mDNS-Alias-Dienst ist nicht installiert"
   fi
+
+  # Stabiler Alias `mycleancenter.local` via gehärtetem Single-Name-Service.
+  # StartLimitBurst=3 / RestartSec=60 → niemals wieder Hot-Loop.
+  if [[ -f "$MDNS_ALIAS_UNIT" ]]; then
+    install -m 0644 "$MDNS_ALIAS_UNIT" /etc/systemd/system/mycleancenter-mdns-alias.service
+    systemctl daemon-reload
+    systemctl enable mycleancenter-mdns-alias.service >/dev/null 2>&1 || true
+    systemctl restart mycleancenter-mdns-alias.service || warn "mDNS-Alias konnte nicht gestartet werden — IP-Zugriff bleibt möglich"
+    ok "mDNS-Alias mycleancenter.local aktiviert (gehärtet, kein Loop)"
+  fi
 }
 
 install_systemd_unit() {
