@@ -80,15 +80,7 @@ async function main(): Promise<void> {
 
   // SSD-Check: warnt deutlich, wenn DATA_DIR auf der SD-Karte liegt.
   const ddInfo = inspectDataDir();
-  if (ddInfo.warning) {
-    app.log.warn({ dataDir: ddInfo.resolved }, ddInfo.warning);
-  } else {
-    const gb = ddInfo.freeBytes ? Math.round(ddInfo.freeBytes / 1e9) : null;
-    app.log.info(
-      { dataDir: ddInfo.resolved, freeGB: gb },
-      `Datenverzeichnis OK${gb ? ` (${gb} GB frei)` : ""}`,
-    );
-  }
+  // Logging erfolgt weiter unten, sobald die Fastify-Instanz existiert.
 
   const keyStatus = ensureMasterKey(config.keyPath);
   openDatabase(config.dbPath);
@@ -139,6 +131,17 @@ async function main(): Promise<void> {
     trustProxy: true,
     bodyLimit: 10 * 1024 * 1024, // normale Routes; Backup-Upload nutzt Multipart-Stream
   });
+
+  // SSD-Check-Resultat jetzt loggen (Fastify-Logger ist verfügbar).
+  if (ddInfo.warning) {
+    app.log.warn({ dataDir: ddInfo.resolved }, ddInfo.warning);
+  } else {
+    const gb = ddInfo.freeBytes ? Math.round(ddInfo.freeBytes / 1e9) : null;
+    app.log.info(
+      { dataDir: ddInfo.resolved, freeGB: gb },
+      `Datenverzeichnis OK${gb ? ` (${gb} GB frei)` : ""}`,
+    );
+  }
 
   await app.register(helmet, {
     contentSecurityPolicy: {
