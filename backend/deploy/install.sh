@@ -150,9 +150,15 @@ ensure_dirs() {
     fi
   done
   if [[ $CHECK_ONLY -eq 0 ]]; then
-    chown -R "$APP_USER:$APP_GROUP" "$APP_DIR" "$DATA_DIR"
+    local data_target="$DATA_DIR"
+    if [[ -L "$DATA_DIR" ]]; then
+      data_target="$(readlink -f "$DATA_DIR")"
+    fi
+    chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
+    chown -R "$APP_USER:$APP_GROUP" "$data_target"
+    chown -h "$APP_USER:$APP_GROUP" "$DATA_DIR" 2>/dev/null || true
     chmod 0700 "$DATA_DIR/keys"
-    chmod 0750 "$DATA_DIR"
+    chmod 0750 "$data_target"
     ok "Rechte gesetzt (keys/=0700, data/=0750)"
   fi
 }
@@ -162,22 +168,22 @@ ensure_node() {
     local v
     v="$(node --version)"
     ok "Node vorhanden: $v"
-    if [[ ! "$v" =~ ^v(20|22|24) ]]; then
-      warn "Node-Version ist $v — installiere Node.js 20 LTS."
+    if [[ ! "$v" =~ ^v(22|24) ]]; then
+      warn "Node-Version ist $v — installiere Node.js 22 LTS."
       if [[ $CHECK_ONLY -eq 1 ]]; then
         return
       fi
-      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
       apt-get install -y nodejs
       ok "Node.js aktualisiert: $(node --version)"
     fi
   else
-    log "Installiere Node.js 20 LTS via NodeSource"
+    log "Installiere Node.js 22 LTS via NodeSource"
     if [[ $CHECK_ONLY -eq 1 ]]; then
       warn "[--check] Node fehlt"
       return
     fi
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
     apt-get install -y nodejs
     ok "Node.js installiert: $(node --version)"
   fi
