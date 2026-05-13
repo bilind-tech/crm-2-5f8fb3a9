@@ -225,6 +225,12 @@ if [[ $SKIP_ZETTEL -eq 0 ]]; then
   ( cd "$ZETTEL_SRC" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build )
   ok "Stundenzettel dist/ gebaut"
 
+  # `serve` global installieren (ohne npx-Cache-Probleme unter systemd-Hardening).
+  if ! command -v serve >/dev/null 2>&1; then
+    npm install -g serve --no-audit --no-fund >/dev/null
+  fi
+  ok "serve global verfügbar: $(command -v serve)"
+
   STAMP="$(date +%Y%m%d-%H%M%S)"
   REL_DIR="/opt/stundenzettel/releases/$STAMP"
   mkdir -p "$REL_DIR"
