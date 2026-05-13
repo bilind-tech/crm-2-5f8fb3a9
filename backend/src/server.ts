@@ -179,7 +179,7 @@ async function main(): Promise<void> {
     timeWindow: "1 minute",
     // Diese Pfade dürfen NIE ins globale Bucket zählen, sonst killt sich
     // das UI mit seinem eigenen Polling/SSE selbst.
-    allowList: (req) => {
+    allowList: (req: { url: string }) => {
       const url = req.url.split("?")[0];
       return (
         url === "/health" ||
