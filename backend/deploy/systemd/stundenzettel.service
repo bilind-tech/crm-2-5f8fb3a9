@@ -13,10 +13,10 @@ Environment=NODE_ENV=production
 Environment=TZ=Europe/Berlin
 Environment=PORT=8080
 Environment=HOST=0.0.0.0
-# `serve` wird global via npm installiert (siehe setup-pi.sh).
+# `serve` ist global via `npm install -g serve` installiert (siehe setup-pi.sh).
 # -s: Single-Page-App-Modus (alle Routen → index.html)
 # -l: Listen auf Port 8080, alle Interfaces
-ExecStart=/usr/bin/npx --yes serve -s dist -l tcp://0.0.0.0:8080
+ExecStart=/usr/bin/serve -s dist -l tcp://0.0.0.0:8080
 Restart=on-failure
 RestartSec=3
 StandardOutput=journal
