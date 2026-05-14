@@ -500,6 +500,43 @@ function readPreviousTarget(): string | null {
   }
 }
 
+function backendRuntimeDir(versionRoot: string): string {
+  const nested = path.join(versionRoot, "backend");
+  return existsSync(path.join(nested, "package.json")) ? nested : versionRoot;
+}
+
+function prepareRuntimeLayout(versionRoot: string): void {
+  const backendDir = backendRuntimeDir(versionRoot);
+  const distServer = path.join(backendDir, "dist", "server.js");
+  const distSpa = path.join(versionRoot, "dist-spa");
+  const dist = path.join(versionRoot, "dist");
+
+  if (!existsSync(path.join(dist, "index.html")) && existsSync(path.join(distSpa, "index.html"))) {
+    safeRename(distSpa, dist);
+  }
+  if (!existsSync(distServer)) {
+    throw new Error(`Backend-Build fehlt im Update-Paket: ${distServer}`);
+  }
+  copyRuntimeDeployFiles(versionRoot, backendDir);
+}
+
+function copyRuntimeDeployFiles(versionRoot: string, backendDir: string): void {
+  const currentBackend = path.join(process.cwd());
+  const files = ["package.json", "package-lock.json"];
+  for (const f of files) {
+    const src = path.join(versionRoot, f);
+    const fallback = path.join(currentBackend, f);
+    const dest = path.join(backendDir, f);
+    if (!existsSync(dest) && existsSync(src)) copyFileSync(src, dest);
+    else if (!existsSync(dest) && existsSync(fallback)) copyFileSync(fallback, dest);
+  }
+  const deploySrc = path.join(versionRoot, "deploy");
+  const deployFallback = path.join(currentBackend, "deploy");
+  const deployDest = path.join(backendDir, "deploy");
+  if (!existsSync(deployDest) && existsSync(deploySrc)) cpSync(deploySrc, deployDest, { recursive: true });
+  else if (!existsSync(deployDest) && existsSync(deployFallback)) cpSync(deployFallback, deployDest, { recursive: true });
+}
+
 function cleanupOldVersions(): void {
   try {
     const cur = readCurrentTarget();
