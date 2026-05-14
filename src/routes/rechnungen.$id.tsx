@@ -34,9 +34,11 @@ function RouteShell() {
 
 function Page() {
   const { id } = Route.useParams();
-  const { data: r, isLoading } = useRechnung(id);
-  const safeRechnung = r ? { ...r, zahlungen: r.zahlungen ?? [], positionen: r.positionen ?? [], rabattGesamt: r.rabattGesamt ?? 0 } : undefined;
-  const pdf = useRechnungPdf(safeRechnung);
+  const { data: rechnung, isLoading } = useRechnung(id);
+  const r = rechnung
+    ? { ...rechnung, zahlungen: rechnung.zahlungen ?? [], positionen: rechnung.positionen ?? [], rabattGesamt: rechnung.rabattGesamt ?? 0 }
+    : undefined;
+  const pdf = useRechnungPdf(r);
   const [zahlungOpen, setZahlungOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const { data: quellAngebot } = useAngebot(r?.quellAngebotId ?? "");
@@ -45,7 +47,7 @@ function Page() {
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   if (isLoading) return <DetailSkeleton variant="beleg" />;
-  if (!safeRechnung) {
+  if (!r) {
     return (
       <NotFoundState
         title="Rechnung nicht gefunden"
@@ -55,7 +57,6 @@ function Page() {
       />
     );
   }
-  const r = safeRechnung;
   const s = summenRechnung(r.positionen, r.rabattGesamt);
   const bezahlt = r.zahlungen.reduce((a, z) => a + z.betrag, 0);
   const offen = Math.max(0, s.brutto - bezahlt);
