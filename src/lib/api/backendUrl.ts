@@ -4,6 +4,7 @@
 
 const STORAGE_KEY = "mcc.backend.url";
 const STATUS_EVENT = "mcc.backend.url.changed";
+const HEALTH_TIMEOUT_MS = 4_000;
 
 function defaultUrl(): string {
   // Build-Env hat Vorrang, falls explizit gesetzt
@@ -64,9 +65,23 @@ export interface HealthInfo {
 }
 
 export async function fetchHealth(signal?: AbortSignal): Promise<HealthInfo> {
+  const ctrl = new AbortController();
+  const timeout = window.setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
   const url = `${getBackendUrl()}/health`;
-  const res = await fetch(url, { signal, credentials: "include" });
-  // 503 im Wartungsmodus liefert JSON-Body mit status "maintenance" — auswerten statt werfen.
-  if (!res.ok && res.status !== 503) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as HealthInfo;
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, credentials: "include" });
+    // 503 im Wartungsmodus liefert JSON-Body mit status "maintenance" — auswerten statt werfen.
+    if (!res.ok && res.status !== 503) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as HealthInfo;
+  } catch (err) {
+    if (ctrl.signal.aborted && !signal?.aborted) {
+      throw new Error("Backend-Check hat zu lange gedauert");
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeout);
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
