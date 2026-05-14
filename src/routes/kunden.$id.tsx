@@ -413,14 +413,18 @@ function Page() {
             <Empty text="Noch keine Notizen." />
           ) : (
             <ul className="space-y-3">
-              {notizenListe.map((n) => (
-                <li key={n.id} className="rounded-2xl border border-border bg-card p-4">
-                  <p className="text-sm font-medium">{n.titel}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {n.inhalt}
-                  </p>
-                </li>
-              ))}
+              {notizenListe.map((n, index) => {
+                const text = n.inhalt ?? n.text ?? "";
+                const title = n.titel ?? (n.erstelltAm ? formatDate(n.erstelltAm) : "Notiz");
+                return (
+                  <li key={n.id ?? index} className="rounded-2xl border border-border bg-card p-4">
+                    <p className="text-sm font-medium">{title}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {text || "—"}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </TabsContent>
