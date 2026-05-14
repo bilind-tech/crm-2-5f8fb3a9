@@ -458,7 +458,7 @@ function ManuelleStufenAuswahl({
 }) {
   // Nur verfügbare Stufen ab "aktuell + 1" (außer der bereits vorgeschlagenen,
   // die schon prominent als Primary-Action erscheint).
-  const verfuegbar = einstellungen.stufen.filter(
+  const verfuegbar = (einstellungen.stufen ?? []).filter(
     (s) => s.stufe > aktuell && s.stufe !== vorgeschlagen,
   );
   if (verfuegbar.length === 0) return null;
