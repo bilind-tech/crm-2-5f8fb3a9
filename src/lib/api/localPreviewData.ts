@@ -151,6 +151,8 @@ export const previewMahnungStatus = {
   letzterLauf: null,
 };
 
+export const previewMahnEinstellungen = previewMahnungStatus.einstellungen;
+
 export function previewDashboardKennzahlen(): DashboardKennzahlen {
   return {
     aktiveKunden: previewKunden.length,
@@ -211,7 +213,7 @@ export function localPreviewGet<T>(path: string): T | null {
   if (cleanPath === "/email/signaturen") return [] as T;
   if (cleanPath === "/einstellungen/smtp") return { host: "", port: 587, secure: false, user: "", passwortGesetzt: false, absenderName: "My Clean Center", absenderEmail: "" } as T;
   if (cleanPath === "/einstellungen/google-drive") return previewGoogleDrive as T;
-  if (cleanPath === "/einstellungen/mahnung") return previewMahnungStatus as T;
+  if (cleanPath === "/einstellungen/mahnung") return previewMahnEinstellungen as T;
   if (cleanPath === "/dashboard/kennzahlen") return previewDashboardKennzahlen() as T;
   if (cleanPath === "/dashboard/umsatz") return previewUmsatz() as T;
   if (cleanPath === "/dashboard/warnungen") return [] as T;
