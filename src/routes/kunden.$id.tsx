@@ -53,7 +53,7 @@ function Page() {
   const rechnungen = Array.isArray(k.rechnungen) ? k.rechnungen : [];
   const dokumente = Array.isArray(k.dokumente) ? k.dokumente : [];
   const tags = Array.isArray(k.tags) ? k.tags : [];
-  const rawNotizen = (k as { notizen?: unknown }).notizen;
+  const rawNotizen: unknown = k.notizen;
   const notizenListe: KundenNotiz[] = Array.isArray(rawNotizen)
     ? rawNotizen.filter((n): n is KundenNotiz => !!n && typeof n === "object")
     : [];
