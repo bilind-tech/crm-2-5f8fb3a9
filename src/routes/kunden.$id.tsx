@@ -25,7 +25,8 @@ import type { Angebot, Ansprechpartner, Dokument, Kunde, Objekt, Rechnung } from
 export const Route = createFileRoute("/kunden/$id")({ component: Page });
 
 type KundenNotiz = { id?: string; titel?: string; inhalt?: string; text?: string; erstelltAm?: string };
-type KundeDetailSafe = Kunde & {
+type KundeDetailSafe = Omit<Kunde, "notizen" | "tags"> & {
+  tags: string[];
   ansprechpartner: Ansprechpartner[];
   objekte: Objekt[];
   angebote: Angebot[];
@@ -478,7 +479,7 @@ function Page() {
         <RechnungForm onClose={() => setOpenRechnung(false)} defaultKundeId={k.id} />
       </SlideOver>
       <KundeBearbeitenDialog kunde={k} open={openEdit} onOpenChange={setOpenEdit} />
-      <KundeLoeschenDialog kunde={k} open={openDelete} onOpenChange={setOpenDelete} />
+      <KundeLoeschenDialog kunde={kundeSafe} open={openDelete} onOpenChange={setOpenDelete} />
     </div>
   );
 }
