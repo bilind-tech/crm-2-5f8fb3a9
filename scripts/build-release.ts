@@ -167,14 +167,26 @@ function copyTree(src: string, dest: string): void {
   }
 }
 
-function assertSpaBundle(frontendOutDir: string): void {
+function assertSpaBundle(frontendOutDir: string, buildStartedAt?: number): void {
   const indexPath = path.join(frontendOutDir, "index.html");
   if (!existsSync(indexPath)) fail(`SPA-Build unvollständig: ${indexPath} fehlt`);
+  if (buildStartedAt && statSync(indexPath).mtimeMs < buildStartedAt - 2_000) {
+    fail("SPA index.html wurde nicht frisch erzeugt — Release abgebrochen, damit kein alter Build ausgeliefert wird");
+  }
   const assetsDir = path.join(frontendOutDir, "assets");
   if (!existsSync(assetsDir)) fail(`SPA-Build unvollständig: ${assetsDir} fehlt`);
   const html = readFileSync(indexPath, "utf8");
   if (!/<script[^>]+type=["']module["'][^>]+\/assets\//.test(html)) {
     fail("SPA index.html referenziert kein /assets/*.js Modul");
+  }
+  const assetText = readdirSync(assetsDir)
+    .filter((f) => f.endsWith(".js"))
+    .map((f) => readFileSync(path.join(assetsDir, f), "utf8"))
+    .join("\n");
+  for (const stale of [".objekte.filter", ".ansprechpartner.length", ".notizen.length"] as const) {
+    if (assetText.includes(stale)) {
+      fail(`SPA-Build enthält alten unsicheren Kunden-Code (${stale}) — Release abgebrochen`);
+    }
   }
 }
 
@@ -233,10 +245,12 @@ async function main(): Promise<void> {
 
   if (!args.skipFrontend) {
     log("Frontend (SPA) bauen — vite.spa.config.ts");
-    runPackageScript("build:spa", ROOT);
     const frontendDist = path.join(ROOT, "dist-spa");
+    rmSync(frontendDist, { recursive: true, force: true });
+    const spaBuildStartedAt = Date.now();
+    runPackageScript("build:spa", ROOT);
     if (!existsSync(frontendDist)) fail("Frontend-SPA-Build hat dist-spa/ nicht erzeugt");
-    assertSpaBundle(frontendDist);
+    assertSpaBundle(frontendDist, spaBuildStartedAt);
     const stagedFrontend = path.join(stagingRoot, "dist");
     copyTree(frontendDist, stagedFrontend);
     ok("Frontend (SPA) kopiert");
