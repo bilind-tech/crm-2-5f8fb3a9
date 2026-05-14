@@ -44,6 +44,14 @@ function Page() {
     );
   }
 
+  // Defensiv: ältere Backend-Versionen liefern manche Listen nicht mit.
+  const ansprechpartner = k.ansprechpartner ?? [];
+  const objekte = k.objekte ?? [];
+  const angebote = k.angebote ?? [];
+  const rechnungen = k.rechnungen ?? [];
+  const dokumente = k.dokumente ?? [];
+  const notizenListe = Array.isArray(k.notizen) ? k.notizen : [];
+
   const fullName = k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim();
   const initialen =
     (k.firmenname
@@ -53,7 +61,7 @@ function Page() {
       .toUpperCase()
       .slice(0, 2) || "K";
 
-  const aktiveObjekte = k.objekte.filter((o) => o.status === "aktiv").length;
+  const aktiveObjekte = objekte.filter((o) => o.status === "aktiv").length;
 
   const statusToneMap: Record<string, string> = {
     aktiv: "bg-success/10 text-success border-success/20",
@@ -118,22 +126,22 @@ function Page() {
             Übersicht
           </TabsTrigger>
           <TabsTrigger value="ansprechpartner" className="shrink-0 rounded-full px-3 sm:px-5">
-            Ansprechpartner ({k.ansprechpartner.length})
+            Ansprechpartner ({ansprechpartner.length})
           </TabsTrigger>
           <TabsTrigger value="objekte" className="shrink-0 rounded-full px-3 sm:px-5">
-            Objekte ({k.objekte.length})
+            Objekte ({objekte.length})
           </TabsTrigger>
           <TabsTrigger value="angebote" className="shrink-0 rounded-full px-3 sm:px-5">
-            Angebote ({k.angebote.length})
+            Angebote ({angebote.length})
           </TabsTrigger>
           <TabsTrigger value="rechnungen" className="shrink-0 rounded-full px-3 sm:px-5">
-            Rechnungen ({k.rechnungen.length})
+            Rechnungen ({rechnungen.length})
           </TabsTrigger>
           <TabsTrigger value="belege" className="shrink-0 rounded-full px-3 sm:px-5">
-            Belege ({k.dokumente.length})
+            Belege ({dokumente.length})
           </TabsTrigger>
           <TabsTrigger value="notizen" className="shrink-0 rounded-full px-3 sm:px-5">
-            Notizen ({k.notizen.length})
+            Notizen ({notizenListe.length})
           </TabsTrigger>
         </TabsList>
 
@@ -181,16 +189,18 @@ function Page() {
             ) : (
               <p className="text-sm text-muted-foreground">Keine Tags.</p>
             )}
-            {k.notizen ? (
-              <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{k.notizen}</p>
-            ) : (
+            {notizenListe.length === 0 ? (
               <p className="mt-3 text-sm text-muted-foreground">Keine Notizen.</p>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">
+                {notizenListe.length} {notizenListe.length === 1 ? "Notiz" : "Notizen"} — siehe Tab „Notizen".
+              </p>
             )}
           </SectionCard>
         </TabsContent>
 
         <TabsContent value="ansprechpartner" className="mt-6">
-          <AnsprechpartnerTab kundeId={k.id} liste={k.ansprechpartner} />
+          <AnsprechpartnerTab kundeId={k.id} liste={ansprechpartner} />
         </TabsContent>
 
         <TabsContent value="objekte" className="mt-6 space-y-3">
@@ -199,7 +209,7 @@ function Page() {
               <Plus className="mr-1 h-4 w-4" /> Neues Objekt
             </Button>
           </div>
-          {k.objekte.length === 0 ? (
+          {objekte.length === 0 ? (
             <Empty text="Noch keine Objekte für diesen Kunden." />
           ) : (
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -213,7 +223,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {k.objekte.map((o) => (
+                  {objekte.map((o) => (
                     <tr
                       key={o.id}
                       className="border-b border-border last:border-0 hover:bg-muted/30"
@@ -248,7 +258,7 @@ function Page() {
               <Plus className="mr-1 h-4 w-4" /> Neues Angebot
             </Button>
           </div>
-          {k.angebote.length === 0 ? (
+          {angebote.length === 0 ? (
             <Empty text="Noch keine Angebote für diesen Kunden." />
           ) : (
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -263,9 +273,9 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {k.angebote.map((a) => {
+                  {angebote.map((a) => {
                     const s = summenRechnung(a.positionen, a.rabattGesamt);
-                    const hatRechnung = k.rechnungen.some((r) => r.quellAngebotId === a.id);
+                    const hatRechnung = rechnungen.some((r) => r.quellAngebotId === a.id);
                     const flow = angebotFlow(a, hatRechnung);
                     return (
                       <tr
@@ -312,7 +322,7 @@ function Page() {
               <Plus className="mr-1 h-4 w-4" /> Neue Rechnung
             </Button>
           </div>
-          {k.rechnungen.length === 0 ? (
+          {rechnungen.length === 0 ? (
             <Empty text="Noch keine Rechnungen für diesen Kunden." />
           ) : (
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -327,7 +337,7 @@ function Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {k.rechnungen.map((r) => {
+                  {rechnungen.map((r) => {
                     const s = summenRechnung(r.positionen, r.rabattGesamt);
                     const bezahlt = r.zahlungen.reduce((a, z) => a + z.betrag, 0);
                     const offen = Math.max(0, s.brutto - bezahlt);
@@ -372,11 +382,11 @@ function Page() {
 
         <TabsContent value="belege" className="mt-6 space-y-4">
           <DokumentUploadPanel kundeId={k.id} compact />
-          {k.dokumente.length === 0 ? (
+          {dokumente.length === 0 ? (
             <Empty text="Noch keine Belege/Dokumente." />
           ) : (
             <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
-              {k.dokumente.map((d) => (
+              {dokumente.map((d) => (
                 <li key={d.id} className="flex items-center gap-3 p-4">
                   <DokumentThumb dokument={d} className="h-12 w-12 shrink-0 rounded-lg" />
                   <div className="min-w-0 flex-1">
@@ -393,11 +403,11 @@ function Page() {
         </TabsContent>
 
         <TabsContent value="notizen" className="mt-6">
-          {k.notizen.length === 0 ? (
+          {notizenListe.length === 0 ? (
             <Empty text="Noch keine Notizen." />
           ) : (
             <ul className="space-y-3">
-              {k.notizen.map((n) => (
+              {notizenListe.map((n) => (
                 <li key={n.id} className="rounded-2xl border border-border bg-card p-4">
                   <p className="text-sm font-medium">{n.titel}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
