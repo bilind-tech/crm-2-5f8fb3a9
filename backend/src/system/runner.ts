@@ -530,14 +530,19 @@ async function ensureBuiltRuntime(versionRoot: string): Promise<string[]> {
   if (existsSync(path.join(versionRoot, "package.json"))) {
     safeRm(path.join(versionRoot, "dist"));
     safeRm(path.join(versionRoot, "dist-spa"));
-    const fe = await npmInstallWithFallback(versionRoot, [], "Frontend-Dependencies");
+    // Für den Frontend-Build nutzen wir bewusst `npm install` statt `npm ci`.
+    // Diese node_modules sind ephemer (werden nach dem Build nicht behalten),
+    // daher ist Reproduzierbarkeit weniger wichtig als Robustheit gegenüber
+    // einem leicht veralteten root-package-lock.json (typisch bei
+    // GitHub-Update-Paketen, die direkt vom Repo gezogen werden).
+    const fe = await npmInstallTolerant(versionRoot, [], "Frontend-Dependencies");
     details.push(fe);
     await runNpm(versionRoot, ["run", "build:spa"], "Frontend-Build");
     prepareRuntimeLayout(versionRoot);
     details.push("Frontend frisch gebaut");
   }
   if (!existsSync(backendServer)) {
-    const be = await npmInstallWithFallback(backendDir, [], "Backend-Dependencies");
+    const be = await npmInstallTolerant(backendDir, [], "Backend-Dependencies");
     details.push(be);
     await runNpm(backendDir, ["run", "build"], "Backend-Build");
     details.push("Backend gebaut");
