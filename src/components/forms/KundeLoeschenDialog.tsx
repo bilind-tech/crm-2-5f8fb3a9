@@ -34,12 +34,12 @@ import type {
 } from "@/lib/api/types";
 
 type KundeDetail = Kunde & {
-  ansprechpartner: Ansprechpartner[];
-  objekte: Objekt[];
-  angebote: Angebot[];
-  rechnungen: Rechnung[];
-  dokumente: Dokument[];
-  notizen: Notiz[];
+  ansprechpartner?: Ansprechpartner[];
+  objekte?: Objekt[];
+  angebote?: Angebot[];
+  rechnungen?: Rechnung[];
+  dokumente?: Dokument[];
+  notizen?: Notiz[] | string;
 };
 
 interface Props {
@@ -60,12 +60,12 @@ export function KundeLoeschenDialog({ kunde, open, onOpenChange }: Props) {
   const matches = eingabe.trim().toLowerCase() === expected.toLowerCase();
 
   const counts = {
-    objekte: kunde.objekte.length,
-    angebote: kunde.angebote.length,
-    rechnungen: kunde.rechnungen.length,
-    ansprechpartner: kunde.ansprechpartner.length,
-    dokumente: kunde.dokumente.length,
-    notizen: kunde.notizen.length,
+    objekte: Array.isArray(kunde.objekte) ? kunde.objekte.length : 0,
+    angebote: Array.isArray(kunde.angebote) ? kunde.angebote.length : 0,
+    rechnungen: Array.isArray(kunde.rechnungen) ? kunde.rechnungen.length : 0,
+    ansprechpartner: Array.isArray(kunde.ansprechpartner) ? kunde.ansprechpartner.length : 0,
+    dokumente: Array.isArray(kunde.dokumente) ? kunde.dokumente.length : 0,
+    notizen: Array.isArray(kunde.notizen) ? kunde.notizen.length : 0,
   };
   const hatDaten =
     counts.objekte + counts.angebote + counts.rechnungen + counts.dokumente + counts.notizen > 0;
