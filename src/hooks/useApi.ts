@@ -84,6 +84,47 @@ export const qk = {
   search: (q: string) => ["search", q] as const,
 };
 
+type KundeDetail = Omit<Kunde, "notizen" | "tags"> & {
+  tags: string[];
+  ansprechpartner: Ansprechpartner[];
+  objekte: Objekt[];
+  angebote: Angebot[];
+  rechnungen: Rechnung[];
+  dokumente: Dokument[];
+  notizen: Notiz[];
+};
+
+function normalizeKundeDetail(raw: unknown): KundeDetail {
+  const k = (raw ?? {}) as Kunde & Record<string, unknown>;
+  const notizen = Array.isArray(k.notizen)
+    ? k.notizen
+        .filter((n): n is Record<string, unknown> => !!n && typeof n === "object")
+        .map((n, index) => ({
+          id: typeof n.id === "string" ? n.id : `notiz-${index}`,
+          kundeId: typeof n.kundeId === "string" ? n.kundeId : k.id,
+          titel: typeof n.titel === "string" ? n.titel : "Notiz",
+          inhalt:
+            typeof n.inhalt === "string"
+              ? n.inhalt
+              : typeof n.text === "string"
+                ? n.text
+                : "",
+          erstelltAm:
+            typeof n.erstelltAm === "string" ? n.erstelltAm : (k.erstelltAm ?? new Date().toISOString()),
+        }))
+    : [];
+  return {
+    ...k,
+    tags: Array.isArray(k.tags) ? k.tags.filter((t): t is string => typeof t === "string") : [],
+    ansprechpartner: Array.isArray(k.ansprechpartner) ? (k.ansprechpartner as Ansprechpartner[]) : [],
+    objekte: Array.isArray(k.objekte) ? (k.objekte as Objekt[]) : [],
+    angebote: Array.isArray(k.angebote) ? (k.angebote as Angebot[]) : [],
+    rechnungen: Array.isArray(k.rechnungen) ? (k.rechnungen as Rechnung[]) : [],
+    dokumente: Array.isArray(k.dokumente) ? (k.dokumente as Dokument[]) : [],
+    notizen,
+  };
+}
+
 // ---------- Kunden ----------
 export const useKunden = (params?: {
   q?: string;
@@ -107,17 +148,8 @@ export const useKunden = (params?: {
 export const useKunde = (id: string) =>
   useQuery({
     queryKey: qk.kunde(id),
-    queryFn: () =>
-      api.get<
-        Kunde & {
-          ansprechpartner: Ansprechpartner[];
-          objekte: Objekt[];
-          angebote: Angebot[];
-          rechnungen: Rechnung[];
-          dokumente: Dokument[];
-          notizen: Notiz[];
-        }
-      >(`/kunden/${id}`),
+    queryFn: () => api.get<unknown>(`/kunden/${id}`),
+    select: normalizeKundeDetail,
     enabled: !!id,
   });
 
