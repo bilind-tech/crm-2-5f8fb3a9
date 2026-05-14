@@ -3,15 +3,18 @@ import type {
   DashboardKennzahlen,
   Firmendaten,
   Kunde,
+  Nummernkreise,
   Rechnung,
   UmsatzPunkt,
 } from "@/lib/api/types";
+import { vorschauBelegnummer } from "@/lib/belegNummer";
 
 const now = new Date();
 const isoNow = now.toISOString();
 const today = isoNow.slice(0, 10);
 const due = new Date(now.getTime() + 14 * 86400000).toISOString().slice(0, 10);
 const month = today.slice(0, 7);
+const STORAGE_KEY = "mcc.localPreview.belege.v1";
 
 const optionen = {
   materialBereitgestellt: true,
@@ -127,6 +130,61 @@ export const previewRechnungen: Rechnung[] = [
   },
 ];
 
+const previewNummernkreise: Nummernkreise = {
+  rechnungFormat: "{KUERZEL}{MM}{YY}/{NN}",
+  angebotFormat: "A-{KUERZEL}{MM}{YY}/{NN}",
+  startNummer: 1,
+};
+
+interface PreviewStore {
+  angebote: Angebot[];
+  rechnungen: Rechnung[];
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function readStore(): PreviewStore {
+  if (typeof window === "undefined") return { angebote: [], rechnungen: [] };
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { angebote: [], rechnungen: [] };
+    const parsed = JSON.parse(raw) as Partial<PreviewStore>;
+    return {
+      angebote: Array.isArray(parsed.angebote) ? parsed.angebote : [],
+      rechnungen: Array.isArray(parsed.rechnungen) ? parsed.rechnungen : [],
+    };
+  } catch {
+    return { angebote: [], rechnungen: [] };
+  }
+}
+
+function writeStore(store: PreviewStore): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+}
+
+function allAngebote(): Angebot[] {
+  return [...previewAngebote, ...readStore().angebote];
+}
+
+function allRechnungen(): Rechnung[] {
+  return [...previewRechnungen, ...readStore().rechnungen];
+}
+
+function nextBelegnummer(kind: "angebot" | "rechnung", kundeId: string): string {
+  const kunde = previewKunden.find((k) => k.id === kundeId);
+  const count = kind === "angebot"
+    ? allAngebote().filter((a) => a.kundeId === kundeId).length
+    : allRechnungen().filter((r) => r.kundeId === kundeId).length;
+  return vorschauBelegnummer(
+    kunde?.kuerzel,
+    kind === "angebot" ? previewNummernkreise.angebotFormat : previewNummernkreise.rechnungFormat,
+    count + 1,
+  );
+}
+
 export const previewGoogleDrive = {
   verbunden: false,
   email: null,
@@ -154,11 +212,13 @@ export const previewMahnungStatus = {
 export const previewMahnEinstellungen = previewMahnungStatus.einstellungen;
 
 export function previewDashboardKennzahlen(): DashboardKennzahlen {
+  const angebote = allAngebote();
+  const rechnungen = allRechnungen();
   return {
     aktiveKunden: previewKunden.length,
     aktiveObjekte: 0,
-    offeneAngebote: previewAngebote.filter((a) => a.status === "entwurf" || a.status === "versendet").length,
-    offeneRechnungen: previewRechnungen.filter((r) => r.status !== "bezahlt" && r.status !== "storniert").length,
+    offeneAngebote: angebote.filter((a) => a.status === "entwurf" || a.status === "versendet").length,
+    offeneRechnungen: rechnungen.filter((r) => r.status !== "bezahlt" && r.status !== "storniert").length,
     ausstehendEUR: 1011.5,
   };
 }
@@ -182,27 +242,30 @@ export function localPreviewGet<T>(path: string): T | null {
       ...kunde,
       ansprechpartner: [],
       objekte: [],
-      angebote: previewAngebote.filter((a) => a.kundeId === id),
-      rechnungen: previewRechnungen.filter((r) => r.kundeId === id),
+      angebote: allAngebote().filter((a) => a.kundeId === id),
+      rechnungen: allRechnungen().filter((r) => r.kundeId === id),
       dokumente: [],
       notizen: [],
     } as T;
   }
+  if (cleanPath.endsWith("/zaehler") && cleanPath.startsWith("/kunden/")) {
+    return { periode: month, naechsterStart: 1 } as T;
+  }
   if (cleanPath === "/angebote") {
     const kundeId = params.get("kundeId");
     const status = params.get("status");
-    return previewAngebote.filter((a) => (!kundeId || a.kundeId === kundeId) && (!status || a.status === status)) as T;
+    return allAngebote().filter((a) => (!kundeId || a.kundeId === kundeId) && (!status || a.status === status)) as T;
   }
   if (cleanPath.startsWith("/angebote/")) {
-    return (previewAngebote.find((a) => a.id === cleanPath.split("/")[2]) ?? null) as T | null;
+    return (allAngebote().find((a) => a.id === cleanPath.split("/")[2]) ?? null) as T | null;
   }
   if (cleanPath === "/rechnungen") {
     const kundeId = params.get("kundeId");
     const status = params.get("status");
-    return previewRechnungen.filter((r) => (!kundeId || r.kundeId === kundeId) && (!status || r.status === status)) as T;
+    return allRechnungen().filter((r) => (!kundeId || r.kundeId === kundeId) && (!status || r.status === status)) as T;
   }
   if (cleanPath.startsWith("/rechnungen/")) {
-    return (previewRechnungen.find((r) => r.id === cleanPath.split("/")[2]) ?? null) as T | null;
+    return (allRechnungen().find((r) => r.id === cleanPath.split("/")[2]) ?? null) as T | null;
   }
   if (cleanPath === "/objekte") return [] as T;
   if (cleanPath === "/dokumente") return [] as T;
@@ -222,7 +285,73 @@ export function localPreviewGet<T>(path: string): T | null {
   if (cleanPath === "/aktivitaeten") return [] as T;
   if (cleanPath === "/benachrichtigungen") return [] as T;
   if (cleanPath === "/einstellungen/firma") return previewFirma as T;
+  if (cleanPath === "/einstellungen/nummernkreise") return previewNummernkreise as T;
   if (cleanPath === "/mahnung/status") return previewMahnungStatus as T;
   if (cleanPath === "/mahnung/laeufe") return [] as T;
+  return null;
+}
+
+export function localPreviewMutate<T>(method: string, path: string, body?: unknown): T | null {
+  const cleanPath = path.split("?")[0];
+  const store = readStore();
+  const timestamp = new Date().toISOString();
+
+  if (method === "POST" && cleanPath === "/angebote") {
+    const input = (body ?? {}) as Partial<Angebot>;
+    const angebot: Angebot = {
+      id: `preview-angebot-${crypto.randomUUID()}`,
+      nummer: nextBelegnummer("angebot", input.kundeId ?? "preview-kunde-1"),
+      kundeId: input.kundeId ?? "preview-kunde-1",
+      objektId: input.objektId,
+      ansprechpartnerId: input.ansprechpartnerId,
+      titel: input.titel?.trim() || "Neues Angebot",
+      introText: input.introText,
+      outroText: input.outroText,
+      positionen: clone(input.positionen ?? []),
+      rabattGesamt: input.rabattGesamt ?? 0,
+      steuersatz: input.steuersatz ?? 19,
+      gueltigBis: input.gueltigBis,
+      notizen: input.notizen,
+      status: input.status ?? "entwurf",
+      archiviert: false,
+      optionen: input.optionen,
+      erstelltAm: timestamp,
+      geaendertAm: timestamp,
+    };
+    store.angebote.push(angebot);
+    writeStore(store);
+    return angebot as T;
+  }
+
+  if (method === "POST" && cleanPath === "/rechnungen") {
+    const input = (body ?? {}) as Partial<Rechnung>;
+    const rechnung: Rechnung = {
+      id: `preview-rechnung-${crypto.randomUUID()}`,
+      nummer: nextBelegnummer("rechnung", input.kundeId ?? "preview-kunde-1"),
+      kundeId: input.kundeId ?? "preview-kunde-1",
+      objektId: input.objektId,
+      ansprechpartnerId: input.ansprechpartnerId,
+      quellAngebotId: input.quellAngebotId,
+      titel: input.titel?.trim() || "Neue Rechnung",
+      introText: input.introText,
+      outroText: input.outroText,
+      positionen: clone(input.positionen ?? []),
+      rabattGesamt: input.rabattGesamt ?? 0,
+      steuersatz: input.steuersatz ?? 19,
+      rechnungsdatum: input.rechnungsdatum ?? today,
+      faelligkeitsdatum: input.faelligkeitsdatum ?? due,
+      notizen: input.notizen,
+      status: input.status ?? "entwurf",
+      archiviert: false,
+      zahlungen: clone(input.zahlungen ?? []),
+      optionen: input.optionen,
+      erstelltAm: timestamp,
+      geaendertAm: timestamp,
+    };
+    store.rechnungen.push(rechnung);
+    writeStore(store);
+    return rechnung as T;
+  }
+
   return null;
 }
