@@ -290,3 +290,68 @@ export function localPreviewGet<T>(path: string): T | null {
   if (cleanPath === "/mahnung/laeufe") return [] as T;
   return null;
 }
+
+export function localPreviewMutate<T>(method: string, path: string, body?: unknown): T | null {
+  const cleanPath = path.split("?")[0];
+  const store = readStore();
+  const timestamp = new Date().toISOString();
+
+  if (method === "POST" && cleanPath === "/angebote") {
+    const input = (body ?? {}) as Partial<Angebot>;
+    const angebot: Angebot = {
+      id: `preview-angebot-${crypto.randomUUID()}`,
+      nummer: nextBelegnummer("angebot", input.kundeId ?? "preview-kunde-1"),
+      kundeId: input.kundeId ?? "preview-kunde-1",
+      objektId: input.objektId,
+      ansprechpartnerId: input.ansprechpartnerId,
+      titel: input.titel?.trim() || "Neues Angebot",
+      introText: input.introText,
+      outroText: input.outroText,
+      positionen: clone(input.positionen ?? []),
+      rabattGesamt: input.rabattGesamt ?? 0,
+      steuersatz: input.steuersatz ?? 19,
+      gueltigBis: input.gueltigBis,
+      notizen: input.notizen,
+      status: input.status ?? "entwurf",
+      archiviert: false,
+      optionen: input.optionen,
+      erstelltAm: timestamp,
+      geaendertAm: timestamp,
+    };
+    store.angebote.push(angebot);
+    writeStore(store);
+    return angebot as T;
+  }
+
+  if (method === "POST" && cleanPath === "/rechnungen") {
+    const input = (body ?? {}) as Partial<Rechnung>;
+    const rechnung: Rechnung = {
+      id: `preview-rechnung-${crypto.randomUUID()}`,
+      nummer: nextBelegnummer("rechnung", input.kundeId ?? "preview-kunde-1"),
+      kundeId: input.kundeId ?? "preview-kunde-1",
+      objektId: input.objektId,
+      ansprechpartnerId: input.ansprechpartnerId,
+      quellAngebotId: input.quellAngebotId,
+      titel: input.titel?.trim() || "Neue Rechnung",
+      introText: input.introText,
+      outroText: input.outroText,
+      positionen: clone(input.positionen ?? []),
+      rabattGesamt: input.rabattGesamt ?? 0,
+      steuersatz: input.steuersatz ?? 19,
+      rechnungsdatum: input.rechnungsdatum ?? today,
+      faelligkeitsdatum: input.faelligkeitsdatum ?? due,
+      notizen: input.notizen,
+      status: input.status ?? "entwurf",
+      archiviert: false,
+      zahlungen: clone(input.zahlungen ?? []),
+      optionen: input.optionen,
+      erstelltAm: timestamp,
+      geaendertAm: timestamp,
+    };
+    store.rechnungen.push(rechnung);
+    writeStore(store);
+    return rechnung as T;
+  }
+
+  return null;
+}
