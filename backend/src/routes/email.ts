@@ -102,12 +102,13 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     scoped.post("/email/vorlagen", async (req, reply) => {
       const p = VorlageSchema.partial({ kontext: true }).safeParse(req.body);
       if (!p.success) { reply.status(422); return { error: "validation", issues: p.error.issues }; }
-      return createVorlage({ ...p.data, kontext: (p.data.kontext ?? "allgemein") as EmailKontext });
+      const data = normalizeVorlage(p.data);
+      return createVorlage({ ...data, kontext: (data.kontext ?? "allgemein") as EmailKontext });
     });
     scoped.patch<{ Params: { id: string } }>("/email/vorlagen/:id", async (req, reply) => {
       const p = VorlageSchema.partial().safeParse(req.body);
       if (!p.success) { reply.status(422); return { error: "validation", issues: p.error.issues }; }
-      const upd = updateVorlage(req.params.id, p.data);
+      const upd = updateVorlage(req.params.id, normalizeVorlage(p.data));
       if (!upd) { reply.status(404); return { error: "not-found" }; }
       return upd;
     });
