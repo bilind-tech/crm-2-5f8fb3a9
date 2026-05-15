@@ -13,6 +13,20 @@ import { renderAngebotPdf, renderRechnungPdf, type RenderResult } from "../pdf/b
 
 const SEND_TIMEOUT_MS = 30_000;
 
+// Lokaler Stream-Transport, der Mails NICHT verschickt, sondern nur das
+// fertige RFC-822-MIME als Buffer baut. Wir nutzen ihn nach erfolgreichem
+// SMTP-Send, um exakt dieselbe Mail per IMAP in den Sent-Ordner abzulegen.
+let _mimeBuilder: Transporter | null = null;
+function getMimeBuilder(): Transporter {
+  if (_mimeBuilder) return _mimeBuilder;
+  _mimeBuilder = nodemailer.createTransport({
+    streamTransport: true,
+    buffer: true,
+    newline: "unix",
+  });
+  return _mimeBuilder;
+}
+
 interface MailSendInfo {
   messageId?: string | null;
   message?: Buffer | string;
