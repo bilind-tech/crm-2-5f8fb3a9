@@ -35,24 +35,26 @@ function markBelegVersendet(
 
 const KONTEXTE = ["rechnung", "angebot", "mahnung", "allgemein"] as const;
 
-const VorlageSchema = z
-  .object({
-    name: z.string().trim().min(1).max(200),
-    betreff: z.string().trim().max(500).default(""),
-    // Backend-Schreibweise `bodyHtml` und Frontend-Alias `koerperHtml`
-    // werden beide akzeptiert. `koerperHtml` wird auf `bodyHtml` gemappt.
-    bodyHtml: z.string().max(50_000).optional(),
-    koerperHtml: z.string().max(50_000).optional(),
-    kontext: z.enum(KONTEXTE),
-    istStandard: z.boolean().default(false),
-  })
-  .transform((v) => ({
-    name: v.name,
-    betreff: v.betreff,
-    bodyHtml: v.bodyHtml ?? v.koerperHtml ?? "",
-    kontext: v.kontext,
-    istStandard: v.istStandard,
-  }));
+const VorlageSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  betreff: z.string().trim().max(500).default(""),
+  // Backend-Schreibweise `bodyHtml` und Frontend-Alias `koerperHtml`
+  // werden beide akzeptiert. Mapping passiert im Route-Handler.
+  bodyHtml: z.string().max(50_000).optional(),
+  koerperHtml: z.string().max(50_000).optional(),
+  kontext: z.enum(KONTEXTE),
+  istStandard: z.boolean().default(false),
+});
+
+function normalizeVorlage<T extends { bodyHtml?: string; koerperHtml?: string }>(
+  d: T,
+): Omit<T, "koerperHtml"> {
+  const { koerperHtml, ...rest } = d;
+  if (koerperHtml !== undefined && rest.bodyHtml === undefined) {
+    return { ...rest, bodyHtml: koerperHtml };
+  }
+  return rest;
+}
 const SignaturSchema = z.object({
   name: z.string().trim().min(1).max(200),
   html: z.string().max(20_000).default(""),
