@@ -44,24 +44,28 @@ export function PdfCanvasViewer({
   const [numPages, setNumPages] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
+  // ORIGINAL-Buffer im State halten und NIE direkt an PDF.js geben.
+  // PDF.js transferiert ArrayBuffer in den Worker (postMessage) und detacht
+  // dabei den Buffer. Würden wir denselben Buffer beim Re-Mount wieder
+  // übergeben, käme: "ArrayBuffer at index 0 is already detached".
+  // Lösung: pro Document-Load eine frische Kopie via `slice(0)` erzeugen.
+  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
 
-  // Blob → Uint8Array konvertieren (stabilere Quelle für PDF.js als blob:-URL).
   useEffect(() => {
     let cancelled = false;
     if (!pdfBlob) {
-      setPdfData(null);
+      setPdfBuffer(null);
       return;
     }
     pdfBlob
       .arrayBuffer()
       .then((buf) => {
-        if (!cancelled) setPdfData(new Uint8Array(buf));
+        if (!cancelled) setPdfBuffer(buf);
       })
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error("[PdfCanvasViewer] blob→arrayBuffer failed", err);
-        if (!cancelled) setPdfData(null);
+        if (!cancelled) setPdfBuffer(null);
       });
     return () => {
       cancelled = true;
@@ -106,14 +110,25 @@ export function PdfCanvasViewer({
     return Array.from({ length: numPages }, (_, i) => i + 1);
   }, [numPages, firstPageOnly]);
 
-  // Memoisierte file-Quelle: bevorzugt Binärdaten, sonst URL.
+  // Frische Kopie des Buffers für JEDEN PDF.js-Load. `slice(0)` erzeugt
+  // einen neuen ArrayBuffer, der Original-Buffer bleibt intakt und kann
+  // beim nächsten Mount/Retry erneut kopiert werden.
   const fileSource = useMemo(() => {
-    if (pdfData) return { data: pdfData };
+    if (pdfBuffer) {
+      try {
+        return { data: new Uint8Array(pdfBuffer.slice(0)) };
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[PdfCanvasViewer] buffer.slice failed", err);
+        return pdfUrl ?? null;
+      }
+    }
     return pdfUrl ?? null;
-  }, [pdfData, pdfUrl]);
+    // attempt erzwingt eine frische Kopie bei Retry.
+  }, [pdfBuffer, pdfUrl, attempt]);
 
-  const hasSource = !!pdfData || !!pdfUrl;
-  const sourceKey = pdfData ? `data#${pdfData.byteLength}` : (pdfUrl ?? "none");
+  const hasSource = !!pdfBuffer || !!pdfUrl;
+  const sourceKey = pdfBuffer ? `buf#${pdfBuffer.byteLength}` : (pdfUrl ?? "none");
 
   return (
     <div ref={containerRef} className={className ?? "h-full w-full overflow-y-auto bg-muted/30"}>
@@ -174,7 +189,17 @@ export function PdfCanvasViewer({
           onLoadError={(err) => {
             // eslint-disable-next-line no-console
             console.error("[PdfCanvasViewer] load error", err);
-            setLoadError(err?.message || String(err));
+            const msg = err?.message || String(err);
+            // Auto-Retry bei detached-ArrayBuffer (StrictMode / Re-Mount).
+            if (
+              attempt < 1 &&
+              pdfBuffer &&
+              /detached|already detached|neutered/i.test(msg)
+            ) {
+              setAttempt((n) => n + 1);
+              return;
+            }
+            setLoadError(msg);
           }}
           loading={
             <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
