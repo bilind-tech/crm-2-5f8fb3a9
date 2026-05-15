@@ -269,6 +269,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
         return { error: "rate-limit" };
       }
       const result = await sendNow(existing);
+      if (result.ok) markBelegVersendet(existing.belegArt, existing.belegId);
       const after = getById(existing.id);
       reply.status(result.ok ? 200 : 502);
       return {
