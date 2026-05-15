@@ -66,7 +66,7 @@ export function PdfPreviewCard({
       <div className="border-t border-border bg-muted/30">
         {hasPreview && status !== "error" ? (
           <PdfCanvasViewer
-            pdfUrl={pdfUrl}
+            pdfUrl={pdfUrl ?? null}
             pdfBlob={pdfBlob}
             fileName={fileName ?? `${title}.pdf`}
             className="block max-h-[70vh] w-full overflow-y-auto"
