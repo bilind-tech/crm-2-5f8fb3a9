@@ -64,9 +64,14 @@ export function loadDriveSettings(): DriveSettings {
 function getRedirectUri(req?: { protocol?: string; hostname?: string }): string {
   const fromCfg = process.env.GOOGLE_OAUTH_REDIRECT;
   if (fromCfg) return fromCfg;
-  const proto = req?.protocol ?? "http";
-  const host = req?.hostname ?? `localhost:${config.port}`;
-  return `${proto}://${host}/einstellungen/google-drive/callback`;
+  // WICHTIG: redirect_uri ist IMMER localhost.
+  // Google OAuth erlaubt bei http:// nur localhost/127.0.0.1 — keine .local-Hosts
+  // oder LAN-IPs. Daher pinnen wir fest auf localhost, unabhängig davon, wie das
+  // Backend gerade aufgerufen wird (SSH-Tunnel, .local, LAN-IP). Der einmalige
+  // OAuth-Verbinden-Flow läuft dadurch über localhost auf dem Pi; das Token wird
+  // serverseitig gespeichert und gilt anschließend für alle Geräte im LAN.
+  void req;
+  return `http://localhost:${config.port}/einstellungen/google-drive/callback`;
 }
 
 export function buildOAuthClient(redirectUri?: string): OAuth2Client {
