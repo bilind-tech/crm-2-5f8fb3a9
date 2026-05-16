@@ -54,6 +54,32 @@ const DATEI_PLATZHALTER = [
   "{datum}",
 ];
 
+// Defaults identisch zum Backend (backend/src/routes/drive.ts). Werden
+// gemergt, damit ein älteres Backend oder ein leerer Settings-State die
+// Seite nicht crashen lässt.
+const DEFAULT_FOLDERS = {
+  rechnungen: "Rechnungen/{YYYY}/{MM}",
+  angebote: "Angebote/{YYYY}/{MM}",
+  dokumente: "Dokumente/{YYYY}/{MM}",
+  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}",
+  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}",
+} as const;
+const DEFAULT_FILES = {
+  rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+  angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+  protokoll: "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}",
+} as const;
+
+function normalize(data: GoogleDriveEinstellungen): GoogleDriveEinstellungen {
+  return {
+    ...data,
+    rootOrdnerName: data.rootOrdnerName ?? "mycleancenter.cm",
+    unterordnerSchema: { ...DEFAULT_FOLDERS, ...(data.unterordnerSchema ?? {}) },
+    dateinameSchema: { ...DEFAULT_FILES, ...(data.dateinameSchema ?? {}) },
+    autoUpload: data.autoUpload ?? true,
+  };
+}
+
 function pfadVorschau(template: string): string {
   const now = new Date();
   return template
