@@ -267,6 +267,13 @@ function MobileUploadPage() {
           onChange={onPick}
         />
 
+        {fehler > 0 && (
+          <DiagnoseBlock
+            token={token}
+            entries={dateien.filter((e) => e.status === "fehler")}
+          />
+        )}
+
         {allesFertig && (
           <div className="flex items-center gap-3 rounded-2xl border border-success/40 bg-success/10 p-4 text-sm text-success">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-success/20">
