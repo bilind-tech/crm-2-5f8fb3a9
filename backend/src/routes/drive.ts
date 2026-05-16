@@ -55,9 +55,10 @@ const DEFAULT_FILES = {
 function defaultRedirectUri(req?: { protocol?: string; hostname?: string }): string {
   const fromCfg = process.env.GOOGLE_OAUTH_REDIRECT;
   if (fromCfg) return fromCfg;
-  const proto = req?.protocol ?? "http";
-  const host = req?.hostname ?? `localhost:${config.port}`;
-  return `${proto}://${host}/einstellungen/google-drive/callback`;
+  // WICHTIG: redirect_uri ist IMMER localhost (siehe backend/src/drive/oauth.ts).
+  // Google blockiert .local-Hosts und LAN-IPs bei http://.
+  void req;
+  return `http://localhost:${config.port}/einstellungen/google-drive/callback`;
 }
 
 function buildResponse(req?: { protocol?: string; hostname?: string }): DriveResponse {
