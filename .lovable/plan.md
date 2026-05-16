@@ -1,34 +1,45 @@
-## Plan: Handy-Scan muss sofort sichtbar und nachvollziehbar funktionieren
+## Ziel
+Der QR-Handy-Upload muss auf iPhone und Android sichtbar und nachvollziehbar funktionieren: Nach Kamera oder Galerie-Auswahl muss das Bild sofort auf der Handy-Seite erscheinen, danach hochgeladen werden, und bei Fehlern muss klar sichtbar sein, was passiert ist.
 
-Ich ändere den bestehenden QR-Code-Handy-Scan-Flow so, dass nach der Foto-/Dateiauswahl auf dem Handy sofort klar sichtbar ist, was ausgewählt wurde, ob es gerade hochlädt, ob es gespeichert wurde und ob es am PC angekommen ist.
+## Problem, das ich behebe
+Aktuell wird der Datei-Input direkt im `onChange` geleert. Auf iOS/Safari kann das dazu führen, dass die ausgewählte Datei nicht zuverlässig übernommen wird. Zusätzlich startet der Upload sofort und der sichtbare Zustand hängt davon ab, ob Datei-Übernahme, Preview-Erzeugung und Upload sauber durchlaufen. Wenn einer dieser Schritte scheitert, sieht man zu wenig.
 
-### 1. Handy-Seite `/m/upload/:session` stabilisieren
-- Direkt nach Auswahl eines Fotos oder einer Datei wird eine große, eindeutige Vorschau angezeigt.
-- Zusätzlich steht sichtbar darunter: „Ausgewählt“, „Wird hochgeladen“, „Gespeichert“ oder „Fehler“.
-- Es gibt einen klar sichtbaren Button zum erneuten Auswählen bzw. weiteren Foto hinzufügen.
-- Bei Fehlern wird die konkrete Fehlermeldung sichtbar angezeigt und ein „Erneut versuchen“-Button angeboten.
-- Der erfolgreiche Upload bleibt sichtbar, statt dass der Nutzer das Gefühl hat, nichts sei passiert.
+## Umsetzung
+1. **Datei-Auswahl iPhone-sicher machen**
+   - Datei-Liste im `onChange` sofort synchron in ein echtes Array kopieren.
+   - `input.value = ""` erst nach dieser Kopie und nicht vor der Verarbeitung ausführen.
+   - Separate Refs für Kamera und Galerie verwenden, damit erneutes Auswählen derselben Datei sauber funktioniert.
 
-### 2. Upload nicht nur still im Hintergrund laufen lassen
-- Der automatische Upload bleibt erhalten, aber die Oberfläche zeigt den Vorgang deutlich.
-- Während des Uploads wird Fortschritt angezeigt.
-- Nach Erfolg wird deutlich bestätigt: „Gespeichert und am PC sichtbar“.
-- Falls das Backend nicht erreichbar ist oder die Session abgelaufen ist, erscheint eine klare Meldung statt einer scheinbar leeren Seite.
+2. **Preview immer sofort anzeigen**
+   - Direkt nach Auswahl einen sichtbaren Eintrag erzeugen.
+   - Bilder mit `URL.createObjectURL(file)` anzeigen.
+   - Falls Object-URL/Preview scheitert, trotzdem eine sichtbare Dateikachel mit Dateiname, Größe und Status anzeigen.
 
-### 3. PC-Dialog „Vom Handy scannen“ zuverlässiger aktualisieren
-- Der PC-Dialog pollt die Session bereits, wird aber so ergänzt, dass empfangene Dateien klarer sichtbar und gezählt werden.
-- Nach neu empfangenem Upload werden auch die Dokumentenlisten invalidiert, damit das Dokument direkt im Dokumente-Bereich auftaucht.
-- Der Wartestatus bleibt verständlich: erst „Warte auf Dateien“, danach „Datei empfangen“.
+3. **Upload erst nach sichtbarer Übernahme starten**
+   - Neuer Statusfluss: `Ausgewählt` → `Wird vorbereitet` → `Wird hochgeladen` → `Gespeichert` oder `Fehler`.
+   - Die Datei bleibt auf der Handy-Seite stehen, auch nach Erfolg oder Fehler.
 
-### 4. Backend-Session-Antwort als Quelle der Wahrheit nutzen
-- Die mobile Seite fragt nach Upload-Erfolg die Session nochmal ab, damit sie wirklich weiß, dass das Dokument serverseitig gespeichert und in der Session gelandet ist.
-- Dadurch wird nicht nur „XHR war erfolgreich“ angezeigt, sondern tatsächlich „im System angekommen“.
+4. **Fehler-Diagnose direkt auf dem Handy einbauen**
+   - Bei jedem Fehler wird eine klare Fehlermeldung mit Code angezeigt.
+   - Zusätzlich ein kleiner Bereich „Fehlerdetails kopieren“ auf der Handy-Seite, damit du mir den echten Fehler schicken kannst.
+   - Erfasst werden unter anderem: Browser, Dateiname, Dateityp, Dateigröße, Session-Token gekürzt, Schritt, HTTP-Status und Fehlermeldung.
 
-### 5. Technische Details
-- Dateien: `src/routes/m.upload.$session.tsx`, `src/components/dokumente/HandyScanDialog.tsx`, ggf. `src/hooks/useApi.ts`.
-- Kein automatischer E-Mail-Versand, kein Datenordner-Eingriff, kein Cloud-Deploy.
-- Keine Änderung am Backup-/Restore-/Update-System.
-- Keine neuen Rollen oder Benutzerlogik.
+5. **Upload-API robuster machen**
+   - `postWithProgress` bekommt sichere JSON-Fehlerbehandlung, falls das Backend kein sauberes JSON zurückgibt.
+   - Upload-Timeout klarer melden.
+   - Nach erfolgreichem Upload wird die Session einmal neu abgefragt, damit „am PC sichtbar“ erst kommt, wenn der Server die Datei wirklich kennt.
 
-### Ergebnis
-Nach dem QR-Scan sieht der Nutzer auf dem Handy sofort das ausgewählte Bild, den Upload-Status und die Erfolgsmeldung. Am PC erscheint der Upload im Scan-Dialog und danach in den Dokumenten, ohne dass man raten muss, ob etwas passiert ist.
+6. **PC-Dialog weiter synchron halten**
+   - Die vorhandene Live-Abfrage bleibt.
+   - Bei neu empfangener Datei wird die Dokumentenliste invalidiert, damit sie sofort erscheint.
+
+## Dateien
+- `src/routes/m.upload.$session.tsx`
+- `src/lib/dokument/upload.ts`
+- `src/lib/api/piClient.ts`
+- bei Bedarf klein: `src/components/dokumente/HandyScanDialog.tsx`
+
+## Nicht betroffen
+- Keine Änderungen an Datenordnern, Backup, Restore oder System-Update.
+- Kein automatischer E-Mail-Versand.
+- Keine Cloud-Umstellung.

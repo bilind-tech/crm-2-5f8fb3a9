@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Camera, Trash2, Check, Loader2, FolderOpen, FileText, AlertTriangle, RotateCw, WifiOff } from "lucide-react";
+import { Camera, Trash2, Check, Loader2, FolderOpen, FileText, AlertTriangle, RotateCw, WifiOff, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { uploadDokumentToSessionMitProgress, MAX_BYTES } from "@/lib/dokument/upload";
 import { getBackendUrl } from "@/lib/api/backendUrl";
@@ -20,6 +20,8 @@ interface DateiEntry {
   progress: number;
   versuche: number;
   fehler?: string;
+  fehlerStatus?: number;
+  fehlerSchritt?: string;
 }
 
 const MAX_PARALLEL = 2;
@@ -70,6 +72,74 @@ function FileButton({
 }
 
 function MobileUploadPage() {
+  return <MobileUploadInner />;
+}
+
+function DiagnoseBlock({
+  token,
+  entries,
+}: {
+  token: string;
+  entries: DateiEntry[];
+}) {
+  const [kopiert, setKopiert] = useState(false);
+  if (entries.length === 0) return null;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "n/a";
+  const tokenKurz = token.slice(0, 6) + "…" + token.slice(-4);
+  const zeilen = entries.map((e) => {
+    return [
+      `Datei: ${e.file.name}`,
+      `Typ: ${e.file.type || "unbekannt"}`,
+      `Größe: ${Math.round(e.file.size / 1024)} KB`,
+      `Schritt: ${e.fehlerSchritt ?? "upload"}`,
+      `HTTP: ${e.fehlerStatus ?? 0}`,
+      `Fehler: ${e.fehler ?? "-"}`,
+    ].join(" | ");
+  });
+  const text =
+    `Handy-Upload-Fehler\n` +
+    `Zeit: ${new Date().toISOString()}\n` +
+    `Session: ${tokenKurz}\n` +
+    `Browser: ${ua}\n\n` +
+    zeilen.join("\n");
+  async function kopiere() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setKopiert(true);
+      setTimeout(() => setKopiert(false), 1500);
+    } catch {
+      toast.error("Kopieren nicht möglich — Text bitte markieren.");
+    }
+  }
+  return (
+    <div className="space-y-2 rounded-2xl border border-destructive/40 bg-destructive/5 p-3">
+      <div className="flex items-start gap-2 text-sm">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <div className="min-w-0">
+          <p className="font-semibold text-destructive">
+            {entries.length === 1 ? "Eine Datei ist nicht angekommen" : `${entries.length} Dateien sind nicht angekommen`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Bitte einmal „Erneut“ versuchen. Falls es weiter nicht klappt: Fehlerdetails kopieren und an den Support schicken.
+          </p>
+        </div>
+      </div>
+      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-background p-2 text-[11px] text-muted-foreground">
+        {text}
+      </pre>
+      <button
+        type="button"
+        onClick={kopiere}
+        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-semibold"
+      >
+        {kopiert ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+        {kopiert ? "Kopiert" : "Fehlerdetails kopieren"}
+      </button>
+    </div>
+  );
+}
+
+function MobileUploadInner() {
   const { session: token } = Route.useParams();
   const [dateien, setDateien] = useState<DateiEntry[]>([]);
   const dateienRef = useRef<DateiEntry[]>([]);
@@ -133,7 +203,13 @@ function MobileUploadPage() {
           setTimeout(() => starteUpload(id), 2000);
           return;
         }
-        updateEntry(id, { status: "fehler", versuche, fehler: msg });
+        updateEntry(id, {
+          status: "fehler",
+          versuche,
+          fehler: msg,
+          fehlerStatus: status,
+          fehlerSchritt: "upload",
+        });
       }
     },
     [token, updateEntry],
@@ -149,7 +225,10 @@ function MobileUploadPage() {
   }, [dateien, starteUpload]);
 
   function verarbeite(files: FileList | File[]) {
-    const list = Array.from(files);
+    // WICHTIG (iOS Safari): Datei-Liste SYNCHRON in ein echtes Array kopieren,
+    // bevor irgendetwas async passiert. Sonst kann iOS die Datei-Referenzen
+    // verlieren, wenn der Input zwischendurch geleert oder neu gerendert wird.
+    const list = Array.from(files as ArrayLike<File>);
     if (!list.length) return;
     const neue: DateiEntry[] = [];
     for (const f of list) {
@@ -158,10 +237,14 @@ function MobileUploadPage() {
         continue;
       }
       const istBild = f.type.startsWith("image/");
+      let previewUrl = "";
+      if (istBild) {
+        try { previewUrl = URL.createObjectURL(f); } catch { previewUrl = ""; }
+      }
       neue.push({
         id: Math.random().toString(36).slice(2),
         file: f,
-        previewUrl: istBild ? URL.createObjectURL(f) : "",
+        previewUrl,
         istBild,
         status: "wartet",
         progress: 0,
@@ -172,9 +255,16 @@ function MobileUploadPage() {
   }
 
   function onPick(e: ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    e.target.value = "";
-    if (files) verarbeite(files);
+    const input = e.target;
+    const files = input.files;
+    // ZUERST übernehmen, DANN Input leeren — sonst verliert iOS die FileList,
+    // bevor wir die Dateien synchron in unseren State kopiert haben.
+    if (files && files.length > 0) {
+      verarbeite(files);
+    } else {
+      toast.error("Keine Datei erhalten — bitte erneut auswählen.");
+    }
+    try { input.value = ""; } catch { /* iOS: stillschweigend ignorieren */ }
   }
 
   function entferne(id: string) {
@@ -252,6 +342,13 @@ function MobileUploadPage() {
           multiple
           onChange={onPick}
         />
+
+        {fehler > 0 && (
+          <DiagnoseBlock
+            token={token}
+            entries={dateien.filter((e) => e.status === "fehler")}
+          />
+        )}
 
         {allesFertig && (
           <div className="flex items-center gap-3 rounded-2xl border border-success/40 bg-success/10 p-4 text-sm text-success">
