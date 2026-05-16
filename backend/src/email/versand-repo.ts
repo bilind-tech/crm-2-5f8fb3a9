@@ -116,6 +116,7 @@ export function getById(id: string): EmailVersand | null {
 export interface ListFilter {
   status?: EmailVersandStatus;
   belegId?: string;
+  belegArt?: BelegArt;
   q?: string;
   limit?: number;
   offset?: number;
@@ -124,6 +125,7 @@ export function listVersand(f: ListFilter = {}): EmailVersand[] {
   const where: string[] = []; const params: unknown[] = [];
   if (f.status) { where.push("status = ?"); params.push(f.status); }
   if (f.belegId) { where.push("beleg_id = ?"); params.push(f.belegId); }
+  if (f.belegArt) { where.push("beleg_art = ?"); params.push(f.belegArt); }
   if (f.q && f.q.trim()) {
     where.push("(LOWER(empfaenger_to) LIKE ? OR LOWER(betreff) LIKE ?)");
     const like = `%${f.q.trim().toLowerCase()}%`;
