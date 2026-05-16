@@ -40,17 +40,40 @@ interface DriveResponse {
 }
 
 const DEFAULT_FOLDERS = {
-  rechnungen: "Rechnungen/{YYYY}/{MM}",
-  angebote: "Angebote/{YYYY}/{MM}",
-  dokumente: "Dokumente/{YYYY}/{MM}",
-  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}",
-  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}",
+  rechnungen: "Rechnungen/{YYYY}/{MM}_{MMMM}",
+  angebote: "Angebote/{YYYY}/{MM}_{MMMM}",
+  dokumente: "Dokumente/{YYYY}/{MM}_{MMMM}",
+  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}_{MMMM}",
+  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}_{MMMM}",
 };
 const DEFAULT_FILES = {
   rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
   angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
   protokoll: "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}",
 };
+
+// Alte Default-Pfade (vor Einführung von {MMMM}) — werden beim Laden auf
+// die neuen Defaults gehoben, solange der User das Feld nicht selbst angepasst hat.
+const LEGACY_FOLDER_DEFAULTS: Record<keyof typeof DEFAULT_FOLDERS, string> = {
+  rechnungen: "Rechnungen/{YYYY}/{MM}",
+  angebote: "Angebote/{YYYY}/{MM}",
+  dokumente: "Dokumente/{YYYY}/{MM}",
+  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}",
+  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}",
+};
+function upgradeFolders(
+  schema: Partial<typeof DEFAULT_FOLDERS> | undefined,
+): typeof DEFAULT_FOLDERS {
+  const out = { ...DEFAULT_FOLDERS };
+  if (!schema) return out;
+  for (const k of Object.keys(DEFAULT_FOLDERS) as (keyof typeof DEFAULT_FOLDERS)[]) {
+    const cur = schema[k];
+    if (!cur) continue;
+    // Alten Default automatisch durch neuen ersetzen — User-Anpassungen bleiben.
+    out[k] = cur === LEGACY_FOLDER_DEFAULTS[k] ? DEFAULT_FOLDERS[k] : cur;
+  }
+  return out;
+}
 
 function defaultRedirectUri(req?: { protocol?: string; hostname?: string }): string {
   // WICHTIG: redirect_uri ist IMMER localhost (siehe backend/src/drive/oauth.ts).
