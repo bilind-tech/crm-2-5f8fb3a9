@@ -89,7 +89,7 @@ function buildResponse(req?: { protocol?: string; hostname?: string }): DriveRes
     verbundenAm: undefined,
     rootOrdnerName: s.rootFolderName ?? "mycleancenter.cm",
     rootOrdnerId: s.rootOrdnerId,
-    unterordnerSchema: { ...DEFAULT_FOLDERS, ...(s.unterordnerSchema ?? {}) },
+    unterordnerSchema: upgradeFolders(s.unterordnerSchema),
     dateinameSchema: { ...DEFAULT_FILES, ...(s.dateinameSchema ?? {}) },
     autoUpload: s.autoUpload ?? true,
     letzteSynchronisation: s.letzteSynchronisation,
