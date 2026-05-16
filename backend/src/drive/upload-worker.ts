@@ -172,12 +172,13 @@ export async function tickDriveQueue(limit = 2): Promise<{ processed: number; ok
       try { await processOne(row); ok++; }
       catch (e) {
         failed++;
-        const msg = e instanceof Error ? e.message : String(e);
+        const raw = e instanceof Error ? e.message : String(e);
+        const msg = freundlicherFehler(raw);
         markFehler(row.id, msg);
         if (row.belegArt === "dokument") {
           setDriveStatus(row.belegId, { status: "fehler", fehlerText: msg });
         }
-        if (msg.includes("invalid_grant") || msg.includes("invalid_request")) setStatusError(msg);
+        if (raw.includes("invalid_grant") || raw.includes("invalid_request")) setStatusError(msg);
       }
     }
     return { processed: due.length, ok, failed };
