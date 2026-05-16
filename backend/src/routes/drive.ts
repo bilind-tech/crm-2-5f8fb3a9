@@ -9,6 +9,7 @@ import {
 import { ensureRootFolder, createTextFile, resetDriveClient } from "../drive/folders.js";
 import { listUploads, retry, type DriveUploadStatus, type BelegArt } from "../drive/upload-repo.js";
 import { tickDriveQueue } from "../drive/upload-worker.js";
+import { backfillAll, backfillOne } from "../drive/backfill.js";
 import { getSetting, setSetting } from "../settings/store.js";
 import { GoogleDriveSchema, SENSITIVE_KEYS, type GoogleDriveSettings } from "../settings/schemas.js";
 import { emit } from "../events/bus.js";
@@ -147,6 +148,10 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
       // Geräteübergreifende Live-Aktualisierung: alle verbundenen Clients
       // invalidieren ihren Drive-Status sofort via SSE.
       emit("einstellung:geaendert", { key: "googleDrive", userId: null });
+      // Backfill: alle bestehenden Belege/Dokumente nachsynchronisieren.
+      void backfillAll()
+        .then(() => void tickDriveQueue(10).catch(() => undefined))
+        .catch((err) => console.error("drive backfill (after connect)", err));
       return reply.redirect(redirect("ok"));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -293,6 +298,42 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
       if (!retry(req.params.id)) { reply.status(404); return { error: "not-found" }; }
       void tickDriveQueue(1).catch(() => undefined);
       return { ok: true };
+    });
+
+    // „Jetzt in Drive sichern" pro Beleg/Dokument — enqueued frischen Upload-Eintrag.
+    scoped.post("/drive/uploads/enqueue", async (req, reply) => {
+      const body = z.object({
+        belegArt: z.enum(["angebot", "rechnung", "dokument"]),
+        belegId: z.string().min(1).max(64),
+      }).safeParse(req.body ?? {});
+      if (!body.success) { reply.status(422); return { error: "validation", issues: body.error.issues }; }
+      const s = loadDriveSettings();
+      if (!s.refreshTokenIsSet) {
+        reply.status(409);
+        return {
+          error: "drive-not-connected",
+          message: "Google Drive ist nicht verbunden — bitte zuerst in Einstellungen verbinden.",
+        };
+      }
+      const ok = await backfillOne(body.data.belegArt, body.data.belegId);
+      if (!ok) { reply.status(404); return { error: "not-found" }; }
+      void tickDriveQueue(1).catch(() => undefined);
+      return { ok: true };
+    });
+
+    // „Alles erneut prüfen" — enqueued alles, was noch nicht in Drive ist.
+    scoped.post("/drive/backfill", async (_req, reply) => {
+      const s = loadDriveSettings();
+      if (!s.refreshTokenIsSet) {
+        reply.status(409);
+        return {
+          error: "drive-not-connected",
+          message: "Google Drive ist nicht verbunden — bitte zuerst in Einstellungen verbinden.",
+        };
+      }
+      const result = await backfillAll();
+      void tickDriveQueue(10).catch(() => undefined);
+      return { ok: true, ...result };
     });
   });
 }
