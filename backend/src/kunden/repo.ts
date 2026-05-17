@@ -607,7 +607,7 @@ const NOTIZ_COLS = `id, kunde_id, objekt_id, angebot_id, rechnung_id, text, auto
 
 export function listNotizenForKunde(kundeId: string): ApiNotiz[] {
   const rows = getDatabase()
-    .prepare(`SELECT ${NOTIZ_COLS} FROM notiz WHERE kunde_id = ? ORDER BY erstellt_am DESC`)
+    .prepare(`SELECT ${NOTIZ_COLS} FROM notiz WHERE kunde_id = ? AND geloescht_am IS NULL ORDER BY erstellt_am DESC`)
     .all(kundeId) as DbNotiz[];
   return rows.map(notizRowToApi);
 }
@@ -647,7 +647,10 @@ export function createNotiz(data: NotizWrite): ApiNotiz {
   return notizRowToApi(row);
 }
 
+// Soft-Delete (siehe deleteKunde).
 export function deleteNotiz(id: string): boolean {
-  const r = getDatabase().prepare(`DELETE FROM notiz WHERE id = ?`).run(id);
+  const r = getDatabase()
+    .prepare(`UPDATE notiz SET geloescht_am = datetime('now') WHERE id = ? AND geloescht_am IS NULL`)
+    .run(id);
   return r.changes > 0;
 }
