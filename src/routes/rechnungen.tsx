@@ -22,6 +22,7 @@ import { rechnungFlow } from "@/lib/flow/flows";
 import {
   ZEITRAUM_ALLE,
   passtInZeitraum,
+  zeitraumAktuellesJahr,
   type ZeitraumState,
 } from "@/components/filters/ZeitraumFilter";
 import type { Rechnung } from "@/lib/api/types";
@@ -90,7 +91,7 @@ function Page() {
   const del = useDeleteRechnung();
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
-  const [zeitraum, setZeitraum] = useState<ZeitraumState>(ZEITRAUM_ALLE);
+  const [zeitraum, setZeitraum] = useState<ZeitraumState>(() => zeitraumAktuellesJahr());
   const [nurDA, setNurDA] = useState(false);
   const [open, setOpen] = useState(false);
   const [daDialog, setDaDialog] = useState(false);
