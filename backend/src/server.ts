@@ -31,6 +31,7 @@ import { startMahnScheduler } from "./mahnung/cron.js";
 import { driveRoutes } from "./routes/drive.js";
 import { emailRoutes } from "./routes/email.js";
 import { externRoutes } from "./routes/extern.js";
+import { datenbankRoutes } from "./routes/datenbank.js";
 import { seedOrUpdateDefaultVorlagen } from "./email/templates.js";
 import { startDriveWorker } from "./drive/upload-worker.js";
 import { wireDriveAutoEnqueue } from "./drive/auto-enqueue.js";
@@ -252,6 +253,7 @@ async function main(): Promise<void> {
   await app.register(driveRoutes);
   await app.register(emailRoutes);
   await app.register(externRoutes);
+  await app.register(datenbankRoutes);
 
   // Frontend-Statics — nur wenn FRONTEND_DIR existiert (Prod / Pi-Bundle).
   // Im Dev läuft das Frontend separat über Vite, daher hier kein Fehler.
