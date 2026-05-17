@@ -416,17 +416,20 @@ export function updateAnsprechpartner(id: string, patch: Record<string, unknown>
   return getAnsprechpartner(id);
 }
 
+// Soft-Delete (siehe deleteKunde).
 export function deleteAnsprechpartner(id: string): boolean {
   const db = getDatabase();
   const cur = getAnsprechpartner(id);
   if (!cur) return false;
   const tx = db.transaction(() => {
-    db.prepare(`DELETE FROM ansprechpartner WHERE id = ?`).run(id);
+    db.prepare(`UPDATE ansprechpartner SET geloescht_am = datetime('now') WHERE id = ?`).run(id);
     if (cur.primaer) {
-      // Wenn der primäre weg war, ersten verbliebenen zum primären machen.
+      // Primären-Flag an einen verbliebenen aktiven Ansprechpartner weiterreichen.
       const next = db
         .prepare(
-          `SELECT id FROM ansprechpartner WHERE kunde_id = ? ORDER BY erstellt_am ASC LIMIT 1`,
+          `SELECT id FROM ansprechpartner
+             WHERE kunde_id = ? AND geloescht_am IS NULL
+             ORDER BY erstellt_am ASC LIMIT 1`,
         )
         .get(cur.kundeId) as { id: string } | undefined;
       if (next) {
