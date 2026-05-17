@@ -1,13 +1,15 @@
 // Eingebettete Ansicht der externen Stundenzettel-App per iframe.
-// Erklärt klar, warum Einbettung in der Cloud-Preview nicht geht und auf dem Pi schon.
+// Lädt über Backend-Reverse-Proxy (/extern/stundenzettel/), damit
+// Mixed-Content, LAN-Erreichbarkeit und X-Frame-Options gelöst sind.
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Clock,
   ExternalLink,
   RefreshCw,
   Settings as SettingsIcon,
-  Info,
+  PlugZap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -15,53 +17,9 @@ import { useStundenzettelUrl, useStundenzettelEmbedUrl } from "@/lib/stundenzett
 
 export const Route = createFileRoute("/stundenzettel")({ component: Page });
 
-type Hindernis =
-  | { typ: "mixed-content"; details: string }
-  | { typ: "lan-aus-cloud"; details: string }
-  | { typ: "ungueltige-url"; details: string }
-  | null;
-
-function analysiereUmfeld(url: string): Hindernis {
-  if (!url) return null;
-  let u: URL;
-  try {
-    u = new URL(url);
-  } catch {
-    return { typ: "ungueltige-url", details: "Die hinterlegte Adresse ist keine gültige URL." };
-  }
-
-  const seiteIstHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-  const zielIstHttp = u.protocol === "http:";
-  const istLanHost =
-    /\.local$/i.test(u.hostname) ||
-    /^localhost$/i.test(u.hostname) ||
-    /^127\./.test(u.hostname) ||
-    /^10\./.test(u.hostname) ||
-    /^192\.168\./.test(u.hostname) ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(u.hostname);
-
-  const seiteIstCloudPreview =
-    typeof window !== "undefined" &&
-    /\.(lovable\.app|lovableproject\.com)$/i.test(window.location.hostname);
-
-  if (seiteIstCloudPreview && istLanHost) {
-    return {
-      typ: "lan-aus-cloud",
-      details:
-        "Du betrachtest das CRM gerade über die Lovable-Cloud-Vorschau. Eine LAN-Adresse wie deine Stundenzettel-App ist von dort aus technisch nicht erreichbar. Sobald das CRM produktiv auf dem Pi läuft, sind beide Apps im selben Netz und die Einbettung funktioniert ohne weitere Schritte.",
-    };
-  }
-
-  if (seiteIstHttps && zielIstHttp) {
-    return {
-      typ: "mixed-content",
-      details:
-        'Diese Seite läuft über HTTPS, die Stundenzettel-App über HTTP. Browser blockieren das aus Sicherheitsgründen („Mixed Content"). Auf dem Pi laufen später beide unter derselben Adresse — dann funktioniert es automatisch.',
-    };
-  }
-
-  return null;
-}
+type ProbeResult =
+  | { ok: true }
+  | { ok: false; kind: "not-configured" | "upstream-unreachable" | "network" | "other"; status?: number };
 
 function Page() {
   const { url } = useStundenzettelUrl();
@@ -70,12 +28,26 @@ function Page() {
   const [loaded, setLoaded] = useState(false);
   const [slow, setSlow] = useState(false);
 
-  // Reverse-Proxy im Backend löst Mixed-Content / LAN / X-Frame-Options.
-  // Frühere Hindernis-Analyse entfällt — wir laden immer über `embedUrl`.
-  const hindernis = null as Hindernis;
+  const probe = useQuery<ProbeResult>({
+    queryKey: ["stundenzettel", "probe", embedUrl, reloadKey],
+    enabled: !!embedUrl,
+    retry: false,
+    staleTime: 0,
+    queryFn: async () => {
+      try {
+        const res = await fetch(embedUrl, { method: "GET", credentials: "include" });
+        if (res.ok) return { ok: true };
+        if (res.status === 503) return { ok: false, kind: "not-configured", status: 503 };
+        if (res.status === 502) return { ok: false, kind: "upstream-unreachable", status: 502 };
+        return { ok: false, kind: "other", status: res.status };
+      } catch {
+        return { ok: false, kind: "network" };
+      }
+    },
+  });
 
   useEffect(() => {
-    if (!url || hindernis) return;
+    if (!url || !probe.data?.ok) return;
     setLoaded(false);
     setSlow(false);
     const t = setTimeout(() => {
@@ -83,7 +55,7 @@ function Page() {
     }, 8000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, reloadKey, hindernis]);
+  }, [url, reloadKey, probe.data?.ok]);
 
   if (!url) {
     return (
@@ -106,6 +78,9 @@ function Page() {
       </div>
     );
   }
+
+  const probeData = probe.data;
+  const showError = probeData && !probeData.ok;
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
@@ -137,11 +112,15 @@ function Page() {
         </div>
       </div>
 
-      {hindernis ? (
-        <HindernisInfo hindernis={hindernis} url={url} />
+      {showError ? (
+        <ErrorState
+          kind={probeData!.kind}
+          url={url}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
       ) : (
         <div className="relative flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          {!loaded && (
+          {(!loaded || probe.isLoading) && (
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center p-3">
               <div className="pointer-events-auto rounded-full border border-border bg-background/90 px-4 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
                 {slow ? (
@@ -162,93 +141,76 @@ function Page() {
               </div>
             </div>
           )}
-          <iframe
-            key={reloadKey}
-            src={embedUrl || url}
-            title="Stundenzettel"
-            className="h-full w-full"
-            onLoad={() => {
-              setLoaded(true);
-              setSlow(false);
-            }}
-          />
+          {probe.data?.ok && (
+            <iframe
+              key={reloadKey}
+              src={embedUrl}
+              title="Stundenzettel"
+              className="h-full w-full"
+              onLoad={() => {
+                setLoaded(true);
+                setSlow(false);
+              }}
+            />
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function HindernisInfo({ hindernis, url }: { hindernis: NonNullable<Hindernis>; url: string }) {
-  const titel: Record<NonNullable<Hindernis>["typ"], string> = {
-    "lan-aus-cloud": "Funktioniert erst auf dem Pi",
-    "mixed-content": "Browser blockiert HTTP-Inhalt in HTTPS-Seite",
-    "ungueltige-url": "Adresse ungültig",
-  };
+function ErrorState({
+  kind,
+  url,
+  onRetry,
+}: {
+  kind: "not-configured" | "upstream-unreachable" | "network" | "other";
+  url: string;
+  onRetry: () => void;
+}) {
+  const titel =
+    kind === "not-configured"
+      ? "Noch nicht konfiguriert"
+      : kind === "upstream-unreachable"
+        ? "Stundenzettel-Server nicht erreichbar"
+        : kind === "network"
+          ? "Backend nicht erreichbar"
+          : "Unerwarteter Fehler";
+
+  const text =
+    kind === "not-configured"
+      ? "Im Backend ist keine Stundenzettel-Adresse hinterlegt. Trage die URL in den Einstellungen ein."
+      : kind === "upstream-unreachable"
+        ? `Das Backend kann den Stundenzettel-Dienst unter ${url} nicht erreichen. Prüfe, ob der Dienst läuft und die Adresse stimmt.`
+        : kind === "network"
+          ? "Das CRM-Backend antwortet nicht. Prüfe die Backend-Verbindung in den Einstellungen."
+          : "Der Stundenzettel-Server hat unerwartet geantwortet.";
 
   return (
     <div className="flex-1 overflow-auto rounded-2xl border border-border bg-card p-8 shadow-sm">
       <div className="mx-auto max-w-2xl space-y-5">
         <div className="flex items-start gap-3">
-          <div className="grid h-12 w-12 shrink-0 place-content-center rounded-full bg-primary/10">
-            <Info className="h-6 w-6 text-primary" />
+          <div className="grid h-12 w-12 shrink-0 place-content-center rounded-full bg-muted">
+            <PlugZap className="h-6 w-6 text-muted-foreground" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">{titel[hindernis.typ]}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{hindernis.details}</p>
+            <h2 className="text-lg font-semibold">{titel}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{text}</p>
           </div>
         </div>
 
-        {hindernis.typ === "lan-aus-cloud" && (
-          <div className="rounded-xl border border-border bg-muted/30 p-5">
-            <p className="mb-2 text-sm font-medium">Was du jetzt schon tun kannst:</p>
-            <ul className="ml-5 list-disc space-y-1.5 text-sm text-muted-foreground">
-              <li>
-                Die Adresse{" "}
-                <code className="rounded bg-background px-1.5 py-0.5 text-xs">{url}</code> bleibt
-                gespeichert.
-              </li>
-              <li>
-                Klick rechts oben auf <strong>„In neuem Tab"</strong>, um die App aus deinem
-                Heim-Netz aufzurufen — falls du gerade dort bist.
-              </li>
-              <li>
-                Sobald das CRM produktiv auf dem Pi läuft (z. B. unter{" "}
-                <code className="rounded bg-background px-1.5 py-0.5 text-xs">
-                  http://mycleancenter.local
-                </code>
-                ), wird die Stundenzettel-App hier ohne weitere Schritte eingebettet angezeigt.
-              </li>
-            </ul>
-          </div>
-        )}
-
-        {hindernis.typ === "mixed-content" && (
-          <div className="rounded-xl border border-border bg-muted/30 p-5">
-            <p className="mb-2 text-sm font-medium">Lösungen:</p>
-            <ul className="ml-5 list-disc space-y-1.5 text-sm text-muted-foreground">
-              <li>
-                Die Stundenzettel-App ebenfalls über <strong>HTTPS</strong> ausliefern (z. B. mit
-                einem Reverse-Proxy auf dem Pi).
-              </li>
-              <li>
-                Oder das CRM aus derselben Quelle aufrufen wie die Stundenzettel-App (z. B. beide
-                unter{" "}
-                <code className="rounded bg-background px-1.5 py-0.5 text-xs">
-                  http://mycleancenter.local
-                </code>
-                ) — dann ist kein Mixed-Content mehr.
-              </li>
-            </ul>
-          </div>
-        )}
-
         <div className="flex flex-wrap gap-2">
+          <Button onClick={onRetry} className="gap-1.5 rounded-full px-5">
+            <RefreshCw className="h-4 w-4" />
+            Erneut versuchen
+          </Button>
           <Button
+            variant="outline"
             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
             className="gap-1.5 rounded-full px-5"
           >
             <ExternalLink className="h-4 w-4" />
-            Stundenzettel in neuem Tab
+            In neuem Tab
           </Button>
           <Button asChild variant="outline" className="gap-1.5 rounded-full px-5">
             <Link to="/einstellungen">
