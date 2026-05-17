@@ -330,6 +330,17 @@ function Page() {
         pdfBlobUrl={pdf.url}
         pdfDateiname={`${r.nummer}.pdf`}
       />
+      <BelegLoeschenDialog
+        art="rechnung"
+        id={r.id}
+        nummer={r.nummer}
+        status={r.status}
+        open={delOpen}
+        onOpenChange={setDelOpen}
+        onDeleted={(mode) => {
+          if (mode === "hard") navigate({ to: "/rechnungen" });
+        }}
+      />
       {confirmDialog}
     </div>
   );
