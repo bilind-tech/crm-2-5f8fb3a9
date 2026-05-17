@@ -57,6 +57,8 @@ export interface ApiKunde {
   tags: string[];
   status: string;
   archiviert: boolean;
+  hasLogo: boolean;
+  logoUpdatedAt?: string;
   erstelltAm: string;
   geaendertAm: string;
 }
