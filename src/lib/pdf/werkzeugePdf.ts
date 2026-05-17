@@ -286,6 +286,7 @@ export interface UebergabeprotokollData {
   kunde?: Kunde;
   objekt?: Objekt;
   firma?: Firmendaten;
+  optionen?: ProtokollOptionen;
 }
 
 const PROTOKOLL_ART_LABEL: Record<ProtokollArt, string> = {
@@ -294,9 +295,15 @@ const PROTOKOLL_ART_LABEL: Record<ProtokollArt, string> = {
   beides: "Übergabe- und Abnahmeprotokoll",
 };
 
-export async function generateUebergabeprotokollPdf(data: UebergabeprotokollData): Promise<Blob> {
-  const titel = PROTOKOLL_ART_LABEL[data.art];
+export async function generateUebergabeprotokollPdf(
+  data: UebergabeprotokollData,
+): Promise<PdfBuildResult> {
+  const opt = data.optionen ?? {};
+  const titel = (opt.titelOverride && opt.titelOverride.trim()) || PROTOKOLL_ART_LABEL[data.art];
   const logo = await logoDataUrl(data.firma?.logoUrl);
+  const tracker = createHotspotTracker(A4);
+  const sektTitel = (key: "leistung" | "bemerkungen" | "ergebnis", fb: string) =>
+    (opt.sektionsTitel?.[key] && opt.sektionsTitel[key]!.trim()) || fb;
 
   const meta: { label: string; wert: string }[] = [];
   if (data.nummer) meta.push({ label: "Protokoll-Nr.", wert: data.nummer });
@@ -310,12 +317,14 @@ export async function generateUebergabeprotokollPdf(data: UebergabeprotokollData
     pageSize: "A4" as const,
     pageMargins: [55, 155, 55, 100] as [number, number, number, number],
     defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
-    header: header(data.firma, logo),
-    footer: footer(data.firma),
+    header: header(data.firma, logo, opt.logoSichtbar !== false),
+    footer: opt.footerSichtbar === false ? undefined : footer(data.firma),
+    pageBreakBefore: tracker.pageBreakBefore,
     content: [
       {
         columns: [
           {
+            id: "kunde",
             width: "*",
             stack: adresse.map((l, i) => ({ text: l, fontSize: 10, bold: i === 0 })),
           },
@@ -323,38 +332,77 @@ export async function generateUebergabeprotokollPdf(data: UebergabeprotokollData
         ],
         columnGap: 20,
       },
-      { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 14] },
-
-      sectionTitle("Leistungsumfang"),
-      thinLine(),
-      { text: data.leistungsumfang || "—", fontSize: 10, margin: [0, 6, 0, 0] },
-
-      sectionTitle("Mängel / Bemerkungen"),
-      thinLine(),
-      { text: data.bemerkungen || "Keine.", fontSize: 10, margin: [0, 6, 0, 0] },
-
-      sectionTitle("Ergebnis"),
-      thinLine(),
       {
-        text: data.ohneVorbehalt
-          ? "Die Leistung wird ohne Vorbehalt abgenommen."
-          : "Die Leistung wird mit den oben genannten Vorbehalten / Mängeln abgenommen.",
-        fontSize: 10,
-        margin: [0, 6, 0, 0],
+        id: "titel",
+        stack: [
+          { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 0] },
+          ...(opt.untertitel && opt.untertitel.trim()
+            ? [{ text: opt.untertitel, fontSize: 11, color: COLOR_MUTED, margin: [0, 4, 0, 0] }]
+            : []),
+          { text: "", margin: [0, 0, 0, 14] },
+        ],
       },
 
-      sectionTitle("Anwesende Personen / Unterschriften"),
-      thinLine(),
-      unterschriftenBlock(
-        "Unterschrift Auftraggeber",
-        data.vertreterAuftraggeber,
-        "Unterschrift Auftragnehmer",
-        data.vertreterAuftragnehmer,
-      ),
+      {
+        id: "leistungsumfang",
+        stack: [
+          sectionTitle(sektTitel("leistung", "Leistungsumfang")),
+          thinLine(),
+          { text: data.leistungsumfang || "—", fontSize: 10, margin: [0, 6, 0, 0] },
+        ],
+      },
+      {
+        id: "bemerkungen",
+        stack: [
+          sectionTitle(sektTitel("bemerkungen", "Mängel / Bemerkungen")),
+          thinLine(),
+          { text: data.bemerkungen || "Keine.", fontSize: 10, margin: [0, 6, 0, 0] },
+        ],
+      },
+      {
+        id: "ergebnis",
+        stack: [
+          sectionTitle(sektTitel("ergebnis", "Ergebnis")),
+          thinLine(),
+          {
+            text: data.ohneVorbehalt
+              ? "Die Leistung wird ohne Vorbehalt abgenommen."
+              : "Die Leistung wird mit den oben genannten Vorbehalten / Mängeln abgenommen.",
+            fontSize: 10,
+            margin: [0, 6, 0, 0],
+          },
+        ],
+      },
+      ...(opt.zusatzKlausel && opt.zusatzKlausel.trim()
+        ? [
+            {
+              id: "klausel",
+              stack: [
+                sectionTitle("Zusatzklausel"),
+                thinLine(),
+                { text: opt.zusatzKlausel, fontSize: 10, margin: [0, 6, 0, 0] },
+              ],
+            },
+          ]
+        : []),
+      {
+        id: "unterschriften",
+        stack: [
+          sectionTitle("Anwesende Personen / Unterschriften"),
+          thinLine(),
+          unterschriftenBlock(
+            "Unterschrift Auftraggeber",
+            data.vertreterAuftraggeber,
+            "Unterschrift Auftragnehmer",
+            data.vertreterAuftragnehmer,
+          ),
+        ],
+      },
     ],
   };
 
-  return await renderToBlob(doc);
+  const blob = await renderToBlob(doc);
+  return { blob, hotspots: tracker.build() };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
