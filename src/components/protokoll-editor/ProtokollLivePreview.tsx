@@ -179,11 +179,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   // Frische Kopie pro Load — PDF.js detacht den Buffer im Worker.
   const fileSource = useMemo(
     () => (pdfBuffer ? { data: new Uint8Array(pdfBuffer.slice(0)) } : null),
-    [pdfBuffer, loadAttempt],
-  );
-  const pendingFileSource = useMemo(
-    () => (pendingBuffer ? { data: new Uint8Array(pendingBuffer.slice(0)) } : null),
-    [pendingBuffer, pendingSeq],
+    [pdfBuffer, viewerSeq, loadAttempt],
   );
 
   return (
@@ -228,7 +224,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
             console.error("[ProtokollLivePreview] viewer error", {
               message: err?.message,
               byteLength: pdfBuffer?.byteLength ?? 0,
-              hasPendingBuffer: !!pendingBuffer,
+              viewerSeq,
               loadAttempt,
               kind: draft.kind,
               draftId: draft.id,
@@ -271,39 +267,6 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
             );
           })}
         </Document>
-      )}
-
-      {/* Pre-Loader: atomarer Swap erst, wenn neue PDF erfolgreich geladen ist. */}
-      {pendingFileSource && pendingBuffer !== pdfBuffer && (
-        <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
-          <Document
-            key={`pending-${pendingSeq}`}
-            file={pendingFileSource}
-            onLoadSuccess={() => {
-              // numPages NICHT hier setzen — sichtbares Document setzt es nach dem Swap,
-              // sonst springt die Seitenanzahl vor dem Buffer-Tausch.
-              setPdfBuffer(pendingBuffer);
-              if (pendingHotspots) setHotspots(pendingHotspots);
-              setLoadAttempt(0);
-              setPdfUrl((prev) => {
-                if (prev) URL.revokeObjectURL(prev);
-                return pendingUrl;
-              });
-              setPendingBuffer(null);
-              setPendingUrl(null);
-              setPendingHotspots(null);
-            }}
-            onLoadError={() => {
-              if (pendingUrl) URL.revokeObjectURL(pendingUrl);
-              setPendingBuffer(null);
-              setPendingUrl(null);
-              setPendingHotspots(null);
-            }}
-            loading={null}
-          >
-            <Page pageNumber={1} width={1} renderAnnotationLayer={false} renderTextLayer={false} />
-          </Document>
-        </div>
       )}
 
       {viewerError && pdfBuffer && (
