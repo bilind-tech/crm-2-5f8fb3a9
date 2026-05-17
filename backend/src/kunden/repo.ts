@@ -586,13 +586,17 @@ export function updateObjekt(id: string, patch: Record<string, unknown>): ApiObj
   return getObjekt(id);
 }
 
-export function deleteObjekt(id: string): "soft" | "hard" | "missing" {
+// Soft-Delete (siehe deleteKunde).
+export function deleteObjekt(id: string): "ok" | "missing" {
   const db = getDatabase();
-  const exists = db.prepare(`SELECT 1 FROM objekt WHERE id = ?`).get(id);
-  if (!exists) return "missing";
-  // Step 4/7: später check auf rechnungspositionen / angebotsbezug.
-  db.prepare(`DELETE FROM objekt WHERE id = ?`).run(id);
-  return "hard";
+  const r = db
+    .prepare(`UPDATE objekt SET geloescht_am = datetime('now') WHERE id = ? AND geloescht_am IS NULL`)
+    .run(id);
+  if (r.changes === 0) {
+    const exists = db.prepare(`SELECT 1 FROM objekt WHERE id = ?`).get(id);
+    return exists ? "ok" : "missing";
+  }
+  return "ok";
 }
 
 // =============================================================================
