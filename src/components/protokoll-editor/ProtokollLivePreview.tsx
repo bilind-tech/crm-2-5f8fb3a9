@@ -226,6 +226,23 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
         </div>
       )}
 
+      {queuedKey && !rendering && pdfBuffer && (
+        <div className="sticky top-2 z-20 ml-auto mb-2 flex w-fit items-center gap-2 rounded-full bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
+          <span>Änderungen warten</span>
+          <button
+            type="button"
+            onClick={() => {
+              forceRefreshRef.current = true;
+              setRefreshNonce((n) => n + 1);
+            }}
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-medium text-primary-foreground transition hover:opacity-90"
+          >
+            <RefreshCw className="h-2.5 w-2.5" />
+            Vorschau aktualisieren
+          </button>
+        </div>
+      )}
+
       {!pdfBuffer && !buildError && containerWidth > 0 && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
