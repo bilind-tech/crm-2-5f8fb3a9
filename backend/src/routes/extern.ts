@@ -53,8 +53,7 @@ async function proxyTo(
 
   const method = req.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
-  // @ts-expect-error duplex required by undici fetch when streaming bodies
-  const init: RequestInit & { duplex?: string } = {
+  const init: RequestInit & { duplex?: "half" } = {
     method,
     headers,
     redirect: "manual",
