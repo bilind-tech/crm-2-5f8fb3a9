@@ -50,6 +50,8 @@ export function listRechnungen(f: RechnungFilter = {}): ApiRechnung[] {
   const db = getDatabase();
   const where: string[] = [];
   const params: unknown[] = [];
+  // Soft-Delete: gelöschte Rechnungen werden ausgeblendet (Restore via DB-Seite).
+  where.push("geloescht_am IS NULL");
   if (f.kundeId) {
     where.push("kunde_id = ?");
     params.push(f.kundeId);
@@ -84,7 +86,7 @@ export function listRechnungen(f: RechnungFilter = {}): ApiRechnung[] {
 
 export function getRechnung(id: string): ApiRechnung | null {
   const db = getDatabase();
-  const row = db.prepare(`SELECT ${RECHNUNG_COLS} FROM rechnung WHERE id = ?`).get(id) as
+  const row = db.prepare(`SELECT ${RECHNUNG_COLS} FROM rechnung WHERE id = ? AND geloescht_am IS NULL`).get(id) as
     | DbRechnung
     | undefined;
   if (!row) return null;
