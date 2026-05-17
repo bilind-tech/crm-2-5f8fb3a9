@@ -85,17 +85,21 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   const inFlightRef = useRef(false);
   const latestKeyRef = useRef<string>("");
   const builtKeyRef = useRef<string>("");
-  const hasFirstBufferRef = useRef(false);
   // Aktuelle Daten als Ref, damit der Build-Loop immer den frischesten Stand nimmt.
   const dataRef = useRef({ draft, kunde, objekt, firma });
   dataRef.current = { draft, kunde, objekt, firma };
 
   useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     const combinedKey = `${draftKey}|${ctxKey}`;
     latestKeyRef.current = combinedKey;
     if (builtKeyRef.current === combinedKey) return;
-
-    let cancelled = false;
 
     const runBuild = async () => {
       if (inFlightRef.current) return;
@@ -104,45 +108,41 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
       setBuildError(null);
       try {
         // Schleife: solange der Ziel-Key sich ändert, neu bauen — immer den jüngsten Stand.
-        while (!cancelled && builtKeyRef.current !== latestKeyRef.current) {
+        while (mountedRef.current && builtKeyRef.current !== latestKeyRef.current) {
           const targetKey = latestKeyRef.current;
           const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
           const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
-          if (cancelled) return;
+          if (!mountedRef.current) return;
           if (!(blob instanceof Blob) || blob.size === 0) {
             throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
           }
           const buf = await blob.arrayBuffer();
-          if (cancelled) return;
+          if (!mountedRef.current) return;
           const newUrl = URL.createObjectURL(blob);
-          builtKeyRef.current = targetKey;
 
-          if (!hasFirstBufferRef.current) {
-            hasFirstBufferRef.current = true;
-            setHotspots(hs);
-            setPdfBuffer(buf);
-            setPdfUrl((prev) => {
-              if (prev) URL.revokeObjectURL(prev);
-              return newUrl;
-            });
-          } else {
-            setPendingHotspots(hs);
-            setPendingBuffer(buf);
-            setPendingUrl((prev) => {
-              if (prev) URL.revokeObjectURL(prev);
-              return newUrl;
-            });
-            setPendingSeq((n) => n + 1);
+          if (targetKey !== latestKeyRef.current) {
+            URL.revokeObjectURL(newUrl);
+            continue;
           }
+
+          builtKeyRef.current = targetKey;
+          const previousUrl = pdfUrlRef.current;
+          pdfUrlRef.current = newUrl;
+          setHotspots(hs);
+          setPdfBuffer(buf);
+          setPdfUrl(newUrl);
+          setLoadAttempt(0);
+          setViewerSeq((n) => n + 1);
+          if (previousUrl) URL.revokeObjectURL(previousUrl);
           setViewerError(null);
         }
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[ProtokollLivePreview] build failed", e);
-        if (!cancelled) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
+        if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
       } finally {
         inFlightRef.current = false;
-        if (!cancelled) setRendering(false);
+        if (mountedRef.current) setRendering(false);
       }
     };
 
@@ -151,18 +151,9 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
     }, DEBOUNCE_MS);
 
     return () => {
-      cancelled = true;
       clearTimeout(timer);
     };
   }, [draftKey, ctxKey]);
-
-  useEffect(() => {
-    return () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-      if (pendingUrl) URL.revokeObjectURL(pendingUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Snap auf 20-px-Schritte: kein Re-Render bei Scrollbar-Wackler.
   const renderWidthRaw = useMemo(() => {
