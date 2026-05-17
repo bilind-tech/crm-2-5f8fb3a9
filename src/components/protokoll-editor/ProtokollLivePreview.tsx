@@ -10,19 +10,27 @@ import "react-pdf/dist/Page/TextLayer.css";
 import { configurePdfWorker } from "@/lib/pdf/pdfjsWorker";
 
 configurePdfWorker();
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { generateProtokollPdf } from "@/lib/pdf/werkzeugePdf";
 import type { Protokoll, Kunde, Objekt, Firmendaten } from "@/lib/api/types";
 import { PdfFieldOverlay } from "@/components/pdf-editor/PdfFieldOverlay";
 import { protokollMetaForId, FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1 } from "@/lib/pdf/fieldMap";
 import { A4, type RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
 
-const DEBOUNCE_MS = 800;
+const INITIAL_BUILD_DELAY_MS = 80;
+const AUTO_REFRESH_DELAY_MS = 3000;
 const LOADER_DELAY_MS = 250;
 
 const VOLATILE = new Set(["aktualisiertAm", "erstelltAm", "updatedAt", "createdAt"]);
 function semKey<T>(o: T) {
   return JSON.stringify(o, (k, v) => (VOLATILE.has(k) ? undefined : v));
+}
+
+function hasActiveTextEditor() {
+  if (typeof document === "undefined" || typeof HTMLElement === "undefined") return false;
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement)) return false;
+  return el.matches('input, textarea, select, [contenteditable="true"], [role="textbox"]');
 }
 
 interface Props {
