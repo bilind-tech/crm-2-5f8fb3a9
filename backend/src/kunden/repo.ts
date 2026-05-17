@@ -33,7 +33,9 @@ const KUNDE_COLS = `
   id, nummer, kuerzel, typ, anrede, firmenname, vorname, nachname,
   strasse, plz, ort, land, telefon, mobil, email, webseite,
   ust_id, steuernummer, zahlungsziel_tage, standard_steuersatz, standard_rabatt,
-  notizen, tags, status, archiviert, erstellt_am, geaendert_am
+  notizen, tags, status, archiviert, erstellt_am, geaendert_am,
+  CASE WHEN logo_blob IS NULL THEN 0 ELSE 1 END AS has_logo,
+  logo_updated_at
 `;
 
 export interface KundeFilter {
