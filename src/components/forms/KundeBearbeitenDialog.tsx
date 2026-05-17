@@ -226,7 +226,14 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
               </Field>
             </div>
             <Field label="Notizen">
-              <Textarea rows={4} value={notizen} onChange={(e) => setNotizen(e.target.value)} />
+              <Textarea
+                rows={4}
+                value={notizen}
+                onChange={(e) => {
+                  setNotizen(e.target.value);
+                  setNotizenTouched(true);
+                }}
+              />
             </Field>
           </TabsContent>
 
