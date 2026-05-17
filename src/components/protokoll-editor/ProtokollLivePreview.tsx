@@ -17,7 +17,7 @@ import { PdfFieldOverlay } from "@/components/pdf-editor/PdfFieldOverlay";
 import { protokollMetaForId, FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1 } from "@/lib/pdf/fieldMap";
 import { A4, type RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
 
-const DEBOUNCE_MS = 450;
+const DEBOUNCE_MS = 800;
 const LOADER_DELAY_MS = 250;
 
 const VOLATILE = new Set(["aktualisiertAm", "erstelltAm", "updatedAt", "createdAt"]);
@@ -40,19 +40,18 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
 
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pendingBuffer, setPendingBuffer] = useState<ArrayBuffer | null>(null);
-  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [hotspots, setHotspots] = useState<RuntimeHotspot[]>([]);
-  const [pendingHotspots, setPendingHotspots] = useState<RuntimeHotspot[] | null>(null);
   const [openHotspotId, setOpenHotspotId] = useState<string | null>(null);
 
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [viewerSeq, setViewerSeq] = useState(0);
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
-  const [pendingSeq, setPendingSeq] = useState(0);
+  const mountedRef = useRef(true);
+  const pdfUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -82,21 +81,25 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   // Build-Queue: nur der jüngste Eingabe-Stand wird gerendert.
   // - inFlightRef verhindert parallele Builds
   // - latestKeyRef hält den zuletzt angeforderten Stand fest
-  // - hasFirstBufferRef vermeidet Re-Render-Loops über pdfBuffer-Dep
+  // - viewerSeq erzeugt nur neue PDF.js-Daten, ohne ein zweites Document zu mounten
   const inFlightRef = useRef(false);
   const latestKeyRef = useRef<string>("");
   const builtKeyRef = useRef<string>("");
-  const hasFirstBufferRef = useRef(false);
   // Aktuelle Daten als Ref, damit der Build-Loop immer den frischesten Stand nimmt.
   const dataRef = useRef({ draft, kunde, objekt, firma });
   dataRef.current = { draft, kunde, objekt, firma };
 
   useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     const combinedKey = `${draftKey}|${ctxKey}`;
     latestKeyRef.current = combinedKey;
     if (builtKeyRef.current === combinedKey) return;
-
-    let cancelled = false;
 
     const runBuild = async () => {
       if (inFlightRef.current) return;
@@ -105,45 +108,41 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
       setBuildError(null);
       try {
         // Schleife: solange der Ziel-Key sich ändert, neu bauen — immer den jüngsten Stand.
-        while (!cancelled && builtKeyRef.current !== latestKeyRef.current) {
+        while (mountedRef.current && builtKeyRef.current !== latestKeyRef.current) {
           const targetKey = latestKeyRef.current;
           const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
           const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
-          if (cancelled) return;
+          if (!mountedRef.current) return;
           if (!(blob instanceof Blob) || blob.size === 0) {
             throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
           }
           const buf = await blob.arrayBuffer();
-          if (cancelled) return;
+          if (!mountedRef.current) return;
           const newUrl = URL.createObjectURL(blob);
-          builtKeyRef.current = targetKey;
 
-          if (!hasFirstBufferRef.current) {
-            hasFirstBufferRef.current = true;
-            setHotspots(hs);
-            setPdfBuffer(buf);
-            setPdfUrl((prev) => {
-              if (prev) URL.revokeObjectURL(prev);
-              return newUrl;
-            });
-          } else {
-            setPendingHotspots(hs);
-            setPendingBuffer(buf);
-            setPendingUrl((prev) => {
-              if (prev) URL.revokeObjectURL(prev);
-              return newUrl;
-            });
-            setPendingSeq((n) => n + 1);
+          if (targetKey !== latestKeyRef.current) {
+            URL.revokeObjectURL(newUrl);
+            continue;
           }
+
+          builtKeyRef.current = targetKey;
+          const previousUrl = pdfUrlRef.current;
+          pdfUrlRef.current = newUrl;
+          setHotspots(hs);
+          setPdfBuffer(buf);
+          setPdfUrl(newUrl);
+          setLoadAttempt(0);
+          setViewerSeq((n) => n + 1);
+          if (previousUrl) URL.revokeObjectURL(previousUrl);
           setViewerError(null);
         }
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[ProtokollLivePreview] build failed", e);
-        if (!cancelled) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
+        if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
       } finally {
         inFlightRef.current = false;
-        if (!cancelled) setRendering(false);
+        if (mountedRef.current) setRendering(false);
       }
     };
 
@@ -152,18 +151,9 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
     }, DEBOUNCE_MS);
 
     return () => {
-      cancelled = true;
       clearTimeout(timer);
     };
   }, [draftKey, ctxKey]);
-
-  useEffect(() => {
-    return () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-      if (pendingUrl) URL.revokeObjectURL(pendingUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Snap auf 20-px-Schritte: kein Re-Render bei Scrollbar-Wackler.
   const renderWidthRaw = useMemo(() => {
@@ -189,11 +179,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   // Frische Kopie pro Load — PDF.js detacht den Buffer im Worker.
   const fileSource = useMemo(
     () => (pdfBuffer ? { data: new Uint8Array(pdfBuffer.slice(0)) } : null),
-    [pdfBuffer, loadAttempt],
-  );
-  const pendingFileSource = useMemo(
-    () => (pendingBuffer ? { data: new Uint8Array(pendingBuffer.slice(0)) } : null),
-    [pendingBuffer, pendingSeq],
+    [pdfBuffer, viewerSeq, loadAttempt],
   );
 
   return (
@@ -238,7 +224,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
             console.error("[ProtokollLivePreview] viewer error", {
               message: err?.message,
               byteLength: pdfBuffer?.byteLength ?? 0,
-              hasPendingBuffer: !!pendingBuffer,
+              viewerSeq,
               loadAttempt,
               kind: draft.kind,
               draftId: draft.id,
@@ -281,39 +267,6 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
             );
           })}
         </Document>
-      )}
-
-      {/* Pre-Loader: atomarer Swap erst, wenn neue PDF erfolgreich geladen ist. */}
-      {pendingFileSource && pendingBuffer !== pdfBuffer && (
-        <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
-          <Document
-            key={`pending-${pendingSeq}`}
-            file={pendingFileSource}
-            onLoadSuccess={() => {
-              // numPages NICHT hier setzen — sichtbares Document setzt es nach dem Swap,
-              // sonst springt die Seitenanzahl vor dem Buffer-Tausch.
-              setPdfBuffer(pendingBuffer);
-              if (pendingHotspots) setHotspots(pendingHotspots);
-              setLoadAttempt(0);
-              setPdfUrl((prev) => {
-                if (prev) URL.revokeObjectURL(prev);
-                return pendingUrl;
-              });
-              setPendingBuffer(null);
-              setPendingUrl(null);
-              setPendingHotspots(null);
-            }}
-            onLoadError={() => {
-              if (pendingUrl) URL.revokeObjectURL(pendingUrl);
-              setPendingBuffer(null);
-              setPendingUrl(null);
-              setPendingHotspots(null);
-            }}
-            loading={null}
-          >
-            <Page pageNumber={1} width={1} renderAnnotationLayer={false} renderTextLayer={false} />
-          </Document>
-        </div>
       )}
 
       {viewerError && pdfBuffer && (

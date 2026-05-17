@@ -53,7 +53,7 @@ export function ProtokollHotspotEditor({ fieldId, draft, set, onOpenAdvanced, on
     </div>
   );
 
-  // ────── Stammdaten / Meta ──────
+  // ────── Inhalt / Meta ──────
   if (fieldId === "meta") {
     return (
       <div className="w-[280px]">
@@ -85,10 +85,10 @@ export function ProtokollHotspotEditor({ fieldId, draft, set, onOpenAdvanced, on
       <div className="w-[260px]">
         {Header}
         <p className="text-xs text-muted-foreground">
-          Kunde und Objekt werden im Tab <strong>Stammdaten</strong> ausgewählt.
+          Kunde und Objekt werden im Tab <strong>Inhalt</strong> ausgewählt.
         </p>
         <Button size="sm" variant="outline" onClick={onOpenAdvanced} className="mt-2 w-full">
-          Stammdaten öffnen
+          Inhalt öffnen
         </Button>
       </div>
     );
