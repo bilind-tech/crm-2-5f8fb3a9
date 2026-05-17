@@ -328,6 +328,17 @@ function Page() {
         pdfBlobUrl={pdf.url}
         pdfDateiname={`${a.nummer}.pdf`}
       />
+      <BelegLoeschenDialog
+        art="angebot"
+        id={a.id}
+        nummer={a.nummer}
+        status={a.status}
+        open={delOpen}
+        onOpenChange={setDelOpen}
+        onDeleted={(mode) => {
+          if (mode === "hard") navigate({ to: "/angebote" });
+        }}
+      />
     </div>
   );
 }
