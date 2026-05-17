@@ -21,6 +21,9 @@ import {
   updateAnsprechpartner,
   updateKunde,
   updateObjekt,
+  setKundeLogo,
+  clearKundeLogo,
+  getKundeLogo,
 } from "../kunden/repo.js";
 import { findKuerzelOwner, isKuerzelFormatOk, normalizeKuerzel } from "../kunden/kuerzel.js";
 import { listAngebote } from "../belege/angebote-repo.js";
