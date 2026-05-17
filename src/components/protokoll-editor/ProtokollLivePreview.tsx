@@ -190,7 +190,13 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
       if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
     } finally {
       inFlightRef.current = false;
-      if (mountedRef.current) setRendering(false);
+      if (mountedRef.current) {
+        setRendering(false);
+        if (latestKeyRef.current !== builtKeyRef.current) {
+          setQueuedKey(latestKeyRef.current);
+          setRefreshNonce((n) => n + 1);
+        }
+      }
     }
   };
 
