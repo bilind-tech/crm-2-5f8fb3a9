@@ -1,73 +1,83 @@
-## Problem
+## Ursache
 
-Das Dashboard ist seit jeher leer/falsch, weil die Endpunkte `/dashboard/kennzahlen`, `/dashboard/umsatz` und `/dashboard/warnungen` im Backend **gar nicht existieren**. Frontend ruft sie auf, Backend antwortet mit 404 → KPI-Kacheln und Umsatz-Chart bleiben leer. Bezahlte Rechnungen tauchen deshalb nirgends auf.
+Im Lovable-Preview (lovableproject.com) läuft kein Pi-Backend — `localhost:8787` ist offline (siehe Netzwerk-Log: lauter `Load failed`). Der Client fällt deshalb auf den lokalen Mock (`src/lib/api/localPreviewData.ts`) zurück. Dieser Mock kennt für Daueraufträge nur zwei harte Einträge:
 
-Zusätzlich ist der Default-Charttyp aktuell „Balken" (`DEFAULT_STATE.typ = "bar"`), gewünscht ist die Flächen-Grafik als Start-Ansicht.
-
-## Lösung
-
-### 1. Backend: neue Dashboard-Routen (`backend/src/routes/dashboard.ts`)
-
-`GET /dashboard/kennzahlen?jahr=&monat=`
-- `aktiveKunden` = `COUNT` Kunden ohne `archiviert`
-- `aktiveObjekte` = `COUNT` Objekte mit Status aktiv
-- `offeneAngebote` = `COUNT` Angebote mit Status `versendet`
-- `offeneRechnungen` = `COUNT` Rechnungen mit Status in (`versendet`,`teilbezahlt`,`ueberfaellig`), optional gefiltert auf `rechnungsdatum` im Zeitraum
-- `ausstehendEUR` = Σ (`brutto − bezahlt`) der offenen Rechnungen
-
-`GET /dashboard/umsatz?jahr=&monat=`
-- Liefert `UmsatzPunkt[]` (`monat: "YYYY-MM"`, `netto`, `brutto`)
-- **Definition**: alle Rechnungen mit Status ∈ (`versendet`,`teilbezahlt`,`bezahlt`,`ueberfaellig`) — gruppiert nach Monat des `rechnungsdatum`. Stornos zählen nicht. Bezahlt + Teilbezahlt fließen voll ein → sobald eine Rechnung als bezahlt markiert wird, erscheint sie sofort im Umsatz.
-- Nutzt `rechnungBruttoCt`/`rechnungNettoCt` aus `backend/src/belege/totals.ts` (Netto = Brutto − MwSt., kleine Helferfunktion ergänzen).
-- Ohne Parameter: letzte 12 Monate inkl. leerer Monate (0/0), damit das Chart sauber aufgefüllt ist.
-- Mit `jahr=YYYY&monat=alle`: alle 12 Monate des Jahres. Mit konkretem Monat: ein einzelner Punkt.
-
-`GET /dashboard/warnungen`
-- MVP: leere Liste `[]` (bestehende Fronten zeigen daraus bereits Mahn-/Überfälligkeits-Signale aus anderen Quellen). Endpoint muss existieren, damit `useWarnungen` kein 404 wirft.
-
-Registrierung in `backend/src/server.ts`:
-- `app.register(dashboardRoutes)` einhängen
-- `isBackendApi`: `url.startsWith("/dashboard")` ergänzen
-
-Alle Routen mit `requireAuth` (Single-User-Standard).
-
-### 2. Frontend: Standard-Chart auf „Fläche"
-
-`src/components/dashboard/UmsatzChartCard.tsx`
-- `DEFAULT_STATE.typ` von `"bar"` auf `"area"` setzen
-- `STORAGE_KEY` bumpen (`dashboard.umsatzChart.v2`), damit alte gespeicherte „bar"-Auswahl nicht weiter greift und User auf der Fläche starten
-
-Keine weiteren UI-Änderungen — Toggle bleibt, User kann manuell auf Balken wechseln.
-
-### 3. Tests
-
-- `backend/test/dashboard.spec.ts` (neu): legt Kunde + Rechnung + Zahlung an, prüft dass
-  - Umsatz die Rechnung im richtigen Monat enthält
-  - `offeneRechnungen` nach Voll-Zahlung um 1 sinkt
-  - Storno aus Umsatz verschwindet
-
-## Technische Details
-
-```text
-GET /dashboard/umsatz?jahr=2026&monat=alle
-→ [
-    { monat: "2026-01", netto: 1260.50, brutto: 1500.00 },
-    { monat: "2026-02", netto: 0,       brutto: 0       },
-    ...
-  ]
+```ts
+if (cleanPath === "/dauerauftraege") return [] as T;
+if (cleanPath === "/dauerauftrag-laeufe") return [] as T;
 ```
 
-SQL (vereinfacht):
-```sql
-SELECT substr(rechnungsdatum,1,7) AS m, id
-  FROM rechnung
- WHERE status IN ('versendet','teilbezahlt','bezahlt','ueberfaellig')
-   AND (:jahr IS NULL OR substr(rechnungsdatum,1,4) = :jahr)
-   AND (:monat IS NULL OR substr(rechnungsdatum,6,2) = :monat)
+→ Liste immer leer, deshalb zeigt der „Aus Dauerauftrag"-Dialog im Preview nichts an. Backend, Dialog und Hooks sind funktional korrekt — auf dem echten Pi würde es laufen.
+
+Damit du es **im Preview testen und nutzen** kannst, baue ich den Mock zu einem vollständigen In-Browser-Dauerauftrags-Backend aus, das genau das nachbildet, was der Pi macht.
+
+## Lösung — Mock-Backend für Daueraufträge
+
+Erweitere ausschließlich `src/lib/api/localPreviewData.ts` (gleicher localStorage-Store `mcc.localPreview.belege.v1`, Schlüssel ergänzt). Keine Änderungen am Backend, an den Hooks oder am Dialog nötig.
+
+### 1. Store erweitern
+```ts
+interface PreviewStore {
+  angebote: Angebot[];
+  rechnungen: Rechnung[];
+  dauerauftraege: Dauerauftrag[];           // NEU
+  dauerauftragLaeufe: DauerauftragLauf[];   // NEU
+  dauerauftragSonderpos: DauerauftragSonderposition[]; // NEU
+}
 ```
-Brutto/Netto je Rechnung per `rechnungBruttoCt(db, id)` aufsummiert (autoritative Serverberechnung, identisch zur Status-Logik).
+Read/Write/Default-Fallbacks aktualisieren.
+
+### 2. POST /rechnungen — Auto-Anlage Dauerauftrag
+Im bestehenden `POST /rechnungen`-Handler nach dem Anlegen prüfen:
+
+```ts
+const opt = (input.optionen ?? {}) as { wiederkehrend?: boolean; wiederkehrendDetails?: { rhythmus?: string } };
+if (opt.wiederkehrend === true) {
+  const freq = mapRhythmus(opt.wiederkehrendDetails?.rhythmus); // → monatlich/quartalsweise/halbjaehrlich/jaehrlich
+  const da = createPreviewDauerauftrag({
+    rechnungId: rechnung.id,
+    kundeId: rechnung.kundeId,
+    bezeichnung: rechnung.titel,
+    positionen: rechnung.positionen,
+    rabattGesamt: rechnung.rabattGesamt,
+    steuersatz: rechnung.steuersatz,
+    frequenz: freq,
+    rechnungsdatum: rechnung.rechnungsdatum,
+  });
+  return { ...rechnung, dauerauftragNeu: { id: da.id, nummer: da.nummer } } as T;
+}
+```
+Damit erscheint der Dauerauftrag sofort nach Anlegen einer wiederkehrenden Rechnung im „Aus Dauerauftrag"-Dialog.
+
+### 3. Neue Mock-Endpoints
+
+| Methode + Pfad | Verhalten |
+|---|---|
+| `GET /dauerauftraege` | Store-Liste |
+| `GET /dauerauftraege/:id` | DA + `laeufe`, `sonderpositionen` |
+| `POST /dauerauftraege` | Neuanlage |
+| `PATCH /dauerauftraege/:id` | Felder aktualisieren (Bezeichnung, Frequenz, Status, Steuersatz, Rabatt, Notizen — exakt was der Edit-Dialog sendet) |
+| `DELETE /dauerauftraege/:id` | Eintrag entfernen |
+| `POST /dauerauftraege/:id/sofort-lauf` | **Kern:** erzeugt neue Rechnung im Store (mit `nextBelegnummer`, übernommenen Positionen, Periode in Titel), legt `DauerauftragLauf{status:"erzeugt", periode, rechnungId, erstelltAm}` an. Idempotent: existiert bereits ein Lauf für `(id, periode)` → vorhandenen Lauf zurückgeben (kein Duplikat). |
+| `POST /dauerauftraege/:id/pausieren` | Status auf `pausiert` |
+| `POST /dauerauftraege/:id/beenden` | Status auf `beendet`, `laufzeitBis` setzen |
+| `GET /dauerauftrag-laeufe` | optional `?status=` filtern |
+| `POST /dauerauftrag-sonderpositionen` | Append |
+| `DELETE /dauerauftrag-sonderpositionen/:id` | Remove |
+| `GET /einstellungen/dauerauftrag` | Default-Einstellungen liefern |
+| `PATCH /einstellungen/dauerauftrag` | Werte merken |
+
+### 4. Periode-Mapping
+Analog `backend/src/dauerauftrag/periode.ts`: `YYYY-MM` (monatlich), `YYYY-Qn` (quartal), `YYYY-Hn` (halbjahr), `YYYY` (jahr). Bei `sofort-lauf` ohne `periode` → aktuelle Periode aus heutigem Datum + DA-Frequenz.
+
+## Verifikation
+
+1. Im Preview: neue Rechnung anlegen → Häkchen „Wiederkehrend" + Rhythmus wählen → speichern.
+2. In Rechnungs-Liste „Aus Dauerauftrag" anklicken → Dauerauftrag wird angezeigt mit Frequenz, Brutto/Lauf, Status-Pill.
+3. Periode wählen, Häkchen setzen, „Erzeugen (1)" → Toast „1 Rechnung erzeugt" → neue Rechnung erscheint in der Liste; zweiter Erzeugungs-Versuch derselben Periode zeigt Warn-Badge „bereits erzeugt".
+4. Bleistift-Icon → Edit-Dialog → Bezeichnung/Frequenz/Status ändern → Speichern → Liste reflektiert Änderung.
 
 ## Out of Scope
-
-- Definition „Umsatz nach Zahlungsdatum" (Ist-Versteuerung) — bleibt Soll-Versteuerung wie oben. Bei Bedarf später als Toggle.
-- Echte Warnungs-Engine — vorerst leerer Endpoint.
+- Echte E-Mail-Versendung (im Preview generell nicht).
+- PDF-Generierung im Mock (war auch vorher nicht da).
+- Persistenz über Geräte hinweg — bleibt browser-lokal, wie der gesamte Preview-Store.
