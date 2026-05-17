@@ -1,4 +1,7 @@
-// Live-PDF-Vorschau für Protokolle. Debounced Build aus dem Draft, atomarer URL-Swap.
+// Live-PDF-Vorschau für Protokolle. ArrayBuffer-Quelle für PDF.js
+// (wie LivePdfPreview bei Angebot/Rechnung) — vermeidet
+// "Unexpected server response (0)" beim Worker-Fetch der blob:-URL
+// auf dem Pi-Backend.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
@@ -11,8 +14,13 @@ import { Loader2 } from "lucide-react";
 import { generateProtokollPdf } from "@/lib/pdf/werkzeugePdf";
 import type { Protokoll, Kunde, Objekt, Firmendaten } from "@/lib/api/types";
 
-const A4_WIDTH = 595.28;
-const DEBOUNCE = 350;
+const DEBOUNCE_MS = 350;
+const LOADER_DELAY_MS = 250;
+
+const VOLATILE = new Set(["aktualisiertAm", "erstelltAm", "updatedAt", "createdAt"]);
+function semKey<T>(o: T) {
+  return JSON.stringify(o, (k, v) => (VOLATILE.has(k) ? undefined : v));
+}
 
 interface Props {
   draft: Protokoll;
@@ -21,29 +29,34 @@ interface Props {
   firma?: Firmendaten;
 }
 
-const VOLATILE = new Set(["aktualisiertAm", "erstelltAm"]);
-function semKey<T>(o: T) {
-  return JSON.stringify(o, (k, v) => (VOLATILE.has(k) ? undefined : v));
-}
-
 export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pendingBuffer, setPendingBuffer] = useState<ArrayBuffer | null>(null);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const [viewerError, setViewerError] = useState<string | null>(null);
 
   useEffect(() => {
-    const el = ref.current;
+    const el = containerRef.current;
     if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
+    const measure = () => setContainerWidth(el.clientWidth);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    const fb = setTimeout(() => setContainerWidth((w) => (w === 0 ? 600 : w)), 1000);
+    return () => {
+      ro.disconnect();
+      clearTimeout(fb);
+    };
   }, []);
 
   useEffect(() => {
@@ -51,7 +64,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
       setShowLoader(false);
       return;
     }
-    const t = setTimeout(() => setShowLoader(true), 300);
+    const t = setTimeout(() => setShowLoader(true), LOADER_DELAY_MS);
     return () => clearTimeout(t);
   }, [rendering]);
 
@@ -59,70 +72,111 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       setRendering(true);
-      setError(null);
+      setBuildError(null);
       try {
         const blob = await generateProtokollPdf(draft, kunde, objekt, firma);
         if (cancelled) return;
         if (!(blob instanceof Blob) || blob.size === 0) {
           throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
         }
-        const url = URL.createObjectURL(blob);
+        const buf = await blob.arrayBuffer();
+        if (cancelled) return;
+        const newUrl = URL.createObjectURL(blob);
+        setPendingBuffer(buf);
         setPendingUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
-          return url;
+          return newUrl;
         });
+        setViewerError(null);
       } catch (e) {
-        console.error(e);
-        if (!cancelled) setError(e instanceof Error ? e.message : "PDF-Fehler");
+        // eslint-disable-next-line no-console
+        console.error("[ProtokollLivePreview] build failed", e);
+        if (!cancelled) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
       } finally {
         if (!cancelled) setRendering(false);
       }
-    }, DEBOUNCE);
+    }, DEBOUNCE_MS);
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey, kunde, objekt, firma]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    return () => {
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
       if (pendingUrl) URL.revokeObjectURL(pendingUrl);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    },
-    [],
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const renderWidth = useMemo(
+    () => Math.min(Math.max(containerWidth - 16, 280), 900),
+    [containerWidth],
   );
 
-  const renderWidth = Math.min(Math.max(width - 16, 280), 900);
+  // Frische Kopie pro Load — PDF.js detacht den Buffer im Worker.
+  const fileSource = useMemo(
+    () => (pdfBuffer ? { data: new Uint8Array(pdfBuffer.slice(0)) } : null),
+    [pdfBuffer, loadAttempt],
+  );
+  const pendingFileSource = useMemo(
+    () => (pendingBuffer ? { data: new Uint8Array(pendingBuffer.slice(0)) } : null),
+    [pendingBuffer],
+  );
 
   return (
-    <div ref={ref} className="relative h-full overflow-y-auto bg-muted/30 px-2 py-3 sm:px-4">
+    <div ref={containerRef} className="relative h-full overflow-y-auto bg-muted/30 px-2 py-3 sm:px-4">
       {showLoader && rendering && (
         <div className="pointer-events-none sticky top-2 z-20 ml-auto flex w-fit items-center gap-1.5 rounded-full bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
           <Loader2 className="h-2.5 w-2.5 animate-spin" />
           aktualisiert …
         </div>
       )}
-      {!pdfUrl && !error && width > 0 && (
+
+      {!pdfBuffer && !buildError && containerWidth > 0 && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span>PDF wird erzeugt …</span>
         </div>
       )}
-      {error && !pdfUrl && (
+
+      {buildError && !pdfBuffer && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
           <p className="font-medium text-destructive">PDF konnte nicht erzeugt werden</p>
-          <p className="text-xs text-muted-foreground">{error}</p>
+          <p className="text-xs text-muted-foreground">{buildError}</p>
         </div>
       )}
-      {pdfUrl && width > 0 && (
+
+      {buildError && pdfBuffer && (
+        <div className="sticky top-2 z-20 mx-auto mb-2 w-fit max-w-[90%] rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs text-destructive">
+          Vorschau veraltet — letzter Build fehlgeschlagen: {buildError}
+        </div>
+      )}
+
+      {fileSource && containerWidth > 0 && !viewerError && (
         <Document
-          file={pdfUrl}
-          onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+          key={`buf#${pdfBuffer?.byteLength}#${loadAttempt}`}
+          file={fileSource}
+          onLoadSuccess={({ numPages }) => {
+            setNumPages(numPages);
+            setViewerError(null);
+          }}
+          onLoadError={(err) => {
+            // eslint-disable-next-line no-console
+            console.error("[ProtokollLivePreview] viewer error", err);
+            const msg = err?.message || String(err);
+            if (loadAttempt < 1 && pdfBuffer && /detached|already detached|neutered/i.test(msg)) {
+              setLoadAttempt((n) => n + 1);
+              return;
+            }
+            setViewerError(msg);
+          }}
           loading={null}
+          error={<div className="text-sm text-destructive">PDF kann nicht angezeigt werden.</div>}
           className="flex flex-col items-center gap-4"
         >
           {Array.from({ length: numPages }, (_, i) => i + 1).map((n) => (
@@ -140,19 +194,27 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
           ))}
         </Document>
       )}
-      {pendingUrl && pendingUrl !== pdfUrl && (
+
+      {/* Pre-Loader: atomarer Swap erst, wenn neue PDF erfolgreich geladen ist. */}
+      {pendingFileSource && pendingBuffer !== pdfBuffer && (
         <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
           <Document
-            file={pendingUrl}
-            onLoadSuccess={() => {
+            key={`pending#${pendingBuffer?.byteLength}`}
+            file={pendingFileSource}
+            onLoadSuccess={({ numPages }) => {
+              setNumPages(numPages);
+              setPdfBuffer(pendingBuffer);
+              setLoadAttempt(0);
               setPdfUrl((prev) => {
                 if (prev) URL.revokeObjectURL(prev);
                 return pendingUrl;
               });
+              setPendingBuffer(null);
               setPendingUrl(null);
             }}
             onLoadError={() => {
               if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+              setPendingBuffer(null);
               setPendingUrl(null);
             }}
             loading={null}
@@ -161,8 +223,18 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
           </Document>
         </div>
       )}
+
+      {viewerError && pdfBuffer && (
+        <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+          <p className="font-medium text-destructive">PDF kann nicht angezeigt werden</p>
+          <p className="text-xs text-muted-foreground">{viewerError}</p>
+          {pdfUrl && (
+            <a href={pdfUrl} download className="mt-2 text-xs text-primary underline">
+              PDF trotzdem herunterladen
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }
-// A4 unused but kept for parity
-export const _A4 = A4_WIDTH;
