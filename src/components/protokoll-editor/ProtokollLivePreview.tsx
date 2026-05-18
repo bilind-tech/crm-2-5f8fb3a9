@@ -528,12 +528,11 @@ function DocumentSlot({
   if (!fileSource) return null;
   return (
     <div
-      className="absolute inset-0 flex flex-col items-center transition-opacity"
+      className="absolute inset-0 transition-opacity"
       style={{
         opacity: visible ? 1 : 0,
         transitionDuration: `${FADE_MS}ms`,
         pointerEvents: "none",
-        gap: `${PAGE_GAP_PX}px`,
       }}
       aria-hidden={!visible}
     >
@@ -549,7 +548,6 @@ function DocumentSlot({
         loading={null}
         error={null}
         className="flex w-full flex-col items-center"
-        // gap via parent
       >
         {Array.from({ length: state.numPages }, (_, i) => i + 1).map((pageNum) => (
           <div
