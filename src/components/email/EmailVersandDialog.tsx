@@ -360,7 +360,10 @@ export function EmailVersandDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => phase === "idle" && onOpenChange(o)}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto bg-background p-0">
+      <DialogContent
+        ref={scrollRef}
+        className="max-w-3xl max-h-[92vh] overflow-y-auto bg-background p-0"
+      >
         {/* Hero Header */}
         <div className="relative overflow-hidden border-b border-border bg-background px-6 pb-5 pt-6">
           <div className="flex items-start gap-4">
