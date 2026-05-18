@@ -1,26 +1,58 @@
-// Stabile Snapshot-PDF-Vorschau für Protokolle.
-// Wichtig: Die PDF wird NICHT bei jedem Tastendruck live neu geladen.
-// Änderungen markieren die Vorschau nur als veraltet; aktualisiert wird kontrolliert.
+// Echte PDF als einzige Wahrheit. Auto-Rebuild mit kurzem Debounce nach
+// Änderung — fühlt sich an wie Live-Bearbeitung in Word: tippen → kleine
+// Pause → PDF aktualisiert sich von selbst, ohne Knopfdruck und ohne
+// sichtbares Flackern.
+//
+// Anti-Flacker:
+//  - `<Document>` wird nie unmountet.
+//  - Neuer Build wird offscreen vorgeladen und erst atomar getauscht,
+//    sobald das neue Dokument bereit ist. So bleibt die alte Seite stehen,
+//    bis die neue gezeichnet ist.
+//  - Status-Indikator erscheint erst, wenn der Build > 350 ms dauert.
+//
+// Trigger:
+//  - Jede Draft-Änderung → Debounce 450 ms → Build.
+//  - Imperatives `flush()` (z. B. Popover-Close, Blur, Checkbox-Klick) →
+//    sofortiger Build, falls Änderungen anstehen.
+//  - Window-Blur / `visibilitychange` → ebenfalls flush.
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { configurePdfWorker } from "@/lib/pdf/pdfjsWorker";
 
 configurePdfWorker();
-import { CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+
+import { AlertCircle, Loader2 } from "lucide-react";
 import { generateProtokollPdf } from "@/lib/pdf/werkzeugePdf";
 import type { Protokoll, Kunde, Objekt, Firmendaten } from "@/lib/api/types";
-import { PdfFieldOverlay } from "@/components/pdf-editor/PdfFieldOverlay";
-import { protokollMetaForId, FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1 } from "@/lib/pdf/fieldMap";
+import { PdfFieldOverlay, type TableAction } from "@/components/pdf-editor/PdfFieldOverlay";
+import {
+  protokollMetaForId,
+  FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1,
+} from "@/lib/pdf/fieldMap";
 import { A4, type RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
 
-const LOADER_DELAY_MS = 450;
+const DEBOUNCE_MS = 450;
+const LOADER_DELAY_MS = 350;
 const VOLATILE = new Set(["aktualisiertAm", "erstelltAm", "updatedAt", "createdAt"]);
 
 function semKey<T>(o: T) {
   return JSON.stringify(o, (k, v) => (VOLATILE.has(k) ? undefined : v));
+}
+
+export interface ProtokollLivePreviewHandle {
+  /** Sofortigen Build erzwingen (debounce überspringen). */
+  flush: () => void;
 }
 
 interface Props {
@@ -28,294 +60,353 @@ interface Props {
   kunde?: Kunde;
   objekt?: Objekt;
   firma?: Firmendaten;
-  /** Inline-Editor pro Hotspot (Render-Prop, identisch zu LivePdfPreview). */
   renderEditor?: (fieldId: string, close: () => void) => React.ReactNode;
+  tableActions?: TableAction;
 }
 
-export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
+export const ProtokollLivePreview = forwardRef<ProtokollLivePreviewHandle, Props>(
+  function ProtokollLivePreview(
+    { draft, kunde, objekt, firma, renderEditor, tableActions },
+    ref,
+  ) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
 
-  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [hotspots, setHotspots] = useState<RuntimeHotspot[]>([]);
-  const [openHotspotId, setOpenHotspotId] = useState<string | null>(null);
+    // Sichtbarer Stand
+    const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+    const [hotspots, setHotspots] = useState<RuntimeHotspot[]>([]);
+    const [numPages, setNumPages] = useState(0);
+    const [openHotspotId, setOpenHotspotId] = useState<string | null>(null);
 
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  const [numPages, setNumPages] = useState(0);
-  const [rendering, setRendering] = useState(false);
-  const [showLoader, setShowLoader] = useState(false);
-  const [queuedKey, setQueuedKey] = useState<string | null>(null);
-  const [buildError, setBuildError] = useState<string | null>(null);
-  const [viewerError, setViewerError] = useState<string | null>(null);
+    // Vorgeladener nächster Build (für atomaren Swap)
+    const [pendingBuffer, setPendingBuffer] = useState<ArrayBuffer | null>(null);
+    const pendingHotspotsRef = useRef<RuntimeHotspot[]>([]);
 
-  const mountedRef = useRef(true);
-  const pdfUrlRef = useRef<string | null>(null);
-  const inFlightRef = useRef(false);
-  const latestKeyRef = useRef("");
-  const builtKeyRef = useRef("");
-  const hasVisiblePdfRef = useRef(false);
-  const dataRef = useRef({ draft, kunde, objekt, firma });
-  dataRef.current = { draft, kunde, objekt, firma };
+    const [building, setBuilding] = useState(false);
+    const [showLoader, setShowLoader] = useState(false);
+    const [buildError, setBuildError] = useState<string | null>(null);
+    const [viewerError, setViewerError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const measure = () => setContainerWidth(el.clientWidth);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    const fb = setTimeout(() => setContainerWidth((w) => (w === 0 ? 600 : w)), 1000);
-    return () => {
-      ro.disconnect();
-      clearTimeout(fb);
-    };
-  }, []);
+    const mountedRef = useRef(true);
+    const inFlightRef = useRef(false);
+    const builtKeyRef = useRef<string>("");
+    const latestKeyRef = useRef<string>("");
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const dataRef = useRef({ draft, kunde, objekt, firma });
+    dataRef.current = { draft, kunde, objekt, firma };
 
-  useEffect(() => {
-    if (!rendering) {
-      setShowLoader(false);
-      return;
-    }
-    const t = setTimeout(() => setShowLoader(true), LOADER_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [rendering]);
+    // Container-Breite messen
+    useEffect(() => {
+      const el = containerRef.current;
+      if (!el) return;
+      const measure = () => setContainerWidth(el.clientWidth);
+      measure();
+      const ro = new ResizeObserver(measure);
+      ro.observe(el);
+      const fb = setTimeout(() => setContainerWidth((w) => (w === 0 ? 600 : w)), 1000);
+      return () => {
+        ro.disconnect();
+        clearTimeout(fb);
+      };
+    }, []);
 
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
-    };
-  }, []);
+    useEffect(() => {
+      return () => {
+        mountedRef.current = false;
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      };
+    }, []);
 
-  const draftKey = useMemo(() => semKey(draft), [draft]);
-  const ctxKey = useMemo(() => semKey({ kunde, objekt, firma }), [kunde, objekt, firma]);
-  const currentKey = useMemo(() => `${draftKey}|${ctxKey}`, [draftKey, ctxKey]);
-
-  const runBuild = useCallback(async (requestedKey = latestKeyRef.current) => {
-    if (inFlightRef.current || builtKeyRef.current === requestedKey) return;
-
-    inFlightRef.current = true;
-    latestKeyRef.current = requestedKey;
-    setRendering(true);
-    setBuildError(null);
-
-    try {
-      const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
-      const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
-      if (!mountedRef.current) return;
-      if (!(blob instanceof Blob) || blob.size === 0) {
-        throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
-      }
-
-      const buf = await blob.arrayBuffer();
-      if (!mountedRef.current) return;
-      const newUrl = URL.createObjectURL(blob);
-
-      if (requestedKey !== latestKeyRef.current) {
-        URL.revokeObjectURL(newUrl);
-        setQueuedKey(latestKeyRef.current);
+    // Loader nur nach kurzer Wartezeit zeigen (vermeidet Flicker bei schnellen Builds)
+    useEffect(() => {
+      if (!building) {
+        setShowLoader(false);
         return;
       }
+      const t = setTimeout(() => setShowLoader(true), LOADER_DELAY_MS);
+      return () => clearTimeout(t);
+    }, [building]);
 
-      const previousUrl = pdfUrlRef.current;
-      builtKeyRef.current = requestedKey;
-      hasVisiblePdfRef.current = true;
-      pdfUrlRef.current = newUrl;
+    const currentKey = useMemo(
+      () => semKey({ draft, kunde, objekt, firma, kind: draft.kind }),
+      [draft, kunde, objekt, firma],
+    );
+    latestKeyRef.current = currentKey;
 
-      setHotspots(hs);
-      setPdfBuffer(buf);
-      setPdfUrl(newUrl);
-      setQueuedKey(null);
-      setLoadAttempt(0);
-      setViewerError(null);
+    const runBuild = useCallback(async () => {
+      if (inFlightRef.current) return;
+      const targetKey = latestKeyRef.current;
+      if (builtKeyRef.current === targetKey) return;
 
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[ProtokollLivePreview] build failed", e);
-      if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
-    } finally {
-      inFlightRef.current = false;
-      if (!mountedRef.current) return;
+      inFlightRef.current = true;
+      setBuilding(true);
+      setBuildError(null);
 
-      setRendering(false);
-      const newestKey = latestKeyRef.current;
-      if (newestKey !== builtKeyRef.current) {
-        setQueuedKey(newestKey);
-        if (!hasVisiblePdfRef.current) {
-          window.setTimeout(() => {
-            if (mountedRef.current) void runBuild(latestKeyRef.current);
-          }, 0);
+      try {
+        const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
+        const t0 = performance.now();
+        const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
+        if (!mountedRef.current) return;
+        if (!(blob instanceof Blob) || blob.size === 0) {
+          throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+        }
+        const buf = await blob.arrayBuffer();
+        if (!mountedRef.current) return;
+
+        // eslint-disable-next-line no-console
+        console.debug(`[protokoll-build] ${Math.round(performance.now() - t0)}ms`);
+
+        // Erster Build → direkt anzeigen (kein offscreen-Preload nötig).
+        if (!pdfBuffer) {
+          setPdfBuffer(buf);
+          setHotspots(hs);
+          builtKeyRef.current = targetKey;
+        } else {
+          // Folge-Build → in Pending parken, atomarer Swap nach onLoadSuccess.
+          pendingHotspotsRef.current = hs;
+          setPendingBuffer(buf);
+          // builtKeyRef wird erst beim Swap aktualisiert.
+          builtKeyRef.current = targetKey;
+        }
+        setViewerError(null);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error("[ProtokollLivePreview] build failed", e);
+        if (mountedRef.current) {
+          setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
+        }
+      } finally {
+        inFlightRef.current = false;
+        if (mountedRef.current) {
+          setBuilding(false);
+          // Wenn währenddessen ein neuer Key reingekommen ist, gleich nachziehen.
+          if (latestKeyRef.current !== builtKeyRef.current) {
+            // Microtask, damit React zwischendurch rendern kann.
+            queueMicrotask(() => {
+              if (mountedRef.current) void runBuild();
+            });
+          }
         }
       }
-    }
-  }, []);
+    }, [pdfBuffer]);
 
-  useEffect(() => {
-    latestKeyRef.current = currentKey;
-    if (builtKeyRef.current === currentKey) {
-      setQueuedKey(null);
-      return;
-    }
+    const scheduleBuild = useCallback(() => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        void runBuild();
+      }, DEBOUNCE_MS);
+    }, [runBuild]);
 
-    setQueuedKey(currentKey);
-    if (!hasVisiblePdfRef.current && !inFlightRef.current) {
-      void runBuild(currentKey);
-    }
-  }, [currentKey, runBuild]);
+    const flush = useCallback(() => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      if (latestKeyRef.current === builtKeyRef.current) return;
+      void runBuild();
+    }, [runBuild]);
 
-  const renderWidthRaw = useMemo(() => {
-    const raw = Math.min(Math.max(containerWidth - 16, 280), 900);
-    return Math.round(raw / 20) * 20;
-  }, [containerWidth]);
-  const renderWidth = useDeferredValue(renderWidthRaw);
-  const scale = renderWidth / A4.width;
+    useImperativeHandle(ref, () => ({ flush }), [flush]);
 
-  const effectiveHotspots: RuntimeHotspot[] = useMemo(() => {
-    if (hotspots.length > 0) return hotspots;
-    return FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1.map((f) => ({
-      id: f.id,
-      page: f.page,
-      x: f.box.x * A4.width,
-      y: f.box.y * A4.height,
-      w: f.box.w * A4.width,
-      h: f.box.h * A4.height,
-    }));
-  }, [hotspots]);
+    // Erster Build, sobald Container vermessen ist.
+    const didInitRef = useRef(false);
+    useEffect(() => {
+      if (didInitRef.current) return;
+      if (containerWidth === 0) return;
+      didInitRef.current = true;
+      void runBuild();
+    }, [containerWidth, runBuild]);
 
-  const fileSource = useMemo(
-    () => (pdfBuffer ? { data: new Uint8Array(pdfBuffer.slice(0)) } : null),
-    [pdfBuffer, loadAttempt],
-  );
+    // Reagiere auf Draft/Context-Änderungen → debounced rebuild.
+    useEffect(() => {
+      if (!didInitRef.current) return;
+      if (builtKeyRef.current === currentKey) return;
+      scheduleBuild();
+    }, [currentKey, scheduleBuild]);
 
-  const isStale = Boolean(queuedKey && queuedKey !== builtKeyRef.current && pdfBuffer);
+    // Tab-Wechsel / Window-Blur → sofort flushen.
+    useEffect(() => {
+      const onBlur = () => flush();
+      const onVis = () => {
+        if (document.visibilityState === "hidden") flush();
+      };
+      window.addEventListener("blur", onBlur);
+      document.addEventListener("visibilitychange", onVis);
+      return () => {
+        window.removeEventListener("blur", onBlur);
+        document.removeEventListener("visibilitychange", onVis);
+      };
+    }, [flush]);
 
-  return (
-    <div ref={containerRef} className="relative h-full overflow-y-auto bg-muted/30 px-2 py-3 sm:px-4">
-      {(showLoader && rendering && pdfBuffer) || isStale ? (
-        <div className="sticky top-2 z-20 ml-auto mb-2 flex w-fit items-center gap-2 rounded-full bg-background/95 px-2 py-1 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
-          {rendering ? (
-            <>
-              <Loader2 className="h-2.5 w-2.5 animate-spin" />
-              <span>Vorschau wird aktualisiert</span>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="h-2.5 w-2.5" />
-              <span>Vorschau nicht aktuell</span>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => void runBuild(latestKeyRef.current)}
-            disabled={rendering}
-            className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+    const renderWidth = useMemo(() => {
+      const raw = Math.min(Math.max(containerWidth - 16, 280), 900);
+      return Math.round(raw / 20) * 20;
+    }, [containerWidth]);
+    const scale = renderWidth / A4.width;
+
+    const effectiveHotspots: RuntimeHotspot[] = useMemo(() => {
+      if (hotspots.length > 0) return hotspots;
+      return FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1.map((f) => ({
+        id: f.id,
+        page: f.page,
+        x: f.box.x * A4.width,
+        y: f.box.y * A4.height,
+        w: f.box.w * A4.width,
+        h: f.box.h * A4.height,
+      }));
+    }, [hotspots]);
+
+    // Frische Kopie pro Document-Load — sonst detacht PDF.js den Buffer.
+    const fileSource = useMemo(
+      () => (pdfBuffer ? { data: new Uint8Array(pdfBuffer.slice(0)) } : null),
+      [pdfBuffer],
+    );
+    const pendingFileSource = useMemo(
+      () => (pendingBuffer ? { data: new Uint8Array(pendingBuffer.slice(0)) } : null),
+      [pendingBuffer],
+    );
+
+    return (
+      <div
+        ref={containerRef}
+        className="relative h-full overflow-y-auto bg-muted/30 px-2 py-3 sm:px-4"
+      >
+        {/* Subtiler Status-Indikator */}
+        {(showLoader && building) || buildError ? (
+          <div className="pointer-events-none sticky top-2 z-20 mb-2 flex justify-end">
+            <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
+              {buildError ? (
+                <span
+                  title={buildError}
+                  className="flex items-center gap-1 text-destructive"
+                >
+                  <AlertCircle className="h-2.5 w-2.5" />
+                  Aktualisierung fehlgeschlagen
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  aktualisiert …
+                </span>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {!pdfBuffer && !buildError && containerWidth > 0 && (
+          <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>PDF wird erzeugt …</span>
+          </div>
+        )}
+
+        {buildError && !pdfBuffer && (
+          <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+            <p className="font-medium text-destructive">PDF konnte nicht erzeugt werden</p>
+            <p className="text-xs text-muted-foreground">{buildError}</p>
+          </div>
+        )}
+
+        {/* Sichtbares Dokument (bleibt stehen, bis pendingBuffer fertig geladen ist). */}
+        {fileSource && containerWidth > 0 && !viewerError && (
+          <Document
+            file={fileSource}
+            onLoadSuccess={({ numPages: n }) => {
+              setNumPages(n);
+              setViewerError(null);
+            }}
+            onLoadError={(err) => {
+              // eslint-disable-next-line no-console
+              console.error("[ProtokollLivePreview] viewer error", err);
+              setViewerError(err?.message || String(err));
+            }}
+            loading={null}
+            error={<div className="text-sm text-destructive">PDF kann nicht angezeigt werden.</div>}
+            className="flex flex-col items-center gap-4"
           >
-            <RefreshCw className="h-2.5 w-2.5" />
-            Aktualisieren
-          </button>
-        </div>
-      ) : null}
-
-      {!pdfBuffer && !buildError && containerWidth > 0 && (
-        <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>PDF wird erzeugt …</span>
-        </div>
-      )}
-
-      {buildError && !pdfBuffer && (
-        <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
-          <p className="font-medium text-destructive">PDF konnte nicht erzeugt werden</p>
-          <p className="text-xs text-muted-foreground">{buildError}</p>
-          <button
-            type="button"
-            onClick={() => void runBuild(latestKeyRef.current)}
-            className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition hover:opacity-90"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Erneut versuchen
-          </button>
-        </div>
-      )}
-
-      {buildError && pdfBuffer && (
-        <div className="sticky top-2 z-20 mx-auto mb-2 w-fit max-w-[90%] rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs text-destructive">
-          Letzte stabile Vorschau bleibt sichtbar — Aktualisierung fehlgeschlagen: {buildError}
-        </div>
-      )}
-
-      {fileSource && containerWidth > 0 && !viewerError && (
-        <Document
-          file={fileSource}
-          onLoadSuccess={({ numPages }) => {
-            setNumPages(numPages);
-            setViewerError(null);
-          }}
-          onLoadError={(err) => {
-            // eslint-disable-next-line no-console
-            console.error("[ProtokollLivePreview] viewer error", {
-              message: err?.message,
-              byteLength: pdfBuffer?.byteLength ?? 0,
-              loadAttempt,
-              kind: draft.kind,
-              draftId: draft.id,
-            });
-            const msg = err?.message || String(err);
-            if (loadAttempt < 1 && pdfBuffer && /detached|already detached|neutered/i.test(msg)) {
-              setLoadAttempt((n) => n + 1);
-              return;
-            }
-            setViewerError(msg);
-          }}
-          loading={null}
-          error={<div className="text-sm text-destructive">PDF kann nicht angezeigt werden.</div>}
-          className="flex flex-col items-center gap-4"
-        >
-          {Array.from({ length: numPages }, (_, i) => i + 1).map((n) => {
-            const pageHotspots = effectiveHotspots.filter((h) => h.page === n);
-            return (
-              <div
-                key={n}
-                className="relative overflow-hidden rounded-md bg-background shadow-sm ring-1 ring-border"
-              >
-                <Page
-                  pageNumber={n}
-                  width={renderWidth}
-                  renderAnnotationLayer={false}
-                  renderTextLayer={false}
-                />
-                {renderEditor && (
-                  <PdfFieldOverlay
-                    hotspots={pageHotspots}
-                    scale={scale}
-                    openId={openHotspotId}
-                    onOpenChange={setOpenHotspotId}
-                    renderEditor={renderEditor}
-                    metaForId={protokollMetaForId}
+            {Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => {
+              const pageHotspots = effectiveHotspots.filter((h) => h.page === pageNum);
+              return (
+                <div
+                  key={pageNum}
+                  className="relative overflow-hidden rounded-md bg-background shadow-sm ring-1 ring-border"
+                >
+                  <Page
+                    pageNumber={pageNum}
+                    width={renderWidth}
+                    renderAnnotationLayer={false}
+                    renderTextLayer={false}
                   />
-                )}
-              </div>
-            );
-          })}
-        </Document>
-      )}
+                  {renderEditor && (
+                    <PdfFieldOverlay
+                      hotspots={pageHotspots}
+                      scale={scale}
+                      openId={openHotspotId}
+                      onOpenChange={(id) => {
+                        setOpenHotspotId(id);
+                        // Beim Schließen eines Popovers → sofortiger Build der letzten Änderung.
+                        if (id === null) flush();
+                      }}
+                      renderEditor={renderEditor}
+                      metaForId={protokollMetaForId}
+                      tableActions={tableActions}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </Document>
+        )}
 
-      {viewerError && pdfBuffer && (
-        <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
-          <p className="font-medium text-destructive">PDF kann nicht angezeigt werden</p>
-          <p className="text-xs text-muted-foreground">{viewerError}</p>
-          <p className="font-mono text-[10px] text-muted-foreground/70">
-            Quelle: ArrayBuffer · {Math.round((pdfBuffer?.byteLength ?? 0) / 1024)} KB · Versuch {loadAttempt + 1}
-          </p>
-          {pdfUrl && (
-            <a href={pdfUrl} download className="mt-2 text-xs text-primary underline">
-              PDF trotzdem herunterladen
-            </a>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+        {/* Versteckter Preload: wartet bis die neue PDF parse-fertig ist, dann atomarer Swap. */}
+        {pendingFileSource && (
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: -99999,
+              top: 0,
+              width: 1,
+              height: 1,
+              overflow: "hidden",
+              pointerEvents: "none",
+              opacity: 0,
+            }}
+          >
+            <Document
+              file={pendingFileSource}
+              loading={null}
+              error={null}
+              onLoadSuccess={() => {
+                if (!mountedRef.current) return;
+                // Atomarer Swap
+                setPdfBuffer(pendingBuffer);
+                setHotspots(pendingHotspotsRef.current);
+                setPendingBuffer(null);
+              }}
+              onLoadError={(err) => {
+                // eslint-disable-next-line no-console
+                console.error("[ProtokollLivePreview] pending load error", err);
+                // Fallback: trotzdem swappen, damit User aktuelle Daten sieht.
+                if (!mountedRef.current) return;
+                setPdfBuffer(pendingBuffer);
+                setHotspots(pendingHotspotsRef.current);
+                setPendingBuffer(null);
+              }}
+            >
+              <Page pageNumber={1} width={120} renderAnnotationLayer={false} renderTextLayer={false} />
+            </Document>
+          </div>
+        )}
+
+        {viewerError && pdfBuffer && (
+          <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+            <p className="font-medium text-destructive">PDF kann nicht angezeigt werden</p>
+            <p className="text-xs text-muted-foreground">{viewerError}</p>
+          </div>
+        )}
+      </div>
+    );
+  },
+);
