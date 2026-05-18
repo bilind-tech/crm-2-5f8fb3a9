@@ -24,6 +24,8 @@ import {
   Check,
   Plus,
   Settings,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -59,6 +61,7 @@ import {
   replacePlaceholders,
   type PlaceholderContext,
 } from "@/lib/email/placeholders";
+import { autoLinkifyImages } from "@/lib/email/signature";
 import type { Angebot, EmailKontext, EmailVorlage, Kunde, Rechnung } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { createClientId } from "@/lib/clientId";
@@ -145,6 +148,8 @@ export function EmailVersandDialog({
   const [zeigeCcBcc, setZeigeCcBcc] = useState(false);
   const [phase, setPhase] = useState<SendPhase>("idle");
   const visuellRef = useRef<HTMLDivElement>(null);
+  const [pdfPreviewOffen, setPdfPreviewOffen] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Ausgewählten Ansprechpartner für Platzhalter ({{ansprechpartner.*}},
   // {{anrede.zeile}}) ermitteln. Reihenfolge wie bei der „An"-Vorbelegung:
@@ -229,10 +234,11 @@ export function EmailVersandDialog({
   }, [mode, open, bodyHtml, ctx]);
 
   const signatur = signaturen.find((s) => s.id === signaturId);
+  const signaturHtmlGerendert = signatur ? autoLinkifyImages(signatur.html) : "";
   const aufgelosterBetreff = replacePlaceholders(betreff, ctx);
   const finaleBody =
     replacePlaceholders(bodyHtml, ctx) +
-    (signatur ? `\n<br/><br/>${replacePlaceholders(signatur.html, ctx)}` : "");
+    (signatur ? `\n<br/><br/>${replacePlaceholders(signaturHtmlGerendert, ctx)}` : "");
   const unresolved = [
     ...findUnresolvedPlaceholders(betreff, ctx),
     ...findUnresolvedPlaceholders(bodyHtml, ctx),
