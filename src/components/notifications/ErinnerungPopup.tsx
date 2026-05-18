@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { MailClock, X, Send } from "lucide-react";
+import { Mail, X, Send } from "lucide-react";
 import { useErinnerungen, type ErinnerungEintrag } from "@/hooks/useErinnerungen";
 import { useErinnerungVorlageId } from "@/lib/erinnerung/seedVorlage";
 import { useRechnungen, useKunde } from "@/hooks/useApi";
@@ -51,7 +51,7 @@ export function ErinnerungPopup() {
         <div className="pointer-events-auto overflow-hidden rounded-2xl border border-warning/40 bg-card shadow-lg">
           <div className="flex items-start gap-3 border-b border-border bg-warning/5 px-4 py-3">
             <div className="grid h-9 w-9 shrink-0 place-content-center rounded-full bg-warning/15 text-warning">
-              <MailClock className="h-4 w-4" />
+              <Mail className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground">
