@@ -73,7 +73,7 @@ export function berechneErinnerungsKandidaten(
   for (const v of versand) {
     if (v.belegArt !== "rechnung" || !v.belegId) continue;
     if (v.status !== "gesendet") continue;
-    const ts = v.versendetAm ?? v.erstelltAm;
+    const ts = v.versendetAm;
     if (!ts) continue;
     const cur = letzteMailMap.get(v.belegId);
     if (!cur || ts > cur) letzteMailMap.set(v.belegId, ts);
