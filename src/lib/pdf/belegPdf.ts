@@ -207,14 +207,7 @@ function header(firma: Firmendaten, logo: string | null) {
       },
       logo
         ? { width: 270, image: logo, fit: [270, 120], alignment: "right" }
-        : {
-            width: 270,
-            text: (firma.firmenname || "MY CLEAN CENTER").toUpperCase(),
-            bold: true,
-            fontSize: 20,
-            color: COLOR_TEXT,
-            alignment: "right",
-          },
+        : { width: 270, text: "" },
     ],
   };
 }
