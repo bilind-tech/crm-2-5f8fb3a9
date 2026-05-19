@@ -13,9 +13,12 @@ const cNum = (min: number, max: number, def: number) =>
 export const FirmaSchema = z.object({
   name: z.string().trim().min(1).max(200).default("MyCleanCenter GmbH"),
   inhaber: optStr.default(""),
+  rechtsform: optStr.default(""),
+  slogan: optStr.default(""),
   strasse: optStr.default(""),
   plz: optStr.default(""),
   ort: optStr.default(""),
+  land: optStr.default(""),
   telefon: optStr.default(""),
   email: optStr.default(""),
   web: optStr.default(""),
@@ -26,6 +29,10 @@ export const FirmaSchema = z.object({
   bankName: optStr.default(""),
   iban: optStr.default(""),
   bic: optStr.default(""),
+  // Data-URL (data:image/...) bis ~700 KB. Größeres Logo -> Upload-Endpoint nutzen.
+  logoUrl: z.string().trim().max(750_000).optional().nullable().default(""),
+  standardSteuersatz: cNum(0, 100, 19),
+  standardZahlungszielTage: cInt(0, 365, 14),
 });
 export type FirmaSettings = z.infer<typeof FirmaSchema>;
 
