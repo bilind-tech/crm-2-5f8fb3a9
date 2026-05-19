@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { CheckCircle2, Trash2, ChevronRight, Mail, Repeat, MailWarning, FileSpreadsheet } from "lucide-react";
+import { CheckCircle2, Trash2, ChevronRight, Mail, Repeat, MailWarning } from "lucide-react";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { useRechnungen, useDeleteRechnung, useKunde } from "@/hooks/useApi";
@@ -19,7 +19,6 @@ import { FormErrorBoundary } from "@/components/layout/FormErrorBoundary";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
 import { useConfirm } from "@/hooks/useConfirm";
 import { RechnungAusDauerauftragDialog } from "@/components/dauerauftrag/RechnungAusDauerauftragDialog";
-import { RechnungenExcelExportDialog } from "@/components/rechnungen/RechnungenExcelExportDialog";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { rechnungFlow } from "@/lib/flow/flows";
 import {
