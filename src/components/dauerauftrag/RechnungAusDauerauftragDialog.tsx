@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Repeat, AlertTriangle, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -14,38 +15,62 @@ import {
   useDauerauftraege,
   useDauerauftragLaeufe,
   useSofortLaufBulk,
-  useUpdateDauerauftrag,
 } from "@/hooks/useDauerauftraege";
 import { useKunden } from "@/hooks/useApi";
 import { summenRechnung } from "@/lib/belege/summen";
 import { formatEUR } from "@/lib/format";
 import { periodeFuer, periodeBezeichnung } from "@/lib/dauerauftrag/termine";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DauerauftragEditDialog } from "@/components/dauerauftrag/DauerauftragEditDialog";
 import type { Dauerauftrag, DauerauftragFrequenz } from "@/lib/api/types";
 
 type Props = { open: boolean; onOpenChange: (open: boolean) => void };
 
-/** Liefert die zur Frequenz passende Periode `offset` Schritte ab heute. */
-function periodeMitOffset(frequenz: DauerauftragFrequenz, offset: number): { key: string; label: string; datum: Date } {
-  const heute = new Date();
-  const monateSchritt =
-    frequenz === "monatlich" ? 1 : frequenz === "quartalsweise" ? 3 : frequenz === "halbjaehrlich" ? 6 : 12;
-  const d = new Date(heute.getFullYear(), heute.getMonth() + offset * monateSchritt, 1);
-  // Wir brauchen ein Dummy-Dauerauftrag-Objekt nur für periodeFuer/Bezeichnung
+/** Liefert die zur Frequenz passende Periode für ein konkretes Datum. */
+function periodeFuerDatum(
+  frequenz: DauerauftragFrequenz,
+  datum: Date,
+): { key: string; label: string } {
   const fakeDa = { frequenz } as Dauerauftrag;
-  return { key: periodeFuer(fakeDa, d), label: periodeBezeichnung(fakeDa, d), datum: d };
+  return { key: periodeFuer(fakeDa, datum), label: periodeBezeichnung(fakeDa, datum) };
 }
+
+const MONATE = [
+  "Januar",
+  "Februar",
+  "März",
+  "April",
+  "Mai",
+  "Juni",
+  "Juli",
+  "August",
+  "September",
+  "Oktober",
+  "November",
+  "Dezember",
+];
 
 export function RechnungAusDauerauftragDialog({ open, onOpenChange }: Props) {
   const { data: alleDA = [] } = useDauerauftraege();
   const { data: alleLaeufe = [] } = useDauerauftragLaeufe();
   const { data: kunden = [] } = useKunden();
   const bulk = useSofortLaufBulk();
+  const navigate = useNavigate();
 
+  const heute = new Date();
   const [auswahl, setAuswahl] = useState<Set<string>>(new Set());
-  const [offset, setOffset] = useState<number>(0); // 0=jetzt, +1=nächste, -1=letzte
+  const [monat, setMonat] = useState<number>(heute.getMonth()); // 0-11
+  const [jahr, setJahr] = useState<number>(heute.getFullYear());
   const [bearbeiten, setBearbeiten] = useState<Dauerauftrag | null>(null);
+
+  const gewaehltesDatum = useMemo(() => new Date(jahr, monat, 1), [jahr, monat]);
+  // Jahres-Spannweite: aktuelles Jahr -2 bis +2 (5 Jahre — reicht für ein ganzes
+  // Geschäftsjahr rückwärts plus Puffer).
+  const jahresOptionen = useMemo(() => {
+    const aktJahr = heute.getFullYear();
+    return [aktJahr - 2, aktJahr - 1, aktJahr, aktJahr + 1, aktJahr + 2];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const kundeName = (id: string) => {
     const k = kunden.find((x) => x.id === id);
@@ -79,48 +104,33 @@ export function RechnungAusDauerauftragDialog({ open, onOpenChange }: Props) {
   const handleErzeugen = () => {
     const ids = Array.from(auswahl);
     if (ids.length === 0) return;
-    // Periode hängt von Frequenz jeder DA ab → wir senden je DA seine eigene Periode
-    // via einzelne Calls (Bulk-Hook nimmt einen periode-String; bei gemischten
-    // Frequenzen rufen wir pro DA separat — der Bulk-Hook unterstützt nur einen Wert,
-    // daher mappen wir hier: wenn alle gleiche Frequenz haben → ein Wert, sonst
-    // pro DA passend nacheinander.)
+    // Für jeden Dauerauftrag wird die zum gewählten Monat/Jahr passende Periode
+    // berechnet (Monats-DA → Monat, Quartals-DA → das passende Quartal usw.)
     const ausgewaehlte = sortiert.filter((d) => auswahl.has(d.id));
-    const freqs = new Set(ausgewaehlte.map((d) => d.frequenz));
-    if (freqs.size === 1) {
-      const f = ausgewaehlte[0].frequenz;
-      const p = periodeMitOffset(f, offset).key;
-      bulk.mutate(
-        { ids, periode: p },
-        {
-          onSuccess: ({ erfolge, fehler }) => {
-            if (erfolge > 0 && fehler === 0) toast.success(`${erfolge} Rechnung(en) erzeugt`);
-            else if (erfolge > 0) toast.warning(`${erfolge} erzeugt, ${fehler} fehlgeschlagen`);
-            else toast.error(`Erzeugen fehlgeschlagen (${fehler})`);
-            reset();
-            onOpenChange(false);
-          },
-        },
-      );
-    } else {
-      // gemischte Frequenzen — pro DA seine Periode bestimmen, sequentiell aufrufen via Bulk-Hook mit Einzel-IDs
-      Promise.all(
-        ausgewaehlte.map((d) =>
-          bulk.mutateAsync({ ids: [d.id], periode: periodeMitOffset(d.frequenz, offset).key }),
-        ),
-      )
-        .then((results) => {
-          const erfolge = results.reduce((a, r) => a + r.erfolge, 0);
-          const fehler = results.reduce((a, r) => a + r.fehler, 0);
-          if (erfolge > 0 && fehler === 0) toast.success(`${erfolge} Rechnung(en) erzeugt`);
-          else toast.warning(`${erfolge} erzeugt, ${fehler} fehlgeschlagen`);
-          reset();
-          onOpenChange(false);
-        })
-        .catch((e) => toast.error(e instanceof Error ? e.message : "Erzeugen fehlgeschlagen"));
-    }
+    Promise.all(
+      ausgewaehlte.map((d) =>
+        bulk.mutateAsync({
+          ids: [d.id],
+          periode: periodeFuerDatum(d.frequenz, gewaehltesDatum).key,
+        }),
+      ),
+    )
+      .then((results) => {
+        const erfolge = results.reduce((a, r) => a + r.erfolge, 0);
+        const fehler = results.reduce((a, r) => a + r.fehler, 0);
+        const rechnungIds = results.flatMap((r) => r.rechnungIds);
+        if (erfolge > 0 && fehler === 0) toast.success(`${erfolge} Rechnung(en) erzeugt`);
+        else if (erfolge > 0) toast.warning(`${erfolge} erzeugt, ${fehler} fehlgeschlagen`);
+        else toast.error(`Erzeugen fehlgeschlagen (${fehler})`);
+        reset();
+        onOpenChange(false);
+        // Bei genau einer erzeugten Rechnung direkt zur Detailseite springen.
+        if (rechnungIds.length === 1) {
+          navigate({ to: "/rechnungen/$id", params: { id: rechnungIds[0] } });
+        }
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Erzeugen fehlgeschlagen"));
   };
-
-  const periodenOptionen = [-1, 0, 1, 2, 3];
 
   return (
     <>
@@ -154,21 +164,27 @@ export function RechnungAusDauerauftragDialog({ open, onOpenChange }: Props) {
                 <Label className="text-xs font-medium text-muted-foreground">Periode</Label>
                 <select
                   className="h-8 rounded-md border border-border bg-background px-2 text-sm"
-                  value={offset}
-                  onChange={(e) => setOffset(Number(e.target.value))}
+                  value={monat}
+                  onChange={(e) => setMonat(Number(e.target.value))}
+                  aria-label="Monat"
                 >
-                  {periodenOptionen.map((o) => {
-                    // Standard-Beispiel: monatliche Variante als Label
-                    const ex = periodeMitOffset("monatlich", o);
-                    const prefix =
-                      o === 0 ? "Diesen Monat — " : o === 1 ? "Nächsten Monat — " : o === -1 ? "Letzten Monat — " : "";
-                    return (
-                      <option key={o} value={o}>
-                        {prefix}
-                        {ex.label}
-                      </option>
-                    );
-                  })}
+                  {MONATE.map((name, idx) => (
+                    <option key={idx} value={idx}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="h-8 rounded-md border border-border bg-background px-2 text-sm"
+                  value={jahr}
+                  onChange={(e) => setJahr(Number(e.target.value))}
+                  aria-label="Jahr"
+                >
+                  {jahresOptionen.map((j) => (
+                    <option key={j} value={j}>
+                      {j}
+                    </option>
+                  ))}
                 </select>
                 <span className="ml-auto text-xs text-muted-foreground">
                   Quartals-/Jahres-DA bekommen die passende Periode automatisch
@@ -196,8 +212,9 @@ export function RechnungAusDauerauftragDialog({ open, onOpenChange }: Props) {
                   const beendet = da.status === "beendet";
                   const checked = auswahl.has(da.id);
                   const s = summenRechnung(da.positionen, da.rabattGesamt);
-                  const periodeKey = periodeMitOffset(da.frequenz, offset).key;
-                  const periodeLabel = periodeMitOffset(da.frequenz, offset).label;
+                  const periode = periodeFuerDatum(da.frequenz, gewaehltesDatum);
+                  const periodeKey = periode.key;
+                  const periodeLabel = periode.label;
                   const bereitsErzeugt = alleLaeufe.some(
                     (l) => l.dauerauftragId === da.id && l.periode === periodeKey,
                   );
@@ -287,106 +304,6 @@ export function RechnungAusDauerauftragDialog({ open, onOpenChange }: Props) {
         />
       )}
     </>
-  );
-}
-
-function DauerauftragEditDialog({ da, onClose }: { da: Dauerauftrag; onClose: () => void }) {
-  const update = useUpdateDauerauftrag(da.id);
-  const [bezeichnung, setBezeichnung] = useState(da.bezeichnung);
-  const [frequenz, setFrequenz] = useState<DauerauftragFrequenz>(da.frequenz);
-  const [status, setStatus] = useState(da.status);
-  const [steuersatz, setSteuersatz] = useState(da.steuersatz);
-  const [rabattGesamt, setRabattGesamt] = useState(da.rabattGesamt);
-  const [notizen, setNotizen] = useState(da.notizen ?? "");
-
-  const save = () => {
-    update.mutate(
-      { bezeichnung, frequenz, status, steuersatz, rabattGesamt, notizen },
-      {
-        onSuccess: () => {
-          toast.success("Dauerauftrag gespeichert");
-          onClose();
-        },
-        onError: (e) => toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen"),
-      },
-    );
-  };
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-background sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Dauerauftrag bearbeiten</DialogTitle>
-          <DialogDescription>{da.nummer}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label className="text-xs">Bezeichnung</Label>
-            <Input value={bezeichnung} onChange={(e) => setBezeichnung(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Frequenz</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                value={frequenz}
-                onChange={(e) => setFrequenz(e.target.value as DauerauftragFrequenz)}
-              >
-                <option value="monatlich">Monatlich</option>
-                <option value="quartalsweise">Quartalsweise</option>
-                <option value="halbjaehrlich">Halbjährlich</option>
-                <option value="jaehrlich">Jährlich</option>
-              </select>
-            </div>
-            <div>
-              <Label className="text-xs">Status</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as Dauerauftrag["status"])}
-              >
-                <option value="aktiv">Aktiv</option>
-                <option value="pausiert">Pausiert</option>
-                <option value="beendet">Beendet</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Steuersatz (%)</Label>
-              <Input
-                type="number"
-                value={steuersatz}
-                onChange={(e) => setSteuersatz(Number(e.target.value) || 0)}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Rabatt gesamt (%)</Label>
-              <Input
-                type="number"
-                value={rabattGesamt}
-                onChange={(e) => setRabattGesamt(Number(e.target.value) || 0)}
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs">Notizen</Label>
-            <Input value={notizen} onChange={(e) => setNotizen(e.target.value)} />
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Positionen werden beim Bearbeiten der zugehörigen Rechnung gepflegt.
-          </p>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} disabled={update.isPending}>
-            Abbrechen
-          </Button>
-          <Button onClick={save} disabled={update.isPending}>
-            {update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Speichern"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
