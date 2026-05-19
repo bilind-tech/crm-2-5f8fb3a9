@@ -1,19 +1,16 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Repeat, Pause, Play, Square, Zap, CheckCircle2, FileText } from "lucide-react";
-import { toast } from "sonner";
+import { Repeat, Pencil, FileText } from "lucide-react";
 import {
   useDauerauftrag,
   useDauerauftragLaeufe,
-  usePausiereDauerauftrag,
-  useBeendeDauerauftrag,
-  useSofortLauf,
 } from "@/hooks/useDauerauftraege";
 import { useRechnungen } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
-import { useConfirm } from "@/hooks/useConfirm";
 import { berechneNaechsteLauftermine } from "@/lib/dauerauftrag/termine";
 import { formatDate } from "@/lib/format";
 import { formatWiederkehrend } from "@/components/forms/DauerauftragKonfig";
+import { DauerauftragEditDialog } from "@/components/dauerauftrag/DauerauftragEditDialog";
 import type { WiederkehrendDetails } from "@/lib/api/types";
 
 type Props = {
@@ -64,16 +61,12 @@ function VerwaltungInner({
     : never;
 }) {
   const { data: da } = useDauerauftrag(dauerauftragId);
-  const pausiere = usePausiereDauerauftrag(dauerauftragId);
-  const beende = useBeendeDauerauftrag(dauerauftragId);
-  const sofort = useSofortLauf(dauerauftragId);
-  const { confirm, dialog } = useConfirm();
+  const [editOpen, setEditOpen] = useState(false);
 
   if (!da) return null;
 
   const heute = new Date();
   const naechste = berechneNaechsteLauftermine(da, heute, 1)[0];
-  const istPausiert = da.status === "pausiert";
   const istBeendet = da.status === "beendet";
 
   // Letzte 3 Läufe (neueste zuerst)
@@ -118,67 +111,13 @@ function VerwaltungInner({
 
       {!istBeendet && (
         <div className="mb-3 flex flex-wrap gap-2">
-          {istPausiert ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-lg"
-              onClick={() =>
-                pausiere.mutate(null, {
-                  onSuccess: () => toast.success("Dauerauftrag fortgesetzt"),
-                })
-              }
-            >
-              <Play className="mr-1.5 h-3.5 w-3.5" /> Fortsetzen
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-lg"
-              onClick={() =>
-                pausiere.mutate(null, {
-                  onSuccess: () => toast.success("Dauerauftrag pausiert"),
-                })
-              }
-            >
-              <Pause className="mr-1.5 h-3.5 w-3.5" /> Pausieren
-            </Button>
-          )}
           <Button
             size="sm"
             variant="outline"
             className="rounded-lg"
-            onClick={() =>
-              sofort.mutate(undefined, {
-                onSuccess: () => toast.success("Sofort-Lauf erzeugt"),
-                onError: (e) =>
-                  toast.error(e instanceof Error ? e.message : "Fehler beim Sofort-Lauf"),
-              })
-            }
+            onClick={() => setEditOpen(true)}
           >
-            <Zap className="mr-1.5 h-3.5 w-3.5" /> Sofort erzeugen
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-lg text-destructive hover:bg-destructive/10"
-            onClick={() =>
-              confirm(
-                {
-                  title: "Dauerauftrag beenden?",
-                  description: `${da.nummer} · ${da.bezeichnung} wird beendet. Es werden keine weiteren Rechnungen automatisch erzeugt.`,
-                  variant: "destructive",
-                  confirmLabel: "Beenden",
-                },
-                () =>
-                  beende.mutate(undefined, {
-                    onSuccess: () => toast.success("Dauerauftrag beendet"),
-                  }),
-              )
-            }
-          >
-            <Square className="mr-1.5 h-3.5 w-3.5" /> Beenden
+            <Pencil className="mr-1.5 h-3.5 w-3.5" /> Dauerauftrag bearbeiten
           </Button>
         </div>
       )}
@@ -236,13 +175,7 @@ function VerwaltungInner({
         </div>
       )}
 
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        <CheckCircle2 className="mr-1 inline h-3 w-3" />
-        Jeder Monat ist eine eigene Rechnung — bezahlt-Markierung erfolgt pro Monat in der
-        jeweiligen Rechnung.
-      </p>
-
-      {dialog}
+      {editOpen && <DauerauftragEditDialog da={da} onClose={() => setEditOpen(false)} />}
     </div>
   );
 }
