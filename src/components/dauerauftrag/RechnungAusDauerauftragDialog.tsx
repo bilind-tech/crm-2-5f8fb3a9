@@ -20,6 +20,7 @@ import { useKunden } from "@/hooks/useApi";
 import { summenRechnung } from "@/lib/belege/summen";
 import { formatEUR } from "@/lib/format";
 import { periodeFuer, periodeBezeichnung } from "@/lib/dauerauftrag/termine";
+import { verfuegbareJahre } from "@/lib/zeitraum/jahre";
 import { Label } from "@/components/ui/label";
 import { DauerauftragEditDialog } from "@/components/dauerauftrag/DauerauftragEditDialog";
 import type { Dauerauftrag, DauerauftragFrequenz } from "@/lib/api/types";
