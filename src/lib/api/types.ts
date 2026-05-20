@@ -481,7 +481,7 @@ export interface SmtpEinstellungen {
 
 // ---------- E-Mail (Vorlagen, Signaturen, Versand) ----------
 
-export type EmailKontext = "angebot" | "rechnung" | "allgemein";
+export type EmailKontext = "angebot" | "rechnung" | "mahnung" | "protokoll" | "allgemein";
 
 export interface EmailVorlage {
   id: ID;

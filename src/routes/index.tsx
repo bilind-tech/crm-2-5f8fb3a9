@@ -202,8 +202,8 @@ function Dashboard() {
             <>
               <p className="mb-3 text-sm text-muted-foreground">
                 {erinnerungen.count === 1
-                  ? "1 Rechnung empfiehlt eine freundliche Erinnerung."
-                  : `${erinnerungen.count} Rechnungen empfehlen eine freundliche Erinnerung.`}{" "}
+                  ? "1 Rechnung ist überfällig und sollte erinnert werden."
+                  : `${erinnerungen.count} Rechnungen sind überfällig und sollten erinnert werden.`}{" "}
                 Offen gesamt:{" "}
                 <span className="font-medium text-foreground">
                   {formatEUR(erinnerungen.gesamtOffen)}
