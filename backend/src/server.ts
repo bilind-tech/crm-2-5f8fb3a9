@@ -33,6 +33,7 @@ import { driveRoutes } from "./routes/drive.js";
 import { emailRoutes } from "./routes/email.js";
 import { externRoutes } from "./routes/extern.js";
 import { datenbankRoutes } from "./routes/datenbank.js";
+import { testdatenResetRoutes } from "./routes/testdaten-reset.js";
 import { dauerauftragRoutes } from "./routes/dauerauftrag.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { seedOrUpdateDefaultVorlagen } from "./email/templates.js";
