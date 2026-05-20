@@ -114,7 +114,7 @@ export async function testdatenResetRoutes(app: FastifyInstance): Promise<void> 
           DELETE FROM kunde;
           DELETE FROM aktivitaet;
           DELETE FROM benachrichtigung;
-          DELETE FROM belegnummer_zaehler_v2;
+          DELETE FROM belegnummer_zaehler;
           DELETE FROM belegnummer_reserviert;
           DELETE FROM kunde_nummer_zaehler;
           DELETE FROM objekt_nummer_zaehler;
