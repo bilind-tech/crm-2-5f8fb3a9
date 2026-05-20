@@ -6,7 +6,7 @@
 import crypto from "node:crypto";
 import { getDatabase } from "../db/index.js";
 
-export type EmailKontext = "rechnung" | "angebot" | "mahnung" | "allgemein";
+export type EmailKontext = "rechnung" | "angebot" | "mahnung" | "protokoll" | "allgemein";
 
 export interface EmailVorlage {
   id: string;
