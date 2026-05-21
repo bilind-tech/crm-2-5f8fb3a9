@@ -10,7 +10,7 @@ interface Props {
   errorMessage?: string | null;
   drive?: DriveSyncInfo;
   viewButton: ReactNode;
-  /** Wenn vorhanden, wird die PDF inline als kleine Vorschau (Seite 1) eingebettet. */
+  /** Wenn vorhanden, wird die PDF inline als Vorschau eingebettet. */
   pdfUrl?: string | null;
   /** Bevorzugte Quelle für die Inline-Vorschau (umgeht blob:-URL-Probleme). */
   pdfBlob?: Blob | null;
@@ -20,7 +20,7 @@ interface Props {
 
 /**
  * Kompakter Vorschau-Block auf Detailseiten.
- * Rendert die erste Seite der PDF zuverlässig per Canvas (PDF.js),
+ * Rendert alle Seiten der PDF zuverlässig per Canvas (PDF.js),
  * unabhängig vom nativen Browser-PDF-Plugin.
  */
 export function PdfPreviewCard({
@@ -70,7 +70,6 @@ export function PdfPreviewCard({
             pdfBlob={pdfBlob}
             fileName={fileName ?? `${title}.pdf`}
             className="block max-h-[70vh] w-full overflow-y-auto"
-            firstPageOnly
             maxWidth={720}
           />
         ) : (
