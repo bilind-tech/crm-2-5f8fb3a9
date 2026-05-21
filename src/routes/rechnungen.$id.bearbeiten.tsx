@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Loader2, ArrowLeft, AlertCircle } from "lucide-react";
-import { useRechnung, useKunde, useFirmendaten } from "@/hooks/useApi";
+import { useRechnung, useKunde, useFirmendaten, useObjekt } from "@/hooks/useApi";
 import { NotFoundState } from "@/components/layout/NotFoundState";
 import { Button } from "@/components/ui/button";
 import { PdfEditorLayout } from "@/components/pdf-editor/PdfEditorLayout";
@@ -14,9 +14,10 @@ function Page() {
   const { id } = Route.useParams();
   const { data: rechnung, isLoading: rechnungLoading } = useRechnung(id);
   const { data: kunde, isLoading: kundeLoading } = useKunde(rechnung?.kundeId ?? "");
+  const { data: objektDirekt, isLoading: objektLoading } = useObjekt(rechnung?.objektId ?? "");
   const { data: firma, isLoading: firmaLoading } = useFirmendaten();
   const ansprechpartner = kunde?.ansprechpartner?.find((a) => a.id === rechnung?.ansprechpartnerId);
-  const objekt = kunde?.objekte?.find((o) => o.id === rechnung?.objektId) ?? null;
+  const objekt = objektDirekt ?? kunde?.objekte?.find((o) => o.id === rechnung?.objektId) ?? null;
 
   if (rechnungLoading) {
     return <EditorLoading label="Rechnung wird geladen …" />;
@@ -31,7 +32,7 @@ function Page() {
       />
     );
   }
-  if (kundeLoading || firmaLoading || !kunde || !firma) {
+  if (kundeLoading || firmaLoading || (!!rechnung.objektId && objektLoading) || !kunde || !firma) {
     return <EditorLoading label="Editor wird vorbereitet …" />;
   }
 

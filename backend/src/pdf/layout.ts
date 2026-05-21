@@ -62,14 +62,15 @@ function kundeAdresse(k: ApiKunde, ap?: ApiAnsprechpartner, o?: ApiObjekt | null
   const apPerson = ap ? [ap.vorname, ap.nachname].filter(Boolean).join(" ").trim() : "";
   const person = apPerson || [k.vorname, k.nachname].filter(Boolean).join(" ");
   if (person) lines.push(person);
-  // Adresse: bevorzugt vom Kunden, sonst Fallback aus dem Objekt.
-  const strasse = k.strasse || o?.strasse || "";
-  const plz = k.plz || o?.plz || "";
-  const ort = k.ort || o?.ort || "";
+  // Wenn ein Objekt ausgewählt ist, ist dessen Einsatzadresse maßgeblich.
+  // Falls dort nichts gepflegt ist, fällt die PDF auf die Kundenadresse zurück.
+  const strasse = o?.strasse || k.strasse || "";
+  const plz = o?.plz || k.plz || "";
+  const ort = o?.ort || k.ort || "";
   if (strasse) lines.push(strasse);
   const plzOrt = [plz, ort].filter(Boolean).join(" ");
   if (plzOrt) lines.push(plzOrt);
-  const land = k.land || o?.land;
+  const land = o?.land || k.land;
   if (land && land !== "Deutschland") lines.push(land);
   return lines;
 }
@@ -139,6 +140,39 @@ function abrechnungsartText(p: ApiPosition): string {
   return "Pauschal";
 }
 
+function beschreibungZeilen(text: string): string[] {
+  const lines = (text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const source = lines.length > 0 ? lines : [text || "Pauschal"];
+  const chunks: string[] = [];
+  const maxChars = 135;
+  for (const raw of source) {
+    const prefixMatch = raw.match(/^([•\-*]\s+)(.*)$/);
+    const prefix = prefixMatch?.[1] ?? "";
+    const body = prefixMatch?.[2] ?? raw;
+    let current = "";
+    for (const word of body.split(/\s+/).filter(Boolean)) {
+      if (word.length > maxChars) {
+        if (current) chunks.push(prefix + current);
+        current = "";
+        for (let i = 0; i < word.length; i += maxChars) chunks.push(prefix + word.slice(i, i + maxChars));
+        continue;
+      }
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > maxChars && current) {
+        chunks.push(prefix + current);
+        current = word;
+      } else {
+        current = next;
+      }
+    }
+    if (current) chunks.push(prefix + current);
+  }
+  return chunks.length > 0 ? chunks : ["Pauschal"];
+}
+
 function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
   const showStunden = hasStundenPositionen(positionen);
   const colCount = showStunden ? 4 : 3;
@@ -156,6 +190,27 @@ function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; s
 
   const body: unknown[][] = [headerRow];
   positionen.forEach((p) => {
+    if (p.modus === "pauschal") {
+      const zeilen = beschreibungZeilen(p.beschreibung || "Pauschal");
+      zeilen.forEach((line, index) => {
+        const row: unknown[] = [
+          {
+            text: line,
+            fontSize: 10,
+            bold: index === 0 && !line.startsWith("•") && !line.startsWith("-") && !line.startsWith("*"),
+            margin: [0, 0, 0, 0],
+          },
+        ];
+        if (showStunden) row.push({ text: "", fontSize: 10, alignment: "center" });
+        row.push(
+          { text: index === 0 ? abrechnungsartText(p) : "", fontSize: 10, alignment: "center" },
+          { text: index === 0 ? eur(summe(p)) : "", fontSize: 10, alignment: "right" },
+        );
+        body.push(row);
+      });
+      return;
+    }
+
     const row: unknown[] = [{ stack: [beschreibungBlock(p.beschreibung || "")] }];
     if (showStunden) row.push({ text: stundenText(p), fontSize: 10, alignment: "center" });
     row.push(
@@ -173,10 +228,6 @@ function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; s
   const positionsTabelle = {
     table: {
       headerRows: 1,
-      keepWithHeaderRows: 1,
-      // dontBreakRows: false (Default) — sehr lange Beschreibungszeilen
-      // dürfen über mehrere Seiten umbrechen, sonst „verschluckt" pdfmake
-      // die ganze Tabelle.
       widths,
       body,
     },
