@@ -55,6 +55,10 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
   const [rechnungsdatum, setRechnungsdatum] = useState(todayISO());
   const [frist, setFrist] = useState(14);
   const [faellig, setFaellig] = useState(addDays(todayISO(), 14));
+  const [leistungsmonat, setLeistungsmonat] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [positionen, setPositionen] = useState<PositionDraft[]>(() => [emptyPosition(19)]);
   const [optionen, setOptionen] = useState<OptionenState>(defaultOptionen);
   const [ansprechpartnerId, setAnsprechpartnerId] = useState<string | undefined>();
@@ -63,6 +67,18 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
     () => objekteAlle.filter((o) => o.kundeId === kundeId),
     [objekteAlle, kundeId],
   );
+
+  const monatsOptionen = useMemo(() => {
+    const out: { value: string; label: string }[] = [];
+    const now = new Date();
+    for (let offset = 2; offset >= -6; offset--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+      out.push({ value, label });
+    }
+    return out;
+  }, []);
 
   const zaehlerQ = useKundenZaehler(kundeId);
   const vorschauNummer = useMemo(() => {
@@ -98,6 +114,7 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
       steuersatz,
       rechnungsdatum,
       faelligkeitsdatum: faellig,
+      leistungsmonat: leistungsmonat || undefined,
       status: "entwurf",
       introText: optionen.eigenesIntroAktiv ? optionen.eigenesIntro : undefined,
       outroText: optionen.eigenesOutroAktiv ? optionen.eigenesOutro : undefined,
