@@ -3,8 +3,15 @@ import { ChevronRight, Folder, FolderOpen, Home, MoreVertical, FolderPlus, Penci
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ordnerKinder } from "@/lib/dokumente/ordnerApi";
 import type { DokumentOrdner, DokumentOrdnerListe } from "@/lib/api/types";
+
+type DriveOrdnerStatus = "synced" | "pending" | "error" | "none";
+export type OrdnerDriveStatusMap = Record<
+  string,
+  { status: DriveOrdnerStatus; error?: string; syncedAt?: string }
+>;
 
 interface Props {
   daten: DokumentOrdnerListe | undefined;
@@ -14,6 +21,8 @@ interface Props {
   onUmbenennen: (o: DokumentOrdner) => void;
   onVerschieben: (o: DokumentOrdner) => void;
   onLoeschen: (o: DokumentOrdner) => void;
+  /** Optional: Drive-Sync-Status pro Ordner-ID (für kleinen Status-Punkt). */
+  driveStatus?: OrdnerDriveStatusMap;
 }
 
 export function OrdnerBaum(p: Props) {
@@ -53,6 +62,7 @@ export function OrdnerBaum(p: Props) {
             onUmbenennen={p.onUmbenennen}
             onVerschieben={p.onVerschieben}
             onLoeschen={p.onLoeschen}
+            driveStatus={p.driveStatus}
           />
         ))}
       </div>
@@ -61,7 +71,7 @@ export function OrdnerBaum(p: Props) {
 }
 
 function BaumKnoten({
-  ordner, alle, tiefe, aktivId, onSelect, onNeuerOrdner, onUmbenennen, onVerschieben, onLoeschen,
+  ordner, alle, tiefe, aktivId, onSelect, onNeuerOrdner, onUmbenennen, onVerschieben, onLoeschen, driveStatus,
 }: {
   ordner: DokumentOrdner;
   alle: DokumentOrdner[];
@@ -72,10 +82,12 @@ function BaumKnoten({
   onUmbenennen: (o: DokumentOrdner) => void;
   onVerschieben: (o: DokumentOrdner) => void;
   onLoeschen: (o: DokumentOrdner) => void;
+  driveStatus?: OrdnerDriveStatusMap;
 }) {
   const [offen, setOffen] = useState(true);
   const kinder = ordnerKinder(alle, ordner.id);
   const aktiv = aktivId === ordner.id;
+  const drive = driveStatus?.[ordner.id];
   return (
     <div>
       <Zeile
@@ -85,6 +97,7 @@ function BaumKnoten({
         aktiv={aktiv}
         onClick={() => onSelect(ordner.id)}
         indent={tiefe}
+        statusDot={<DriveDot status={drive?.status ?? "none"} error={drive?.error} syncedAt={drive?.syncedAt} />}
         chevron={
           kinder.length > 0 ? (
             <button
@@ -134,6 +147,7 @@ function BaumKnoten({
               onUmbenennen={onUmbenennen}
               onVerschieben={onVerschieben}
               onLoeschen={onLoeschen}
+              driveStatus={driveStatus}
             />
           ))}
         </div>
@@ -142,7 +156,7 @@ function BaumKnoten({
   );
 }
 
-function Zeile({ label, icon, zahl, aktiv, onClick, action, chevron, indent = 0 }: {
+function Zeile({ label, icon, zahl, aktiv, onClick, action, chevron, indent = 0, statusDot }: {
   label: string;
   icon: React.ReactNode;
   zahl?: number;
@@ -151,6 +165,7 @@ function Zeile({ label, icon, zahl, aktiv, onClick, action, chevron, indent = 0 
   action?: React.ReactNode;
   chevron?: React.ReactNode;
   indent?: number;
+  statusDot?: React.ReactNode;
 }) {
   return (
     <div
@@ -164,10 +179,38 @@ function Zeile({ label, icon, zahl, aktiv, onClick, action, chevron, indent = 0 
       {chevron}
       <span className="flex-shrink-0">{icon}</span>
       <span className="flex-1 truncate py-1.5">{label}</span>
+      {statusDot}
       {zahl !== undefined && zahl > 0 && (
         <span className="text-xs text-muted-foreground">{zahl}</span>
       )}
       <span className="opacity-0 transition group-hover:opacity-100">{action}</span>
     </div>
+  );
+}
+
+function DriveDot({ status, error, syncedAt }: {
+  status: DriveOrdnerStatus;
+  error?: string;
+  syncedAt?: string;
+}) {
+  if (status === "none") return null;
+  const cfg: Record<Exclude<DriveOrdnerStatus, "none">, { color: string; text: string }> = {
+    synced: { color: "bg-success", text: syncedAt ? `In Drive gesichert · ${syncedAt.slice(0, 10)}` : "In Drive gesichert" },
+    pending: { color: "bg-muted-foreground animate-pulse", text: "Wird zu Drive synchronisiert…" },
+    error: { color: "bg-warning", text: error ? `Drive-Fehler: ${error}` : "Drive-Fehler" },
+  };
+  const { color, text } = cfg[status];
+  return (
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className={cn("inline-block h-1.5 w-1.5 rounded-full", color)}
+            aria-label={text}
+          />
+        </TooltipTrigger>
+        <TooltipContent>{text}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
