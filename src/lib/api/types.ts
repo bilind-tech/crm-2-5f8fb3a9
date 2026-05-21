@@ -235,6 +235,8 @@ export interface Rechnung {
   steuersatz: number;
   rechnungsdatum: ISODate;
   faelligkeitsdatum: ISODate;
+  /** Optionaler Leistungsmonat im Format "YYYY-MM". Wenn gesetzt, wird er im PDF-Intro angezeigt. */
+  leistungsmonat?: string;
   notizen?: string;
   status: RechnungStatus;
   versendetAm?: ISODateTime;
