@@ -28,11 +28,15 @@ import {
 import { storeBuffer, openReadStream, fileExists, deleteFile, fileSize } from "../dokumente/storage.js";
 import {
   DokumentListFilterSchema, DokumentMetaInputSchema, DokumentPatchSchema,
-  UploadSessionInputSchema,
+  UploadSessionInputSchema, OrdnerCreateSchema, OrdnerPatchSchema, BulkMoveSchema,
 } from "../dokumente/validation.js";
 import { isAllowedMime, MAX_UPLOAD_BYTES } from "../dokumente/types.js";
 import type { DokumentTyp, DokumentQuelle } from "../dokumente/types.js";
 import { runFristCheck } from "../dokumente/fristen-cron.js";
+import {
+  createOrdner, deleteOrdner, getOrdner, listOrdner, moveDokumente, rootZaehler,
+  updateOrdner, OrdnerError,
+} from "../dokumente/ordner-repo.js";
 // Avoid unused
 
 interface ParsedUpload {
@@ -90,11 +94,82 @@ function ableitenTyp(mime: string, fallback?: DokumentTyp): DokumentTyp {
 }
 
 export async function dokumenteRoutes(app: FastifyInstance): Promise<void> {
+  // ---------- Ordner ----------
+  // WICHTIG: vor "/dokumente/:id" registrieren, sonst frisst die Param-Route die Pfade.
+  app.get("/dokumente/ordner", { preHandler: requireAuth }, async () => {
+    const ordner = listOrdner();
+    const root = rootZaehler();
+    return { root, ordner };
+  });
+
+  app.post("/dokumente/ordner", { preHandler: requireAuth }, async (req, reply) => {
+    const parsed = OrdnerCreateSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "validation", issues: parsed.error.issues });
+    try {
+      const o = createOrdner(parsed.data);
+      audit({ userId: req.user?.id ?? null, action: "dokument.ordner.create", detail: { id: o.id, name: o.name } });
+      return reply.code(201).send(o);
+    } catch (e) {
+      if (e instanceof OrdnerError) return reply.code(409).send({ error: e.code });
+      throw e;
+    }
+  });
+
+  app.patch<{ Params: { id: string } }>(
+    "/dokumente/ordner/:id",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const parsed = OrdnerPatchSchema.safeParse(req.body ?? {});
+      if (!parsed.success) return reply.code(400).send({ error: "validation", issues: parsed.error.issues });
+      try {
+        const o = updateOrdner(req.params.id, parsed.data);
+        if (!o) return reply.code(404).send({ error: "not-found" });
+        return o;
+      } catch (e) {
+        if (e instanceof OrdnerError) return reply.code(409).send({ error: e.code });
+        throw e;
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string }; Querystring: { mode?: string } }>(
+    "/dokumente/ordner/:id",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const modus = req.query.mode === "cascade" ? "cascade" : "move-to-parent";
+      const cur = getOrdner(req.params.id);
+      if (!cur) return reply.code(404).send({ error: "not-found" });
+      const res = deleteOrdner(req.params.id, modus);
+      audit({
+        userId: req.user?.id ?? null,
+        action: "dokument.ordner.delete",
+        detail: { id: req.params.id, modus, ...res },
+      });
+      return res;
+    },
+  );
+
+  app.post("/dokumente/bulk-move", { preHandler: requireAuth }, async (req, reply) => {
+    const parsed = BulkMoveSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "validation", issues: parsed.error.issues });
+    try {
+      const n = moveDokumente(parsed.data.ids, parsed.data.ordnerId);
+      return { verschoben: n };
+    } catch (e) {
+      if (e instanceof OrdnerError) return reply.code(409).send({ error: e.code });
+      throw e;
+    }
+  });
+
   // ---------- Liste / Detail ----------
   app.get("/dokumente", { preHandler: requireAuth }, async (req, reply) => {
-    const parsed = DokumentListFilterSchema.safeParse(req.query ?? {});
+    const raw = (req.query ?? {}) as Record<string, unknown>;
+    // "root" → null normalisieren BEVOR Zod prüft. Zod-Schema akzeptiert "root", wir mappen anschließend.
+    const parsed = DokumentListFilterSchema.safeParse(raw);
     if (!parsed.success) return reply.code(400).send({ error: "validation", issues: parsed.error.issues });
-    return listDokumente(parsed.data);
+    const f = { ...parsed.data } as Record<string, unknown>;
+    if (f.ordnerId === "root") f.ordnerId = null;
+    return listDokumente(f as Parameters<typeof listDokumente>[0]);
   });
 
   app.get<{ Params: { id: string } }>(
@@ -157,6 +232,7 @@ export async function dokumenteRoutes(app: FastifyInstance): Promise<void> {
         typ: ableitenTyp(parsed.mimeType, meta.typ),
         kundeId: meta.kundeId ?? null,
         objektId: meta.objektId ?? null,
+        ordnerId: meta.ordnerId ?? null,
         uploadSessionId: meta.uploadSessionId ?? null,
         dateiname: parsed.filename,
         mimeType: parsed.mimeType,
