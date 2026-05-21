@@ -65,12 +65,14 @@ function statusBadge(status: string) {
 }
 
 function brutto(r: Rechnung) {
-  // Spiegelt summenRechnung im Backend: Brutto pro Position mit pos.steuersatz,
-  // dann Gesamtrabatt anteilig auf netto+steuer angewendet.
+  // Nutzt geteilten Helfer (deckt modus="pauschal" korrekt ab).
   let netto = 0;
   let steuer = 0;
   for (const p of r.positionen) {
-    const linie = p.menge * p.einzelpreisNetto * (1 - p.rabatt / 100);
+    const linie =
+      p.modus === "pauschal"
+        ? (p.pauschalpreisNetto ?? 0) * (1 - p.rabatt / 100)
+        : p.menge * p.einzelpreisNetto * (1 - p.rabatt / 100);
     netto += linie;
     steuer += linie * (p.steuersatz / 100);
   }
