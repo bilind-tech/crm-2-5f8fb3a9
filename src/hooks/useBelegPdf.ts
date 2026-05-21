@@ -42,7 +42,28 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   });
 }
 
-export const pdfQueryKey = (art: "angebot" | "rechnung", id: string) => ["pdf", art, id] as const;
+export const pdfQueryKey = (art: "angebot" | "rechnung", id: string, signature?: string) =>
+  signature ? (["pdf", art, id, signature] as const) : (["pdf", art, id] as const);
+
+function pdfDependencySignature(
+  beleg: Angebot | Rechnung | undefined,
+  kunde: Kunde | undefined,
+  objekt: Objekt | null | undefined,
+): string {
+  if (!beleg) return "noop";
+  return [
+    beleg.id,
+    beleg.geaendertAm,
+    beleg.objektId ?? "kein-objekt",
+    kunde?.geaendertAm ?? "kunde-offen",
+    objekt?.id ?? "objekt-offen",
+    objekt?.geaendertAm ?? "",
+    objekt?.strasse ?? "",
+    objekt?.plz ?? "",
+    objekt?.ort ?? "",
+    objekt?.land ?? "",
+  ].join("|");
+}
 
 interface PdfData {
   blob: Blob;
@@ -132,11 +153,15 @@ interface UsePdfResult {
 export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
   const { data: kunde } = useKunde(angebot?.kundeId ?? "");
   const { data: firma } = useFirmendaten();
-  const { data: objekt } = useObjekt(angebot?.objektId ?? "");
-  const enabled = !!angebot && !!kunde && !!firma;
+  const objektQuery = useObjekt(angebot?.objektId ?? "");
+  const objekt = objektQuery.data ?? null;
+  const needsObjekt = !!angebot?.objektId;
+  const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
+  const enabled = !!angebot && !!kunde && !!firma && objektReady;
+  const dependencySignature = pdfDependencySignature(angebot, kunde, objekt);
 
   const query = useQuery({
-    queryKey: angebot ? pdfQueryKey("angebot", angebot.id) : ["pdf", "angebot", "noop"],
+    queryKey: angebot ? pdfQueryKey("angebot", angebot.id, dependencySignature) : ["pdf", "angebot", "noop"],
     queryFn: () => buildAngebot(angebot!, kunde!, firma!, objekt ?? null),
     enabled,
     staleTime: Infinity,
@@ -147,7 +172,7 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
     refetchOnReconnect: false,
   });
 
-  const url = useBlobUrl(query.data?.blob, angebot?.id ?? "noop");
+  const url = useBlobUrl(query.data?.blob, angebot ? `${angebot.id}:${dependencySignature}` : "noop");
   const status: Status = !enabled
     ? "idle"
     : query.isError
@@ -168,11 +193,15 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
 export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
   const { data: kunde } = useKunde(rechnung?.kundeId ?? "");
   const { data: firma } = useFirmendaten();
-  const { data: objekt } = useObjekt(rechnung?.objektId ?? "");
-  const enabled = !!rechnung && !!kunde && !!firma;
+  const objektQuery = useObjekt(rechnung?.objektId ?? "");
+  const objekt = objektQuery.data ?? null;
+  const needsObjekt = !!rechnung?.objektId;
+  const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
+  const enabled = !!rechnung && !!kunde && !!firma && objektReady;
+  const dependencySignature = pdfDependencySignature(rechnung, kunde, objekt);
 
   const query = useQuery({
-    queryKey: rechnung ? pdfQueryKey("rechnung", rechnung.id) : ["pdf", "rechnung", "noop"],
+    queryKey: rechnung ? pdfQueryKey("rechnung", rechnung.id, dependencySignature) : ["pdf", "rechnung", "noop"],
     queryFn: () => buildRechnung(rechnung!, kunde!, firma!, objekt ?? null),
     enabled,
     staleTime: Infinity,
@@ -183,7 +212,7 @@ export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
     refetchOnReconnect: false,
   });
 
-  const url = useBlobUrl(query.data?.blob, rechnung?.id ?? "noop");
+  const url = useBlobUrl(query.data?.blob, rechnung ? `${rechnung.id}:${dependencySignature}` : "noop");
   const status: Status = !enabled
     ? "idle"
     : query.isError
