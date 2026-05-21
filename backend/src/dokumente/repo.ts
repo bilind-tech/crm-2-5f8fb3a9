@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { getDatabase } from "../db/index.js";
 import { emit } from "../events/bus.js";
 import { rowToDokument, rowToUploadSession, type DokumentRow, type UploadSessionRow } from "./mappers.js";
+import { descendantIds } from "./ordner-repo.js";
 import type {
   Dokument, DokumentMetaInput, DokumentListFilter, DokumentTyp, DokumentQuelle,
   UploadSession,
@@ -17,6 +18,7 @@ export interface CreateDokumentInput {
   typ: DokumentTyp;
   kundeId?: string | null;
   objektId?: string | null;
+  ordnerId?: string | null;
   uploadSessionId?: string | null;
   dateiname: string;
   mimeType: string;
@@ -36,11 +38,11 @@ export function createDokument(input: CreateDokumentInput): Dokument {
   const db = getDatabase();
   db.prepare(
     `INSERT INTO dokumente (
-       id, titel, beschreibung, typ, kunde_id, objekt_id, upload_session_id,
+       id, titel, beschreibung, typ, kunde_id, objekt_id, ordner_id, upload_session_id,
        dateiname, mime_type, groesse_bytes, sha256, storage_path,
        dokumentdatum, betrag, steuerrelevant, ust_satz,
        faellig_am, quelle
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).run(
     id,
     input.titel,
@@ -48,6 +50,7 @@ export function createDokument(input: CreateDokumentInput): Dokument {
     input.typ,
     input.kundeId ?? null,
     input.objektId ?? null,
+    input.ordnerId ?? null,
     input.uploadSessionId ?? null,
     input.dateiname,
     input.mimeType,
@@ -83,6 +86,21 @@ export function listDokumente(filter: DokumentListFilter = {}): Dokument[] {
   const params: unknown[] = [];
   if (filter.kundeId) { where.push("kunde_id = ?"); params.push(filter.kundeId); }
   if (filter.objektId) { where.push("objekt_id = ?"); params.push(filter.objektId); }
+  if (filter.ordnerId === null) {
+    where.push("ordner_id IS NULL");
+  } else if (typeof filter.ordnerId === "string") {
+    if (filter.recursive) {
+      const ids = descendantIds(filter.ordnerId);
+      if (ids.length === 0) where.push("1 = 0");
+      else {
+        where.push(`ordner_id IN (${ids.map(() => "?").join(",")})`);
+        params.push(...ids);
+      }
+    } else {
+      where.push("ordner_id = ?");
+      params.push(filter.ordnerId);
+    }
+  }
   if (filter.typ) { where.push("typ = ?"); params.push(filter.typ); }
   if (filter.jahr) {
     where.push("substr(COALESCE(dokumentdatum, hochgeladen_am), 1, 4) = ?");
@@ -111,6 +129,7 @@ export function updateDokument(id: string, patch: UpdateDokumentInput): Dokument
     typ: "typ",
     kundeId: "kunde_id",
     objektId: "objekt_id",
+    ordnerId: "ordner_id",
     dokumentdatum: "dokumentdatum",
     betrag: "betrag",
     ustSatz: "ust_satz",
