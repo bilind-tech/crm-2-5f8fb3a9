@@ -184,6 +184,17 @@ function Page() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <GlobalDriveSyncBadge dokumente={alle} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => driftCheck.mutate()}
+              disabled={driftCheck.isPending}
+              className="rounded-lg"
+              title="Alles gegen Google Drive abgleichen"
+            >
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${driftCheck.isPending ? "animate-spin" : ""}`} />
+              Drive prüfen
+            </Button>
             <PrimaryAction
               icon={Smartphone}
               label="Vom Handy scannen"
@@ -243,6 +254,7 @@ function Page() {
               onUmbenennen={setUmbenennOrdner}
               onVerschieben={setVerschiebeOrdner}
               onLoeschen={setLoeschOrdner}
+              driveStatus={ordnerDriveStatus}
             />
           </div>
         </aside>
