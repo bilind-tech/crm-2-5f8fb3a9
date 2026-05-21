@@ -375,5 +375,40 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
       void tickDriveQueue(10).catch(() => undefined);
       return { ok: true, ...result };
     });
+
+    // Drift-Check: gleicht alle CRM-Ordner & Dokumente gegen Drive ab und
+    // enqueued additive Ops (create / move / upload). Niemals destruktiv.
+    scoped.post("/drive/sync/dokumente-full", async (_req, reply) => {
+      const s = loadDriveSettings();
+      if (!s.refreshTokenIsSet) {
+        reply.status(409);
+        return {
+          error: "drive-not-connected",
+          message: "Google Drive ist nicht verbunden — bitte zuerst in Einstellungen verbinden.",
+        };
+      }
+      const result = await driftCheckDokumente();
+      void tickDriveQueue(20).catch(() => undefined);
+      return { ok: true, ...result };
+    });
+
+    // Status pro Ordner: { ordnerId: { status, error?, syncedAt? } }.
+    scoped.get("/drive/ordner/status", async () => {
+      const maps = listMaps(true);
+      const out: Record<string, {
+        status: "synced" | "pending" | "error" | "none";
+        error?: string;
+        syncedAt?: string;
+      }> = {};
+      for (const m of maps) {
+        if (m.geloeschtAm) continue;
+        out[m.ordnerId] = {
+          status: m.fehlerText ? "error" : "synced",
+          error: m.fehlerText ?? undefined,
+          syncedAt: m.zuletztGeprueftAm ?? undefined,
+        };
+      }
+      return out;
+    });
   });
 }
