@@ -763,7 +763,14 @@ export const useUpdateFirmendaten = () => {
   return useMutation({
     mutationFn: (data: Partial<Firmendaten>) =>
       api.patch<Firmendaten>("/einstellungen/firma", data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.firma }),
+    onSuccess: (saved) => {
+      // Direkt mit Server-Antwort cachen, damit das Formular nach dem
+      // Speichern nicht erst kurz alte/leere Werte zeigt.
+      qc.setQueryData(qk.einstellungen.firma, saved);
+      qc.invalidateQueries({ queryKey: qk.einstellungen.firma });
+      // PDFs (Angebot/Rechnung) zeigen Firmendaten im Footer — Cache leeren.
+      qc.invalidateQueries({ queryKey: ["pdf"] });
+    },
   });
 };
 
