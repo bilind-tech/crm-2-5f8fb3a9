@@ -292,6 +292,9 @@ async function processOrdnerDelete(row: DriveUpload): Promise<void> {
   await renameDriveFolder(m.driveFolderId, zielName);
   await moveDriveFile(m.driveFolderId, dateFolderId);
   markMapGeloescht(row.belegId);
+  // Nachfahren-Mappings ebenfalls als gelöscht markieren (Drive hat sie rekursiv mitverschoben).
+  const payload = row.opPayload as { nachfolger?: string[] } | null;
+  for (const nid of payload?.nachfolger ?? []) markMapGeloescht(nid);
   markErfolg(row.id, m.driveFolderId, undefined);
   setStatusOk();
 }
