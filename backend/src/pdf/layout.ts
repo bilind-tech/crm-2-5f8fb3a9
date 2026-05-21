@@ -154,6 +154,12 @@ function beschreibungZeilen(text: string): string[] {
     const body = prefixMatch?.[2] ?? raw;
     let current = "";
     for (const word of body.split(/\s+/).filter(Boolean)) {
+      if (word.length > maxChars) {
+        if (current) chunks.push(prefix + current);
+        current = "";
+        for (let i = 0; i < word.length; i += maxChars) chunks.push(prefix + word.slice(i, i + maxChars));
+        continue;
+      }
       const next = current ? `${current} ${word}` : word;
       if (next.length > maxChars && current) {
         chunks.push(prefix + current);
