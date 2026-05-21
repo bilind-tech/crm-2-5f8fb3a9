@@ -50,6 +50,7 @@ function pdfDependencySignature(
   kunde: Kunde | undefined,
   ansprechpartner: Ansprechpartner | undefined,
   objekt: Objekt | null | undefined,
+  firma?: Firmendaten,
 ): string {
   if (!beleg) return "noop";
   return [
@@ -67,6 +68,22 @@ function pdfDependencySignature(
     objekt?.plz ?? "",
     objekt?.ort ?? "",
     objekt?.land ?? "",
+    // Firmendaten beeinflussen Header + Footer der PDF.
+    firma?.firmenname ?? "",
+    firma?.webseite ?? "",
+    firma?.strasse ?? "",
+    firma?.plz ?? "",
+    firma?.ort ?? "",
+    firma?.telefon ?? "",
+    firma?.email ?? "",
+    firma?.ustId ?? "",
+    firma?.steuernummer ?? "",
+    firma?.handelsregister ?? "",
+    firma?.geschaeftsfuehrer ?? "",
+    firma?.bankName ?? "",
+    firma?.iban ?? "",
+    firma?.bic ?? "",
+    firma?.logoUrl ? firma.logoUrl.length.toString() : "",
   ].join("|");
 }
 
@@ -175,7 +192,7 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
   const needsObjekt = !!angebot?.objektId;
   const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
   const enabled = !!angebot && !!kunde && !!firma && objektReady;
-  const dependencySignature = pdfDependencySignature(angebot, kunde, ansprechpartner, objekt);
+  const dependencySignature = pdfDependencySignature(angebot, kunde, ansprechpartner, objekt, firma);
 
   const query = useQuery({
     queryKey: angebot ? pdfQueryKey("angebot", angebot.id, dependencySignature) : ["pdf", "angebot", "noop"],
@@ -217,7 +234,7 @@ export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
   const needsObjekt = !!rechnung?.objektId;
   const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
   const enabled = !!rechnung && !!kunde && !!firma && objektReady;
-  const dependencySignature = pdfDependencySignature(rechnung, kunde, ansprechpartner, objekt);
+  const dependencySignature = pdfDependencySignature(rechnung, kunde, ansprechpartner, objekt, firma);
 
   const query = useQuery({
     queryKey: rechnung ? pdfQueryKey("rechnung", rechnung.id, dependencySignature) : ["pdf", "rechnung", "noop"],
