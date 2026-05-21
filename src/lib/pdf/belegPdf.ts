@@ -9,6 +9,7 @@ import type {
   Kunde,
   Firmendaten,
   Ansprechpartner,
+  Objekt,
 } from "@/lib/api/types";
 import logoUrl from "@/assets/logo.png";
 import { A4, createHotspotTracker, type RuntimeHotspot } from "./hotspotTracker";
@@ -160,16 +161,21 @@ function beschreibungBlock(text: string): unknown {
   return { stack: items };
 }
 
-function kundeAdresse(k: Kunde, ap?: Ansprechpartner) {
+function kundeAdresse(k: Kunde, ap?: Ansprechpartner, o?: Objekt | null) {
   const lines: string[] = [];
   if (k.firmenname) lines.push(k.firmenname);
   const apPerson = ap ? [ap.vorname, ap.nachname].filter(Boolean).join(" ").trim() : "";
   const person = apPerson || [k.vorname, k.nachname].filter(Boolean).join(" ");
   if (person) lines.push(person);
-  if (k.strasse) lines.push(k.strasse);
-  const plzOrt = [k.plz, k.ort].filter(Boolean).join(" ");
+  // Adresse: bevorzugt vom Kunden, sonst Fallback aus dem Objekt.
+  const strasse = k.strasse || o?.strasse || "";
+  const plz = k.plz || o?.plz || "";
+  const ort = k.ort || o?.ort || "";
+  if (strasse) lines.push(strasse);
+  const plzOrt = [plz, ort].filter(Boolean).join(" ");
   if (plzOrt) lines.push(plzOrt);
-  if (k.land && k.land !== "Deutschland") lines.push(k.land);
+  const land = k.land || o?.land;
+  if (land && land !== "Deutschland") lines.push(land);
   return lines;
 }
 
@@ -218,10 +224,10 @@ function header(firma: Firmendaten, logo: string | null) {
 
 function footer(firma: Firmendaten) {
   return function () {
-    const cell = (lines: (string | null | undefined)[]) => ({
+    const cell = (lines: (string | null | undefined)[], alignment: "left" | "center" = "left") => ({
       stack: lines
         .filter(Boolean)
-        .map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT })),
+        .map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT, alignment })),
     });
     return {
       margin: [55, 0, 55, 12] as [number, number, number, number],
@@ -241,8 +247,8 @@ function footer(firma: Firmendaten) {
                 .filter(Boolean)
                 .join(" - "),
             ]),
-            cell(["Bank", firma.bankName, firma.iban]),
-            cell([firma.telefon, firma.email]),
+            cell(["Bank", firma.bankName, firma.iban], "center"),
+            cell([firma.telefon, firma.email], "center"),
             cell([
               firma.handelsregister,
               firma.ustId ? `USt-ID: ${firma.ustId}` : null,
@@ -488,6 +494,16 @@ export function defaultOutroAngebot(a: Angebot, opts: BuildOptions = {}) {
 }
 export function defaultIntroRechnung(_r: Rechnung, opts: BuildOptions = {}) {
   if (opts.intro) return opts.intro;
+  if (_r.leistungsmonat) {
+    const m = /^(\d{4})-(\d{2})$/.exec(_r.leistungsmonat);
+    if (m) {
+      const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
+      if (!isNaN(d.getTime())) {
+        const monat = d.toLocaleDateString("de-DE", { month: "long", year: "numeric", timeZone: "UTC" });
+        return `hiermit übersenden wir Ihnen die Rechnung v. ${monat} für folgende Leistungen:`;
+      }
+    }
+  }
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
 export function defaultOutroRechnung(_r: Rechnung, opts: BuildOptions = {}) {
@@ -505,6 +521,7 @@ interface PdfContext {
   firma: Firmendaten;
   kunde: Kunde;
   ansprechpartner?: Ansprechpartner;
+  objekt?: Objekt | null;
 }
 
 function mergeFirma(firma: Firmendaten, override?: Partial<Firmendaten>): Firmendaten {
@@ -546,7 +563,7 @@ async function buildDoc(
     id: "kunde",
     width: "*",
     stack: [
-      ...kundeAdresse(ctx.kunde, ctx.ansprechpartner).map((l, i) => ({
+      ...kundeAdresse(ctx.kunde, ctx.ansprechpartner, ctx.objekt ?? null).map((l, i) => ({
         text: l,
         fontSize: 10,
         bold: i === 0,
@@ -590,7 +607,7 @@ async function buildDoc(
         stack: [
           { text: outro, margin: [0, 16, 0, 0] },
           { text: "Mit freundlichen Grüßen", margin: [0, 18, 0, 0] },
-          ...signatur.map((s) => ({ text: s, margin: [0, 0, 0, 0], color: COLOR_MUTED })),
+          ...signatur.map((s) => ({ text: s, margin: [0, 0, 0, 0], color: COLOR_TEXT })),
         ],
         unbreakable: true,
       },
@@ -632,9 +649,10 @@ export async function generateAngebotPdf(
   kunde: Kunde,
   firma: Firmendaten,
   ansprechpartner?: Ansprechpartner,
+  objekt?: Objekt | null,
 ): Promise<PdfBuildResult> {
   const cacheKey =
-    "a:" + angebot.id + ":" + semanticPdfKey([angebot, kunde, firma, ansprechpartner ?? null]);
+    "a:" + angebot.id + ":" + semanticPdfKey([angebot, kunde, firma, ansprechpartner ?? null, objekt ?? null]);
   const cached = lruGet(cacheKey);
   if (cached) return cached;
   const meta = [
@@ -650,7 +668,7 @@ export async function generateAngebotPdf(
   const effFirma = mergeFirma(firma, angebot.optionen?.firmaOverride);
   const tracker = createHotspotTracker(A4);
   const doc = await buildDoc(
-    { firma: effFirma, kunde, ansprechpartner },
+    { firma: effFirma, kunde, ansprechpartner, objekt: objekt ?? null },
     `Angebot ${angebot.titel || ""}`.trim(),
     meta,
     "plain",
@@ -677,9 +695,10 @@ export async function generateRechnungPdf(
   kunde: Kunde,
   firma: Firmendaten,
   ansprechpartner?: Ansprechpartner,
+  objekt?: Objekt | null,
 ): Promise<PdfBuildResult> {
   const cacheKey =
-    "r:" + rechnung.id + ":" + semanticPdfKey([rechnung, kunde, firma, ansprechpartner ?? null]);
+    "r:" + rechnung.id + ":" + semanticPdfKey([rechnung, kunde, firma, ansprechpartner ?? null, objekt ?? null]);
   const cached = lruGet(cacheKey);
   if (cached) return cached;
   const meta = [{ label: "Rechnungsdatum:", wert: dt(rechnung.rechnungsdatum) }];
@@ -713,7 +732,7 @@ export async function generateRechnungPdf(
         .join("\n\n");
   const headerNote = "Bei Zahlung bitte\ndie Rechnungs-Nr. angeben";
   const doc = await buildDoc(
-    { firma: effFirma, kunde, ansprechpartner },
+    { firma: effFirma, kunde, ansprechpartner, objekt: objekt ?? null },
     "Rechnung",
     meta,
     "box",

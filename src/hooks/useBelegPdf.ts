@@ -14,10 +14,10 @@
 
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useKunde, useFirmendaten } from "@/hooks/useApi";
+import { useKunde, useFirmendaten, useObjekt } from "@/hooks/useApi";
 import { generateAngebotPdf, generateRechnungPdf } from "@/lib/pdf/belegPdf";
 import { fetchBackendPdf } from "@/lib/pdf/backendPdf";
-import type { Angebot, Rechnung, Kunde, Firmendaten } from "@/lib/api/types";
+import type { Angebot, Rechnung, Kunde, Firmendaten, Objekt } from "@/lib/api/types";
 
 type Status = "idle" | "loading" | "ready" | "error";
 
@@ -49,11 +49,16 @@ interface PdfData {
   fileName?: string;
 }
 
-async function buildAngebot(angebot: Angebot, kunde: Kunde, firma: Firmendaten): Promise<PdfData> {
+async function buildAngebot(
+  angebot: Angebot,
+  kunde: Kunde,
+  firma: Firmendaten,
+  objekt?: Objekt | null,
+): Promise<PdfData> {
   const backend = await fetchBackendPdf("angebot", angebot.id);
   if (backend) return { blob: backend.blob, fileName: backend.dateiname };
   const { blob } = await withTimeout(
-    generateAngebotPdf(angebot, kunde, firma),
+    generateAngebotPdf(angebot, kunde, firma, undefined, objekt ?? null),
     PDF_TIMEOUT_MS,
     "PDF-Erstellung",
   );
@@ -64,11 +69,12 @@ async function buildRechnung(
   rechnung: Rechnung,
   kunde: Kunde,
   firma: Firmendaten,
+  objekt?: Objekt | null,
 ): Promise<PdfData> {
   const backend = await fetchBackendPdf("rechnung", rechnung.id);
   if (backend) return { blob: backend.blob, fileName: backend.dateiname };
   const { blob } = await withTimeout(
-    generateRechnungPdf(rechnung, kunde, firma),
+    generateRechnungPdf(rechnung, kunde, firma, undefined, objekt ?? null),
     PDF_TIMEOUT_MS,
     "PDF-Erstellung",
   );
@@ -126,11 +132,12 @@ interface UsePdfResult {
 export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
   const { data: kunde } = useKunde(angebot?.kundeId ?? "");
   const { data: firma } = useFirmendaten();
+  const { data: objekt } = useObjekt(angebot?.objektId ?? "");
   const enabled = !!angebot && !!kunde && !!firma;
 
   const query = useQuery({
     queryKey: angebot ? pdfQueryKey("angebot", angebot.id) : ["pdf", "angebot", "noop"],
-    queryFn: () => buildAngebot(angebot!, kunde!, firma!),
+    queryFn: () => buildAngebot(angebot!, kunde!, firma!, objekt ?? null),
     enabled,
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,
@@ -161,11 +168,12 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
 export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
   const { data: kunde } = useKunde(rechnung?.kundeId ?? "");
   const { data: firma } = useFirmendaten();
+  const { data: objekt } = useObjekt(rechnung?.objektId ?? "");
   const enabled = !!rechnung && !!kunde && !!firma;
 
   const query = useQuery({
     queryKey: rechnung ? pdfQueryKey("rechnung", rechnung.id) : ["pdf", "rechnung", "noop"],
-    queryFn: () => buildRechnung(rechnung!, kunde!, firma!),
+    queryFn: () => buildRechnung(rechnung!, kunde!, firma!, objekt ?? null),
     enabled,
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,

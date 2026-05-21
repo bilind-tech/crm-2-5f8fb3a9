@@ -2,7 +2,7 @@
 // Schwarz/weiß, dünne graue Linien, Logo rechts, kompakter 4-spaltiger Footer.
 
 import type { ApiPosition, ApiAngebot, ApiRechnung } from "../belege/mappers.js";
-import type { ApiKunde, ApiAnsprechpartner } from "../kunden/mappers.js";
+import type { ApiKunde, ApiAnsprechpartner, ApiObjekt } from "../kunden/mappers.js";
 import type { FirmaForPdf } from "./types.js";
 import { DEFAULT_FONT } from "./printer.js";
 
@@ -56,16 +56,21 @@ function beschreibungBlock(text: string): unknown {
   return { stack: items };
 }
 
-function kundeAdresse(k: ApiKunde, ap?: ApiAnsprechpartner): string[] {
+function kundeAdresse(k: ApiKunde, ap?: ApiAnsprechpartner, o?: ApiObjekt | null): string[] {
   const lines: string[] = [];
   if (k.firmenname) lines.push(k.firmenname);
   const apPerson = ap ? [ap.vorname, ap.nachname].filter(Boolean).join(" ").trim() : "";
   const person = apPerson || [k.vorname, k.nachname].filter(Boolean).join(" ");
   if (person) lines.push(person);
-  if (k.strasse) lines.push(k.strasse);
-  const plzOrt = [k.plz, k.ort].filter(Boolean).join(" ");
+  // Adresse: bevorzugt vom Kunden, sonst Fallback aus dem Objekt.
+  const strasse = k.strasse || o?.strasse || "";
+  const plz = k.plz || o?.plz || "";
+  const ort = k.ort || o?.ort || "";
+  if (strasse) lines.push(strasse);
+  const plzOrt = [plz, ort].filter(Boolean).join(" ");
   if (plzOrt) lines.push(plzOrt);
-  if (k.land && k.land !== "Deutschland") lines.push(k.land);
+  const land = k.land || o?.land;
+  if (land && land !== "Deutschland") lines.push(land);
   return lines;
 }
 
@@ -93,8 +98,8 @@ function header(f: FirmaForPdf, logoDataUrl: string | null) {
 
 function footer(f: FirmaForPdf) {
   return function () {
-    const cell = (lines: (string | null | undefined)[]) => ({
-      stack: lines.filter(Boolean).map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT })),
+    const cell = (lines: (string | null | undefined)[], alignment: "left" | "center" = "left") => ({
+      stack: lines.filter(Boolean).map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT, alignment })),
     });
     return {
       margin: [55, 0, 55, 12] as [number, number, number, number],
@@ -108,8 +113,8 @@ function footer(f: FirmaForPdf) {
               f.geschaeftsfuehrer ? `Geschäftsführer: ${f.geschaeftsfuehrer}` : null,
               [f.strasse, [f.plz, f.ort].filter(Boolean).join(" ")].filter(Boolean).join(" - "),
             ]),
-            cell(["Bank", f.bankName, f.iban]),
-            cell([f.telefon, f.email]),
+            cell(["Bank", f.bankName, f.iban], "center"),
+            cell([f.telefon, f.email], "center"),
             cell([f.handelsregister, f.ustId ? `USt-ID: ${f.ustId}` : null, f.webseite]),
           ],
           columnGap: 12,
@@ -286,7 +291,20 @@ function defaultOutroAngebot(a: ApiAngebot, outro?: string): string {
 }
 function defaultIntroRechnung(_r: ApiRechnung, intro?: string): string {
   if (intro) return intro;
+  if (_r.leistungsmonat) {
+    const monat = formatLeistungsmonat(_r.leistungsmonat);
+    if (monat) return `hiermit übersenden wir Ihnen die Rechnung v. ${monat} für folgende Leistungen:`;
+  }
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
+}
+
+function formatLeistungsmonat(s?: string | null): string {
+  if (!s) return "";
+  const m = /^(\d{4})-(\d{2})$/.exec(s);
+  if (!m) return "";
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("de-DE", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 
@@ -303,6 +321,7 @@ interface BuildArgs {
   firma: FirmaForPdf;
   kunde: ApiKunde;
   ansprechpartner?: ApiAnsprechpartner;
+  objekt?: ApiObjekt | null;
   logoDataUrl: string | null;
   titel: string;
   meta: { label: string; wert: string }[];
@@ -329,7 +348,7 @@ function buildDoc(args: BuildArgs) {
         columns: [
           {
             width: "*",
-            stack: kundeAdresse(args.kunde, args.ansprechpartner).map((l, i) => ({
+            stack: kundeAdresse(args.kunde, args.ansprechpartner, args.objekt ?? null).map((l, i) => ({
               text: l,
               fontSize: 10,
               bold: i === 0,
@@ -352,7 +371,7 @@ function buildDoc(args: BuildArgs) {
         stack: [
           { text: args.outro, margin: [0, 16, 0, 0] },
           { text: "Mit freundlichen Grüßen", margin: [0, 18, 0, 0] },
-          ...signatur.map((s) => ({ text: s, margin: [0, 0, 0, 0], color: COLOR_MUTED })),
+          ...signatur.map((s) => ({ text: s, margin: [0, 0, 0, 0], color: COLOR_TEXT })),
         ],
         unbreakable: true,
       },
@@ -365,9 +384,10 @@ export function angebotDocDef(args: {
   kunde: ApiKunde;
   firma: FirmaForPdf;
   ansprechpartner?: ApiAnsprechpartner;
+  objekt?: ApiObjekt | null;
   logoDataUrl: string | null;
 }) {
-  const { angebot, kunde, firma, ansprechpartner, logoDataUrl } = args;
+  const { angebot, kunde, firma, ansprechpartner, objekt, logoDataUrl } = args;
   const opts = (angebot.optionen ?? {}) as { eigenesIntro?: string; eigenesOutro?: string };
   const intro = defaultIntroAngebot(angebot, opts.eigenesIntro || angebot.introText);
   const outro = defaultOutroAngebot(angebot, opts.eigenesOutro || angebot.outroText);
@@ -377,7 +397,7 @@ export function angebotDocDef(args: {
     ...(angebot.gueltigBis ? [{ label: "Gültig bis", wert: dt(angebot.gueltigBis) }] : []),
   ];
   return buildDoc({
-    firma, kunde, ansprechpartner, logoDataUrl,
+    firma, kunde, ansprechpartner, objekt, logoDataUrl,
     titel: `Angebot ${angebot.titel || ""}`.trim(),
     meta,
     metaVariant: "plain",
@@ -393,9 +413,10 @@ export function rechnungDocDef(args: {
   kunde: ApiKunde;
   firma: FirmaForPdf;
   ansprechpartner?: ApiAnsprechpartner;
+  objekt?: ApiObjekt | null;
   logoDataUrl: string | null;
 }) {
-  const { rechnung, kunde, firma, ansprechpartner, logoDataUrl } = args;
+  const { rechnung, kunde, firma, ansprechpartner, objekt, logoDataUrl } = args;
   const opts = (rechnung.optionen ?? {}) as { eigenesIntro?: string; eigenesOutro?: string };
   const intro = defaultIntroRechnung(rechnung, opts.eigenesIntro || rechnung.introText);
   const t = totals(rechnung.positionen, rechnung.rabattGesamt, rechnung.steuersatz);
@@ -415,7 +436,7 @@ export function rechnungDocDef(args: {
   ];
   const metaNote = "Bei Zahlung bitte\ndie Rechnungs-Nr. angeben";
   return buildDoc({
-    firma, kunde, ansprechpartner, logoDataUrl,
+    firma, kunde, ansprechpartner, objekt, logoDataUrl,
     titel: "Rechnung",
     meta,
     metaVariant: "box",
