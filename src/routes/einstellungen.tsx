@@ -220,9 +220,18 @@ function Page() {
             firma ? (
               <FirmendatenTab
                 initial={firma}
-                onSave={(data) =>
+                onSave={(data, applyServer) =>
                   update.mutate(data, {
-                    onSuccess: () => toast.success("Firmendaten gespeichert"),
+                    onSuccess: (saved) => {
+                      applyServer(saved);
+                      toast.success("Firmendaten gespeichert");
+                    },
+                    onError: (e) =>
+                      toast.error(
+                        e instanceof Error
+                          ? e.message
+                          : "Speichern fehlgeschlagen",
+                      ),
                   })
                 }
               />
