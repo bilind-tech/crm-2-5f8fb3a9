@@ -67,6 +67,7 @@ interface StapelItem {
 interface BulkMeta {
   kundeId?: string;
   objektId?: string;
+  ordnerId?: string | null;
   typ?: DokumentTyp;
   faelligAm?: string;
   steuerrelevant?: boolean;
@@ -133,6 +134,7 @@ export const DokumentUploadPanel = forwardRef<DokumentUploadPanelHandle, Dokumen
     const [bulk, setBulk] = useState<BulkMeta>({
       kundeId: kundeId ?? defaultMeta?.kundeId,
       objektId: objektId ?? defaultMeta?.objektId,
+      ordnerId: defaultMeta?.ordnerId ?? null,
       typ: defaultMeta?.typ,
       faelligAm: defaultMeta?.faelligAm,
       steuerrelevant: defaultMeta?.steuerrelevant,
@@ -193,6 +195,7 @@ export const DokumentUploadPanel = forwardRef<DokumentUploadPanelHandle, Dokumen
       const meta = {
         kundeId: kundeId ?? bulk.kundeId,
         objektId: objektId ?? bulk.objektId,
+        ordnerId: bulk.ordnerId ?? null,
         typ: bulk.typ,
         faelligAm: bulk.faelligAm || undefined,
         steuerrelevant: bulk.steuerrelevant,
