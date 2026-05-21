@@ -42,12 +42,14 @@ export function computeHash(parts: {
     optionen: beleg.optionen,
     positionen: beleg.positionen.map((p) => ({
       b: p.beschreibung, m: p.menge, e: p.einheit, ep: p.einzelpreisNetto,
-      st: p.steuersatz, r: p.rabatt, mo: p.modus, pp: p.pauschalpreisNetto, a: p.ausfuehrung,
+      st: p.steuersatz, r: p.rabatt, mo: p.modus, pp: p.pauschalpreisNetto,
     })),
     rechnungsdatum: (beleg as ApiRechnung).rechnungsdatum,
     faelligkeitsdatum: (beleg as ApiRechnung).faelligkeitsdatum,
     leistungsmonat: (beleg as ApiRechnung).leistungsmonat,
     gueltigBis: (beleg as ApiAngebot).gueltigBis,
+    einsatzVon: (beleg as ApiAngebot).einsatzVon ?? (beleg as ApiRechnung).einsatzVon,
+    einsatzBis: (beleg as ApiAngebot).einsatzBis ?? (beleg as ApiRechnung).einsatzBis,
     kunde: {
       n: kunde.nummer, f: kunde.firmenname, v: kunde.vorname, na: kunde.nachname,
       s: kunde.strasse, p: kunde.plz, o: kunde.ort, l: kunde.land, a: kunde.anrede,
