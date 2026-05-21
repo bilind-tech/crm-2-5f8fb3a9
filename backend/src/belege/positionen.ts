@@ -56,7 +56,9 @@ export function replacePositionen(
       rabatt: p.rabatt ?? 0,
       modus: p.modus === "pauschal" ? "pauschal" : p.modus === "stunden" ? "stunden" : "einzel",
       pauschalpreis_netto_ct: p.pauschalpreisNetto != null ? euroToCt(p.pauschalpreisNetto) : null,
-      ausfuehrung: p.ausfuehrung ?? null,
+      // ausfuehrung: deprecated — Frontend setzt das Feld nicht mehr.
+      // Bestandsspalte bleibt erhalten (Bestandsdaten), neue Inserts immer null.
+      ausfuehrung: null,
     });
   });
 }
