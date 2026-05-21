@@ -32,14 +32,18 @@ export async function fetchBackendPdf(
   art: BelegArt,
   id: string,
   signal?: AbortSignal,
+  cacheBust?: string,
 ): Promise<BackendPdfResult | null> {
   if (!isBackendUrlExplicit()) return null;
   const base = getBackendUrl();
   const route = art === "angebot" ? "angebote" : "rechnungen";
+  const url = new URL(`${base}/${route}/${encodeURIComponent(id)}/pdf`);
+  if (cacheBust) url.searchParams.set("v", cacheBust);
   let res: Response;
   try {
-    res = await fetch(`${base}/${route}/${encodeURIComponent(id)}/pdf`, {
+    res = await fetch(url.toString(), {
       credentials: "include",
+      cache: "no-store",
       signal,
     });
   } catch {
