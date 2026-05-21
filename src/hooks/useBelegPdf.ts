@@ -168,14 +168,16 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
   const { data: firma } = useFirmendaten();
   const objektQuery = useObjekt(angebot?.objektId ?? "");
   const objekt = objektQuery.data ?? objektAusKunde(kunde, angebot?.objektId) ?? null;
+  const ansprechpartner = (kunde as (Kunde & { ansprechpartner?: Ansprechpartner[] }) | undefined)
+    ?.ansprechpartner?.find((a) => a.id === angebot?.ansprechpartnerId);
   const needsObjekt = !!angebot?.objektId;
   const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
   const enabled = !!angebot && !!kunde && !!firma && objektReady;
-  const dependencySignature = pdfDependencySignature(angebot, kunde, objekt);
+  const dependencySignature = pdfDependencySignature(angebot, kunde, ansprechpartner, objekt);
 
   const query = useQuery({
     queryKey: angebot ? pdfQueryKey("angebot", angebot.id, dependencySignature) : ["pdf", "angebot", "noop"],
-    queryFn: () => buildAngebot(angebot!, kunde!, firma!, objekt ?? null),
+    queryFn: () => buildAngebot(angebot!, kunde!, firma!, ansprechpartner, objekt ?? null),
     enabled,
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,
@@ -208,14 +210,16 @@ export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
   const { data: firma } = useFirmendaten();
   const objektQuery = useObjekt(rechnung?.objektId ?? "");
   const objekt = objektQuery.data ?? objektAusKunde(kunde, rechnung?.objektId) ?? null;
+  const ansprechpartner = (kunde as (Kunde & { ansprechpartner?: Ansprechpartner[] }) | undefined)
+    ?.ansprechpartner?.find((a) => a.id === rechnung?.ansprechpartnerId);
   const needsObjekt = !!rechnung?.objektId;
   const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
   const enabled = !!rechnung && !!kunde && !!firma && objektReady;
-  const dependencySignature = pdfDependencySignature(rechnung, kunde, objekt);
+  const dependencySignature = pdfDependencySignature(rechnung, kunde, ansprechpartner, objekt);
 
   const query = useQuery({
     queryKey: rechnung ? pdfQueryKey("rechnung", rechnung.id, dependencySignature) : ["pdf", "rechnung", "noop"],
-    queryFn: () => buildRechnung(rechnung!, kunde!, firma!, objekt ?? null),
+    queryFn: () => buildRechnung(rechnung!, kunde!, firma!, ansprechpartner, objekt ?? null),
     enabled,
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,
