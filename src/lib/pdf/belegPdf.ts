@@ -521,6 +521,7 @@ interface PdfContext {
   firma: Firmendaten;
   kunde: Kunde;
   ansprechpartner?: Ansprechpartner;
+  objekt?: Objekt | null;
 }
 
 function mergeFirma(firma: Firmendaten, override?: Partial<Firmendaten>): Firmendaten {
@@ -562,7 +563,7 @@ async function buildDoc(
     id: "kunde",
     width: "*",
     stack: [
-      ...kundeAdresse(ctx.kunde, ctx.ansprechpartner).map((l, i) => ({
+      ...kundeAdresse(ctx.kunde, ctx.ansprechpartner, ctx.objekt ?? null).map((l, i) => ({
         text: l,
         fontSize: 10,
         bold: i === 0,
@@ -606,7 +607,7 @@ async function buildDoc(
         stack: [
           { text: outro, margin: [0, 16, 0, 0] },
           { text: "Mit freundlichen Grüßen", margin: [0, 18, 0, 0] },
-          ...signatur.map((s) => ({ text: s, margin: [0, 0, 0, 0], color: COLOR_MUTED })),
+          ...signatur.map((s) => ({ text: s, margin: [0, 0, 0, 0], color: COLOR_TEXT })),
         ],
         unbreakable: true,
       },
@@ -648,9 +649,10 @@ export async function generateAngebotPdf(
   kunde: Kunde,
   firma: Firmendaten,
   ansprechpartner?: Ansprechpartner,
+  objekt?: Objekt | null,
 ): Promise<PdfBuildResult> {
   const cacheKey =
-    "a:" + angebot.id + ":" + semanticPdfKey([angebot, kunde, firma, ansprechpartner ?? null]);
+    "a:" + angebot.id + ":" + semanticPdfKey([angebot, kunde, firma, ansprechpartner ?? null, objekt ?? null]);
   const cached = lruGet(cacheKey);
   if (cached) return cached;
   const meta = [
@@ -666,7 +668,7 @@ export async function generateAngebotPdf(
   const effFirma = mergeFirma(firma, angebot.optionen?.firmaOverride);
   const tracker = createHotspotTracker(A4);
   const doc = await buildDoc(
-    { firma: effFirma, kunde, ansprechpartner },
+    { firma: effFirma, kunde, ansprechpartner, objekt: objekt ?? null },
     `Angebot ${angebot.titel || ""}`.trim(),
     meta,
     "plain",
@@ -693,9 +695,10 @@ export async function generateRechnungPdf(
   kunde: Kunde,
   firma: Firmendaten,
   ansprechpartner?: Ansprechpartner,
+  objekt?: Objekt | null,
 ): Promise<PdfBuildResult> {
   const cacheKey =
-    "r:" + rechnung.id + ":" + semanticPdfKey([rechnung, kunde, firma, ansprechpartner ?? null]);
+    "r:" + rechnung.id + ":" + semanticPdfKey([rechnung, kunde, firma, ansprechpartner ?? null, objekt ?? null]);
   const cached = lruGet(cacheKey);
   if (cached) return cached;
   const meta = [{ label: "Rechnungsdatum:", wert: dt(rechnung.rechnungsdatum) }];
@@ -729,7 +732,7 @@ export async function generateRechnungPdf(
         .join("\n\n");
   const headerNote = "Bei Zahlung bitte\ndie Rechnungs-Nr. angeben";
   const doc = await buildDoc(
-    { firma: effFirma, kunde, ansprechpartner },
+    { firma: effFirma, kunde, ansprechpartner, objekt: objekt ?? null },
     "Rechnung",
     meta,
     "box",
