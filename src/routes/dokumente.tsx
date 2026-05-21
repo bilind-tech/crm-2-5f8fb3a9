@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Smartphone, Receipt, AlertTriangle, X, Upload, FolderPlus, ChevronRight, Home, FolderInput, MoreVertical, Trash2 } from "lucide-react";
+import { Smartphone, Receipt, AlertTriangle, X, Upload, FolderPlus, ChevronRight, Home, FolderInput, MoreVertical, Trash2, RefreshCw } from "lucide-react";
 import { useDokumente, useKunden, useObjekte } from "@/hooks/useApi";
+import { useDriveRetry, useDriveDriftCheck, useOrdnerDriveStatus } from "@/hooks/useDriveSync";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
@@ -77,6 +78,10 @@ function Page() {
   const updateOrdner = useUpdateOrdner();
   const bulkMove = useBulkMoveDokumente();
   const deleteDokument = useDeleteDokument();
+  const driveRetry = useDriveRetry();
+  const driftCheck = useDriveDriftCheck();
+  const { data: ordnerDriveStatus } = useOrdnerDriveStatus();
+  const retryDok = (id: string) => driveRetry.mutate({ belegArt: "dokument", belegId: id });
 
   const pfad = useMemo(
     () => ordnerPfad(ordnerListe?.ordner ?? [], aktuellerOrdnerId),
@@ -179,6 +184,17 @@ function Page() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <GlobalDriveSyncBadge dokumente={alle} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => driftCheck.mutate()}
+              disabled={driftCheck.isPending}
+              className="rounded-lg"
+              title="Alles gegen Google Drive abgleichen"
+            >
+              <RefreshCw className={`mr-1.5 h-4 w-4 ${driftCheck.isPending ? "animate-spin" : ""}`} />
+              Drive prüfen
+            </Button>
             <PrimaryAction
               icon={Smartphone}
               label="Vom Handy scannen"
@@ -238,6 +254,7 @@ function Page() {
               onUmbenennen={setUmbenennOrdner}
               onVerschieben={setVerschiebeOrdner}
               onLoeschen={setLoeschOrdner}
+              driveStatus={ordnerDriveStatus}
             />
           </div>
         </aside>
@@ -375,7 +392,11 @@ function Page() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <p className="truncate font-medium">{d.titel}</p>
-                              <DriveSyncBadge dokument={d} />
+                              <DriveSyncBadge
+                                dokument={d}
+                                onRetry={() => retryDok(d.id)}
+                                retryPending={driveRetry.isPending && driveRetry.variables?.belegId === d.id}
+                              />
                             </div>
                             <p className="truncate text-xs text-muted-foreground">{d.dateiname}</p>
                           </div>
