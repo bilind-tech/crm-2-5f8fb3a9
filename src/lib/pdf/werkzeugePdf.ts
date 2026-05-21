@@ -308,7 +308,7 @@ export async function generateUebergabeprotokollPdf(
 ): Promise<PdfBuildResult> {
   const opt = data.optionen ?? {};
   const titel = (opt.titelOverride && opt.titelOverride.trim()) || PROTOKOLL_ART_LABEL[data.art];
-  const logo = await logoDataUrl(data.firma?.logoUrl);
+  const logo = await resolveLogo(data.firma);
   const tracker = createHotspotTracker(A4);
   const sektTitel = (key: "leistung" | "bemerkungen" | "ergebnis", fb: string) =>
     (opt.sektionsTitel?.[key] && opt.sektionsTitel[key]!.trim()) || fb;
@@ -451,7 +451,7 @@ export async function generateSchluesseluebergabePdf(
     (data.richtung === "ausgabe"
       ? "Schlüsselübergabe — Ausgabe"
       : "Schlüsselübergabe — Rücknahme");
-  const logo = await logoDataUrl(data.firma?.logoUrl);
+  const logo = await resolveLogo(data.firma);
   const tracker = createHotspotTracker(A4);
   const lineWidth = opt.druckfreundlich ? 0.3 : 0.6;
   const sektTitel = (key: "schluessel" | "bestaetigung", fb: string) =>
