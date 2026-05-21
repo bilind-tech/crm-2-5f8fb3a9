@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Smartphone, Receipt, AlertTriangle, X, Upload } from "lucide-react";
+import { Smartphone, Receipt, AlertTriangle, X, Upload, FolderPlus, ChevronRight, Home, FolderInput, MoreVertical, Trash2 } from "lucide-react";
 import { useDokumente, useKunden, useObjekte } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -16,6 +16,15 @@ import { DokumentViewer } from "@/components/dokumente/DokumentViewer";
 import { DriveSyncBadge } from "@/components/dokumente/DriveSyncBadge";
 import { GlobalDriveSyncBadge } from "@/components/dokumente/GlobalDriveSyncBadge";
 import { DokumentThumb } from "@/components/dokumente/DokumentThumb";
+import { OrdnerBaum } from "@/components/dokumente/OrdnerBaum";
+import { NeuerOrdnerDialog } from "@/components/dokumente/NeuerOrdnerDialog";
+import { OrdnerLoeschenDialog } from "@/components/dokumente/OrdnerLoeschenDialog";
+import { OrdnerUmbenennenDialog } from "@/components/dokumente/OrdnerUmbenennenDialog";
+import { OrdnerPickerSheet } from "@/components/dokumente/OrdnerPickerSheet";
+import { useDokumentOrdner, useUpdateOrdner, useBulkMoveDokumente } from "@/hooks/useDokumentOrdner";
+import { ordnerPfad } from "@/lib/dokumente/ordnerApi";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useDeleteDokument } from "@/hooks/useApi";
 import { fristStatus, FRIST_LABEL, fristBadgeClass } from "@/lib/dokument/frist";
 import {
   Select,
@@ -25,18 +34,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { Dokument } from "@/lib/api/types";
+import type { Dokument, DokumentOrdner } from "@/lib/api/types";
 
 export const Route = createFileRoute("/dokumente")({
   component: Page,
-  validateSearch: (s: Record<string, unknown>): { focus?: string } => ({
+  validateSearch: (s: Record<string, unknown>): { focus?: string; ordner?: string; recursive?: boolean } => ({
     focus: typeof s.focus === "string" ? s.focus : undefined,
+    ordner: typeof s.ordner === "string" ? s.ordner : undefined,
+    recursive: s.recursive === true || s.recursive === "true",
   }),
 });
 
 function Page() {
-  const { focus } = Route.useSearch();
-  const { data: alle = [] } = useDokumente();
+  const navigate = Route.useNavigate();
+  const { focus, ordner: ordnerSearch, recursive } = Route.useSearch();
+  // ordnerSearch: undefined = Root, "root" = explizit Root, sonst Ordner-ID
+  const aktuellerOrdnerId: string | null =
+    !ordnerSearch || ordnerSearch === "root" ? null : ordnerSearch;
+  const { data: ordnerListe } = useDokumentOrdner();
+  const { data: alle = [] } = useDokumente({
+    ordnerId: recursive && aktuellerOrdnerId ? aktuellerOrdnerId : aktuellerOrdnerId,
+    recursive: !!(recursive && aktuellerOrdnerId),
+  });
   const { data: kunden = [] } = useKunden();
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
@@ -45,12 +64,31 @@ function Page() {
   const [viewing, setViewing] = useState<Dokument | null>(null);
   const [kundeFilter, setKundeFilter] = useState<string>("alle");
   const [objektFilter, setObjektFilter] = useState<string>("alle");
+  const [neuOrdnerParent, setNeuOrdnerParent] = useState<string | null | undefined>(undefined);
+  const [loeschOrdner, setLoeschOrdner] = useState<DokumentOrdner | null>(null);
+  const [umbenennOrdner, setUmbenennOrdner] = useState<DokumentOrdner | null>(null);
+  const [verschiebeOrdner, setVerschiebeOrdner] = useState<DokumentOrdner | null>(null);
+  const [verschiebeDokument, setVerschiebeDokument] = useState<Dokument | null>(null);
   const { data: objekteFuerFilter = [] } = useObjekte(
     kundeFilter !== "alle" ? kundeFilter : undefined,
   );
-  const jahr = new Date().getFullYear();
   const uploadRef = useRef<DokumentUploadPanelHandle>(null);
   const uploadPanelRef = useRef<HTMLDivElement>(null);
+  const updateOrdner = useUpdateOrdner();
+  const bulkMove = useBulkMoveDokumente();
+  const deleteDokument = useDeleteDokument();
+
+  const pfad = useMemo(
+    () => ordnerPfad(ordnerListe?.ordner ?? [], aktuellerOrdnerId),
+    [ordnerListe, aktuellerOrdnerId],
+  );
+
+  function setOrdner(id: string | null) {
+    navigate({ search: (s) => ({ ...s, ordner: id ?? undefined, recursive: undefined }) });
+  }
+  function setRecursive(v: boolean) {
+    navigate({ search: (s) => ({ ...s, recursive: v ? true : undefined }) });
+  }
 
   // Aus globaler Suche: gewünschtes Dokument öffnen, sobald die Liste geladen ist.
   useEffect(() => {
@@ -154,8 +192,59 @@ function Page() {
         }
       />
 
+      {/* Breadcrumb + Ordner-Aktionen */}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-2">
+        <div className="flex flex-1 flex-wrap items-center gap-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setOrdner(null)}
+            className={`flex items-center gap-1 rounded-md px-2 py-1 hover:bg-muted ${aktuellerOrdnerId === null ? "font-semibold" : ""}`}
+          >
+            <Home className="h-3.5 w-3.5" /> Alle Dokumente
+          </button>
+          {pfad.map((o, i) => (
+            <span key={o.id} className="flex items-center gap-1">
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              <button
+                type="button"
+                onClick={() => setOrdner(o.id)}
+                className={`rounded-md px-2 py-1 hover:bg-muted ${i === pfad.length - 1 ? "font-semibold" : ""}`}
+              >
+                {o.name}
+              </button>
+            </span>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setNeuOrdnerParent(aktuellerOrdnerId)} className="rounded-lg">
+          <FolderPlus className="mr-1.5 h-4 w-4" /> Neuer Ordner
+        </Button>
+        {aktuellerOrdnerId && (
+          <label className="flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
+            <input type="checkbox" checked={!!recursive} onChange={(e) => setRecursive(e.target.checked)} />
+            inkl. Unterordner
+          </label>
+        )}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+        {/* Ordner-Sidebar */}
+        <aside className="hidden lg:block">
+          <div className="rounded-2xl border border-border bg-card p-2">
+            <OrdnerBaum
+              daten={ordnerListe}
+              aktivId={aktuellerOrdnerId}
+              onSelect={setOrdner}
+              onNeuerOrdner={(p) => setNeuOrdnerParent(p)}
+              onUmbenennen={setUmbenennOrdner}
+              onVerschieben={setVerschiebeOrdner}
+              onLoeschen={setLoeschOrdner}
+            />
+          </div>
+        </aside>
+
+        <div className="space-y-4 min-w-0">
       <div ref={uploadPanelRef}>
-        <DokumentUploadPanel ref={uploadRef} />
+        <DokumentUploadPanel ref={uploadRef} defaultMeta={{ ordnerId: aktuellerOrdnerId ?? undefined }} key={aktuellerOrdnerId ?? "root"} />
       </div>
       <FilterBar
         filter={filter}
@@ -235,7 +324,9 @@ function Page() {
           </div>
           <p className="text-base font-semibold">Keine Dokumente</p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Lade dein erstes Dokument oben per Drag & Drop hoch — oder scanne es mit dem Handy.
+            {aktuellerOrdnerId
+              ? "Dieser Ordner ist leer. Lade Dokumente hoch oder verschiebe welche hierher."
+              : "Lade dein erstes Dokument oben per Drag & Drop hoch — oder scanne es mit dem Handy."}
           </p>
         </div>
       ) : (
@@ -248,6 +339,8 @@ function Page() {
                 d={d}
                 kundeName={d.kundeId ? kundeMap.get(d.kundeId) : undefined}
                 onClick={() => setViewing(d)}
+                onMove={() => setVerschiebeDokument(d)}
+                onDelete={() => { if (confirm("Dokument löschen?")) deleteDokument.mutate(d.id); }}
               />
             ))}
           </div>
@@ -263,6 +356,7 @@ function Page() {
                   <th className="px-4 py-3 font-medium">Frist</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 text-right font-medium">Betrag</th>
+                  <th className="px-2 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -309,6 +403,21 @@ function Page() {
                       <td className="px-4 py-3 text-right">
                         {d.betrag ? formatEUR(d.betrag) : "—"}
                       </td>
+                      <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setVerschiebeDokument(d)}>
+                              <FolderInput className="mr-2 h-4 w-4" /> Verschieben nach…
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => { if (confirm("Dokument löschen?")) deleteDokument.mutate(d.id); }}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Löschen
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
                     </tr>
                   );
                 })}
@@ -317,6 +426,8 @@ function Page() {
           </div>
         </>
       )}
+        </div>
+      </div>
 
       <HandyScanDialog open={scanOpen} onOpenChange={setScanOpen} />
       <DokumentViewer
@@ -330,6 +441,54 @@ function Page() {
         open={!!editing}
         onOpenChange={(v) => !v && setEditing(null)}
       />
+
+      {/* Ordner-Dialoge */}
+      <NeuerOrdnerDialog
+        open={neuOrdnerParent !== undefined}
+        onOpenChange={(v) => { if (!v) setNeuOrdnerParent(undefined); }}
+        parentId={neuOrdnerParent ?? null}
+        parentName={
+          neuOrdnerParent
+            ? ordnerListe?.ordner.find((o) => o.id === neuOrdnerParent)?.name
+            : undefined
+        }
+      />
+      <OrdnerUmbenennenDialog
+        ordner={umbenennOrdner}
+        open={!!umbenennOrdner}
+        onOpenChange={(v) => !v && setUmbenennOrdner(null)}
+      />
+      <OrdnerLoeschenDialog
+        ordner={loeschOrdner}
+        open={!!loeschOrdner}
+        onOpenChange={(v) => !v && setLoeschOrdner(null)}
+        onDeleted={() => { if (loeschOrdner?.id === aktuellerOrdnerId) setOrdner(loeschOrdner?.parentId ?? null); }}
+      />
+      <OrdnerPickerSheet
+        open={!!verschiebeOrdner}
+        onOpenChange={(v) => !v && setVerschiebeOrdner(null)}
+        excludeId={verschiebeOrdner?.id}
+        title={`„${verschiebeOrdner?.name ?? ""}" verschieben nach…`}
+        onSelect={(zielId) => {
+          if (!verschiebeOrdner) return;
+          updateOrdner.mutate(
+            { id: verschiebeOrdner.id, parentId: zielId },
+            { onSuccess: () => setVerschiebeOrdner(null) },
+          );
+        }}
+      />
+      <OrdnerPickerSheet
+        open={!!verschiebeDokument}
+        onOpenChange={(v) => !v && setVerschiebeDokument(null)}
+        title={`„${verschiebeDokument?.titel ?? ""}" verschieben nach…`}
+        onSelect={(zielId) => {
+          if (!verschiebeDokument) return;
+          bulkMove.mutate(
+            { ids: [verschiebeDokument.id], ordnerId: zielId },
+            { onSuccess: () => setVerschiebeDokument(null) },
+          );
+        }}
+      />
     </div>
   );
 }
@@ -338,18 +497,19 @@ function DokumentCard({
   d,
   kundeName,
   onClick,
+  onMove,
+  onDelete,
 }: {
   d: Dokument;
   kundeName?: string;
   onClick: () => void;
+  onMove: () => void;
+  onDelete: () => void;
 }) {
   const status = fristStatus(d);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-sm transition active:bg-muted"
-    >
+    <div className="flex w-full gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-sm transition active:bg-muted">
+      <button type="button" onClick={onClick} className="flex flex-1 gap-3 text-left">
       <DokumentThumb dokument={d} className="h-16 w-16" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -378,6 +538,16 @@ function DokumentCard({
       {d.betrag ? (
         <div className="text-right text-sm font-semibold">{formatEUR(d.betrag)}</div>
       ) : null}
-    </button>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"><MoreVertical className="h-4 w-4" /></Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onMove}><FolderInput className="mr-2 h-4 w-4" /> Verschieben…</DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive" onClick={onDelete}><Trash2 className="mr-2 h-4 w-4" /> Löschen</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
