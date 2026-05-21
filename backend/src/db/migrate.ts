@@ -15,7 +15,7 @@ interface MigrationFile {
 
 function loadMigrations(): MigrationFile[] {
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
-  return files
+  const list = files
     .map((filename) => {
       const match = /^(\d+)_(.+)\.sql$/.exec(filename);
       if (!match) {
@@ -29,6 +29,20 @@ function loadMigrations(): MigrationFile[] {
       };
     })
     .sort((a, b) => a.version - b.version);
+  // Schutz gegen doppelte Versionsnummern — sonst würde eine Migration
+  // still übersprungen (siehe Vorfall mit doppelter 032_*.sql).
+  const seen = new Map<number, string>();
+  for (const m of list) {
+    const other = seen.get(m.version);
+    if (other) {
+      throw new Error(
+        `Doppelte Migrations-Version ${m.version}: ${other} und ${m.filename}. ` +
+          `Bitte eine eindeutige Versionsnummer vergeben.`,
+      );
+    }
+    seen.set(m.version, m.filename);
+  }
+  return list;
 }
 
 export function runMigrations(db: Database.Database): {
