@@ -127,7 +127,7 @@ export interface Position {
   modus?: PositionModus;
   /** Pauschalpreis (netto), nur relevant wenn modus = "pauschal". */
   pauschalpreisNetto?: number;
-  /** Optionaler Frequenz-Tag der Ausführung (z. B. „Mo–Fr · 5× wöchentlich"). Wird im PDF in Spalte „Ausführung" gerendert. */
+  /** @deprecated Wird nicht mehr vom Frontend gesetzt. Kommt nur noch aus Bestandsdaten. */
   ausfuehrung?: string;
 }
 
@@ -189,6 +189,10 @@ export interface Angebot {
   rabattGesamt: number; // %
   steuersatz: number;
   gueltigBis?: ISODate;
+  /** Optionaler Einsatztermin (Beginn). Nur wenn KEIN Dauerauftrag (Frontend-Regel). */
+  einsatzVon?: ISODate;
+  /** Optionales Ende des Einsatzzeitraums. Wenn leer/identisch mit `einsatzVon`: Ein-Tages-Einsatz. */
+  einsatzBis?: ISODate;
   notizen?: string;
   status: AngebotStatus;
   versendetAm?: ISODateTime;
@@ -237,6 +241,10 @@ export interface Rechnung {
   faelligkeitsdatum: ISODate;
   /** Optionaler Leistungsmonat im Format "YYYY-MM". Wenn gesetzt, wird er im PDF-Intro angezeigt. */
   leistungsmonat?: string;
+  /** Optionaler Einsatztermin (Beginn). Nur wenn KEIN Dauerauftrag. */
+  einsatzVon?: ISODate;
+  /** Optionales Ende des Einsatzzeitraums. */
+  einsatzBis?: ISODate;
   notizen?: string;
   status: RechnungStatus;
   versendetAm?: ISODateTime;
