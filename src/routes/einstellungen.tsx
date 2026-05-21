@@ -316,7 +316,7 @@ function FirmendatenTab({
   onSave,
 }: {
   initial: Firmendaten;
-  onSave: (data: Partial<Firmendaten>) => void;
+  onSave: (data: Partial<Firmendaten>, applyServer: (saved: Firmendaten) => void) => void;
 }) {
   const [form, setForm] = useState<Firmendaten>(initial);
   useEffect(() => setForm(initial), [initial]);
@@ -501,7 +501,7 @@ function FirmendatenTab({
           </Button>
           <Button
             className="gap-1.5 rounded-full px-5 shadow-sm"
-            onClick={() => onSave(form)}
+            onClick={() => onSave(form, (saved) => setForm(saved))}
             disabled={!dirty}
           >
             <SaveIcon className="h-4 w-4" />
