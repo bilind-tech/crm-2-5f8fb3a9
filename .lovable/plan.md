@@ -1,32 +1,25 @@
-## Änderungen in `src/lib/pdf/werkzeugePdf.ts`
+## Logo in Protokollen aus den Einstellungen verwenden
 
-Diese Datei rendert sowohl das **Übergabe-/Abnahmeprotokoll** als auch die **Schlüsselübergabe**. Beide nutzen dieselben Helpers `header()` und `footer()` – ein Fix wirkt auf beide PDF-Typen.
+### Problem
+In `src/lib/pdf/werkzeugePdf.ts` fetcht `logoDataUrl(firma.logoUrl)` die URL und wandelt sie über `FileReader` erneut in einen data‑URL um. Dabei fällt der Code zu oft auf das gebündelte Fallback `@/assets/logo.png` zurück, sodass im Protokoll-/Schlüsselübergabe-PDF nicht das in **Einstellungen → Firma** hochgeladene Logo (als `data:`‑URL in `firma.logoUrl`) erscheint, sondern der Standard.
 
-### 1. Footer: rechte Spalte rechtsbündig (analog Belege)
-In `footer()` (Zeile 114–147) den `cell()`-Helper erweitern, damit eine `alignment`-Option durchgereicht werden kann. Anwendung:
-- Spalte 1 (Firmenname / GF / Adresse): links (Default)
-- Spalte 2 (Bank / IBAN): links (Default)
-- Spalte 3 (Telefon / E-Mail): mittig (`alignment: "center"`)
-- Spalte 4 (Handelsregister / USt-ID / Webseite): rechtsbündig (`alignment: "right"`)
+In `src/lib/pdf/belegPdf.ts` (Zeile 633–637) ist es bereits richtig gelöst: ist `firma.logoUrl` gesetzt, wird der Wert **direkt** als pdfmake-`image` verwendet — kein Fetch nötig, da pdfmake `data:`-URLs nativ unterstützt.
 
-Damit ist das Footer-Layout 1:1 identisch zu Angebot/Rechnung.
+### Lösung
+`werkzeugePdf.ts` an dieselbe Logik angleichen:
 
-### 2. Logo zuverlässig anzeigen
-Aktuell sieht der Header-Aufruf so aus:
-```ts
-const logo = await logoDataUrl(data.firma?.logoUrl);
-```
-Wenn `firma.logoUrl` einen leeren String enthält (statt `undefined`), liefert `logoDataUrl` zwar den Fallback aus `@/assets/logo.png` – aber nur, wenn der Trim greift. Ich prüfe den Pfad nochmal und ergänze:
-- In `logoDataUrl()` (Zeile 39–53) den Check auf `src?.trim()` strikter ziehen, sodass auch `" "` oder `null` zuverlässig auf das Fallback fallen.
-- Sicherstellen, dass `header()` das Logo wirklich rendert wenn `opt.logoSichtbar !== false` (aktuell korrekt, nur Defensiv-Check).
-- Falls der Fetch des Asset-Imports im Worker/SSR-Kontext fehlschlägt, ein zweites Try mit direktem `new URL("@/assets/logo.png", import.meta.url).href`-Pattern als zusätzlicher Fallback.
+1. Neue Helper-Funktion `resolveLogo(firma)`:
+   - Wenn `firma?.logoUrl` getrimmt nicht leer ist → diese **direkt** zurückgeben (keine `fetch` Pipeline).
+   - Sonst Fallback `@/assets/logo.png` über `fetch` als data‑URL laden.
+2. In `generateUebergabeprotokollPdf` (Zeile 316) und `generateSchluesseluebergabePdf` (Zeile 459) `logoDataUrl(data.firma?.logoUrl)` durch `resolveLogo(data.firma)` ersetzen.
+3. Die alte `logoDataUrl()`‑Pipeline behalten, aber nur noch als Fallback‑Loader für das gebündelte Asset (ohne `src`‑Parameter).
 
-### 3. (nicht betroffen, bleibt wie ist)
-- Inhalt der Protokolle, Meta-Boxen, Tabellen, Unterschriften.
-- Header-Logik (Absenderzeile links, Logo rechts).
-- `useProtokollPdf` / Detailseiten / PDF-Editor – nur die PDF-Engine selbst wird angefasst.
+### Nicht betroffen
+- `header()`, `footer()` und alle übrigen Layoutbausteine bleiben unverändert.
+- Beleg-PDFs (Angebot/Rechnung) sind nicht betroffen.
+- `firma.logoUrl` selbst (Speicherort, Schema) wird nicht angefasst.
 
 ### Verifikation
-Nach dem Patch in der Vorschau ein Übergabeprotokoll und eine Schlüsselübergabe öffnen und prüfen:
-1. Logo rechts oben sichtbar.
-2. Footer: linke 2 Spalten links, Telefon-Spalte mittig, rechte Spalte (HR / USt-ID / Webseite) rechtsbündig.
+- In Einstellungen ein Logo hochladen, dann ein Übergabeprotokoll und eine Schlüsselübergabe öffnen.
+- Rechts oben muss das hochgeladene Logo erscheinen, **nicht** das Standard‑MCC‑Logo.
+- Wenn man das Logo in Einstellungen entfernt, soll das gebündelte Fallback‑Logo erscheinen.

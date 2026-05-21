@@ -36,11 +36,9 @@ async function getPdfMake(): Promise<AnyPdfMake> {
   return pm;
 }
 
-async function logoDataUrl(src?: string): Promise<string | null> {
+async function fetchBundledLogo(): Promise<string | null> {
   try {
-    const trimmed = typeof src === "string" ? src.trim() : "";
-    const url = trimmed.length > 0 ? trimmed : logoFallback;
-    const res = await fetch(url);
+    const res = await fetch(logoFallback);
     if (!res.ok) throw new Error(`logo fetch ${res.status}`);
     const blob = await res.blob();
     return await new Promise<string>((resolve, reject) => {
@@ -50,20 +48,17 @@ async function logoDataUrl(src?: string): Promise<string | null> {
       r.readAsDataURL(blob);
     });
   } catch {
-    // Zweiter Versuch: hart auf das gebündelte Fallback-Asset
-    try {
-      const res = await fetch(logoFallback);
-      const blob = await res.blob();
-      return await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
-        r.onerror = reject;
-        r.readAsDataURL(blob);
-      });
-    } catch {
-      return null;
-    }
+    return null;
   }
+}
+
+// Wie in belegPdf.ts: ist in den Einstellungen ein Logo gesetzt
+// (firma.logoUrl, meist data:-URL), wird dieses direkt verwendet —
+// pdfmake unterstützt data:-URLs nativ. Nur wenn nichts gesetzt ist,
+// fällt der Renderer auf das gebündelte Asset zurück.
+async function resolveLogo(firma?: Firmendaten): Promise<string | null> {
+  if (firma?.logoUrl && firma.logoUrl.trim()) return firma.logoUrl;
+  return await fetchBundledLogo();
 }
 
 // ───────── Konstanten / Helpers (synchron zu belegPdf.ts) ────────────────
@@ -313,7 +308,7 @@ export async function generateUebergabeprotokollPdf(
 ): Promise<PdfBuildResult> {
   const opt = data.optionen ?? {};
   const titel = (opt.titelOverride && opt.titelOverride.trim()) || PROTOKOLL_ART_LABEL[data.art];
-  const logo = await logoDataUrl(data.firma?.logoUrl);
+  const logo = await resolveLogo(data.firma);
   const tracker = createHotspotTracker(A4);
   const sektTitel = (key: "leistung" | "bemerkungen" | "ergebnis", fb: string) =>
     (opt.sektionsTitel?.[key] && opt.sektionsTitel[key]!.trim()) || fb;
@@ -456,7 +451,7 @@ export async function generateSchluesseluebergabePdf(
     (data.richtung === "ausgabe"
       ? "Schlüsselübergabe — Ausgabe"
       : "Schlüsselübergabe — Rücknahme");
-  const logo = await logoDataUrl(data.firma?.logoUrl);
+  const logo = await resolveLogo(data.firma);
   const tracker = createHotspotTracker(A4);
   const lineWidth = opt.druckfreundlich ? 0.3 : 0.6;
   const sektTitel = (key: "schluessel" | "bestaetigung", fb: string) =>
