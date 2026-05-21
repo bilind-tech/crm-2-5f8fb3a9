@@ -54,6 +54,7 @@ export interface DokumentMeta {
   typ?: DokumentTyp;
   kundeId?: string;
   objektId?: string;
+  ordnerId?: string | null;
   dokumentdatum?: string;
   betrag?: number;
   steuerrelevant?: boolean;
