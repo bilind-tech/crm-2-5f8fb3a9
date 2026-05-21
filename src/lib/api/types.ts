@@ -269,6 +269,7 @@ export interface Dokument {
   typ: DokumentTyp;
   kundeId?: ID;
   objektId?: ID;
+  ordnerId?: ID | null;
   dateiname: string;
   mimeType: string;
   groesseBytes: number;
@@ -287,6 +288,21 @@ export interface Dokument {
   erledigtAm?: ISODateTime;
   /** Status der Drive-Synchronisation. */
   drive?: DriveSyncInfo;
+}
+
+export interface DokumentOrdner {
+  id: ID;
+  name: string;
+  parentId: ID | null;
+  erstelltAm: ISODateTime;
+  anzahlDokumente: number;
+  anzahlKinder: number;
+}
+
+export interface DokumentOrdnerListe {
+  /** Wurzel-Zähler: lose Dokumente und Top-Level-Ordner. */
+  root: { anzahlDokumente: number; anzahlKinder: number };
+  ordner: DokumentOrdner[];
 }
 
 // ---------- Protokolle (Übergabe / Schlüssel) ----------
