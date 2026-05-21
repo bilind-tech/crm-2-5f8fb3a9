@@ -224,10 +224,10 @@ function header(firma: Firmendaten, logo: string | null) {
 
 function footer(firma: Firmendaten) {
   return function () {
-    const cell = (lines: (string | null | undefined)[]) => ({
+    const cell = (lines: (string | null | undefined)[], alignment: "left" | "center" = "left") => ({
       stack: lines
         .filter(Boolean)
-        .map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT })),
+        .map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT, alignment })),
     });
     return {
       margin: [55, 0, 55, 12] as [number, number, number, number],
@@ -247,8 +247,8 @@ function footer(firma: Firmendaten) {
                 .filter(Boolean)
                 .join(" - "),
             ]),
-            cell(["Bank", firma.bankName, firma.iban]),
-            cell([firma.telefon, firma.email]),
+            cell(["Bank", firma.bankName, firma.iban], "center"),
+            cell([firma.telefon, firma.email], "center"),
             cell([
               firma.handelsregister,
               firma.ustId ? `USt-ID: ${firma.ustId}` : null,
@@ -494,6 +494,16 @@ export function defaultOutroAngebot(a: Angebot, opts: BuildOptions = {}) {
 }
 export function defaultIntroRechnung(_r: Rechnung, opts: BuildOptions = {}) {
   if (opts.intro) return opts.intro;
+  if (_r.leistungsmonat) {
+    const m = /^(\d{4})-(\d{2})$/.exec(_r.leistungsmonat);
+    if (m) {
+      const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
+      if (!isNaN(d.getTime())) {
+        const monat = d.toLocaleDateString("de-DE", { month: "long", year: "numeric", timeZone: "UTC" });
+        return `hiermit übersenden wir Ihnen die Rechnung v. ${monat} für folgende Leistungen:`;
+      }
+    }
+  }
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
 export function defaultOutroRechnung(_r: Rechnung, opts: BuildOptions = {}) {
