@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { Loader2, ArrowLeft, AlertCircle } from "lucide-react";
-import { useAngebot, useKunde, useFirmendaten } from "@/hooks/useApi";
+import { useAngebot, useKunde, useFirmendaten, useObjekt } from "@/hooks/useApi";
 import { NotFoundState } from "@/components/layout/NotFoundState";
 import { Button } from "@/components/ui/button";
 import { PdfEditorLayout } from "@/components/pdf-editor/PdfEditorLayout";
@@ -14,9 +14,10 @@ function Page() {
   const { id } = Route.useParams();
   const { data: angebot, isLoading: angebotLoading } = useAngebot(id);
   const { data: kunde, isLoading: kundeLoading } = useKunde(angebot?.kundeId ?? "");
+  const { data: objektDirekt, isLoading: objektLoading } = useObjekt(angebot?.objektId ?? "");
   const { data: firma, isLoading: firmaLoading } = useFirmendaten();
   const ansprechpartner = kunde?.ansprechpartner?.find((a) => a.id === angebot?.ansprechpartnerId);
-  const objekt = kunde?.objekte?.find((o) => o.id === angebot?.objektId) ?? null;
+  const objekt = objektDirekt ?? kunde?.objekte?.find((o) => o.id === angebot?.objektId) ?? null;
 
   // Beleg wird primär geladen — solange laden, Skeleton mit klarem Hinweis
   if (angebotLoading) {
@@ -33,7 +34,7 @@ function Page() {
     );
   }
   // Beleg da, aber Kunde/Firma noch nicht — Spinner statt Skeleton, sonst „passiert nichts"-Effekt
-  if (kundeLoading || firmaLoading || !kunde || !firma) {
+  if (kundeLoading || firmaLoading || (!!angebot.objektId && objektLoading) || !kunde || !firma) {
     return <EditorLoading label="Editor wird vorbereitet …" />;
   }
 
