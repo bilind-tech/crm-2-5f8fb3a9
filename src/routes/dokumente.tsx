@@ -84,10 +84,10 @@ function Page() {
   );
 
   function setOrdner(id: string | null) {
-    navigate({ search: (s) => ({ ...s, ordner: id ?? undefined, recursive: undefined }) });
+    navigate({ search: (s: Record<string, unknown>) => ({ ...s, ordner: id ?? undefined, recursive: undefined }) });
   }
   function setRecursive(v: boolean) {
-    navigate({ search: (s) => ({ ...s, recursive: v ? true : undefined }) });
+    navigate({ search: (s: Record<string, unknown>) => ({ ...s, recursive: v ? true : undefined }) });
   }
 
   // Aus globaler Suche: gewünschtes Dokument öffnen, sobald die Liste geladen ist.
