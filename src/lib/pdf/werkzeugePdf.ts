@@ -153,7 +153,7 @@ function footer(firma?: Firmendaten) {
               [f.strasse, [f.plz, f.ort].filter(Boolean).join(" ")].filter(Boolean).join(" - "),
             ]),
             cell(["Bank", f.bankName, f.iban]),
-            cell([f.telefon, f.email], "center"),
+            cell([f.telefon, f.email]),
             cell(
               [f.handelsregister, f.ustId ? `USt-ID: ${f.ustId}` : null, f.webseite],
               "right",
