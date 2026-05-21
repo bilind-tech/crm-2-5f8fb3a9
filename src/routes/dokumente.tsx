@@ -78,6 +78,10 @@ function Page() {
   const updateOrdner = useUpdateOrdner();
   const bulkMove = useBulkMoveDokumente();
   const deleteDokument = useDeleteDokument();
+  const driveRetry = useDriveRetry();
+  const driftCheck = useDriveDriftCheck();
+  const { data: ordnerDriveStatus } = useOrdnerDriveStatus();
+  const retryDok = (id: string) => driveRetry.mutate({ belegArt: "dokument", belegId: id });
 
   const pfad = useMemo(
     () => ordnerPfad(ordnerListe?.ordner ?? [], aktuellerOrdnerId),
