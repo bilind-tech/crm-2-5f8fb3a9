@@ -18,7 +18,7 @@ import { emitBelegMutated } from "./events.js";
 const ANGEBOT_COLS = `
   id, nummer, kunde_id, objekt_id, ansprechpartner_id, titel,
   intro_text, outro_text, rabatt_gesamt, steuersatz, gueltig_bis,
-  notizen, status, versendet_am, archiviert, optionen, drive,
+  einsatz_von, einsatz_bis, notizen, status, versendet_am, archiviert, optionen, drive,
   erstellt_am, geaendert_am
 `;
 
@@ -83,6 +83,8 @@ export interface AngebotWrite {
   rabattGesamt?: number;
   steuersatz?: number;
   gueltigBis?: string;
+  einsatzVon?: string | null;
+  einsatzBis?: string | null;
   notizen?: string;
   optionen?: unknown;
 }
@@ -101,11 +103,11 @@ export function createAngebot(data: AngebotWrite): ApiAngebot {
       `INSERT INTO angebot (
          id, nummer, nummer_periode, nummer_quelle, kunde_id, objekt_id, ansprechpartner_id, titel,
          intro_text, outro_text, rabatt_gesamt, steuersatz, gueltig_bis,
-         notizen, status, archiviert, optionen
+         einsatz_von, einsatz_bis, notizen, status, archiviert, optionen
        ) VALUES (
          @id, @nummer, @nummer_periode, 'auto', @kunde_id, @objekt_id, @ansprechpartner_id, @titel,
          @intro_text, @outro_text, @rabatt_gesamt, @steuersatz, @gueltig_bis,
-         @notizen, 'entwurf', 0, @optionen
+         @einsatz_von, @einsatz_bis, @notizen, 'entwurf', 0, @optionen
        )`,
     ).run({
       id,
@@ -120,6 +122,8 @@ export function createAngebot(data: AngebotWrite): ApiAngebot {
       rabatt_gesamt: data.rabattGesamt ?? 0,
       steuersatz: data.steuersatz ?? 19,
       gueltig_bis: data.gueltigBis ?? null,
+      einsatz_von: data.einsatzVon ?? null,
+      einsatz_bis: data.einsatzBis ?? null,
       notizen: data.notizen ?? null,
       optionen: data.optionen != null ? JSON.stringify(data.optionen) : null,
     });
@@ -142,6 +146,8 @@ const ANGEBOT_UPDATABLE: Record<string, string> = {
   rabattGesamt: "rabatt_gesamt",
   steuersatz: "steuersatz",
   gueltigBis: "gueltig_bis",
+  einsatzVon: "einsatz_von",
+  einsatzBis: "einsatz_bis",
   notizen: "notizen",
   archiviert: "archiviert",
   optionen: "optionen",
@@ -246,11 +252,12 @@ export function duplicateAngebot(id: string): ApiAngebot | null {
       rabatt: p.rabatt,
       modus: p.modus,
       pauschalpreisNetto: p.pauschalpreisNetto,
-      ausfuehrung: p.ausfuehrung,
     })),
     rabattGesamt: src.rabattGesamt,
     steuersatz: src.steuersatz,
     gueltigBis: src.gueltigBis,
+    einsatzVon: src.einsatzVon,
+    einsatzBis: src.einsatzBis,
     notizen: src.notizen,
     optionen: src.optionen,
   });
