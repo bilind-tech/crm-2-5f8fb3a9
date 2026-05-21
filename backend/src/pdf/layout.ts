@@ -134,7 +134,6 @@ function stundenText(p: ApiPosition): string {
   return `${menge} Std.`;
 }
 function abrechnungsartText(p: ApiPosition): string {
-  if (p.ausfuehrung && p.ausfuehrung.trim()) return p.ausfuehrung;
   if (p.modus === "stunden") return "Stundensatz";
   if (p.modus === "einzel") return "Einzelposition";
   return "Pauschal";
@@ -279,7 +278,9 @@ function anrede(k: ApiKunde, ap?: ApiAnsprechpartner): string {
 
 function defaultIntroAngebot(a: ApiAngebot, intro?: string): string {
   if (intro) return intro;
-  return `gerne unterbreiten wir Ihnen ein Angebot für „${a.titel}" und folgende Leistungen:`;
+  const einsatz = formatEinsatz(a.einsatzVon, a.einsatzBis);
+  const suffix = einsatz ? ` für die Reinigung ${einsatz}` : "";
+  return `gerne unterbreiten wir Ihnen ein Angebot für „${a.titel}"${suffix} und folgende Leistungen:`;
 }
 function defaultOutroAngebot(a: ApiAngebot, outro?: string): string {
   if (outro) return outro;
@@ -291,6 +292,10 @@ function defaultOutroAngebot(a: ApiAngebot, outro?: string): string {
 }
 function defaultIntroRechnung(_r: ApiRechnung, intro?: string): string {
   if (intro) return intro;
+  const einsatz = formatEinsatz(_r.einsatzVon, _r.einsatzBis);
+  if (einsatz) {
+    return `hiermit übersenden wir Ihnen die Rechnung für die Reinigung ${einsatz} für folgende Leistungen:`;
+  }
   if (_r.leistungsmonat) {
     const monat = formatLeistungsmonat(_r.leistungsmonat);
     if (monat) return `hiermit übersenden wir Ihnen die Rechnung v. ${monat} für folgende Leistungen:`;
@@ -305,6 +310,17 @@ function formatLeistungsmonat(s?: string | null): string {
   const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, 1));
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("de-DE", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+function formatEinsatz(von?: string | null, bis?: string | null): string {
+  if (!von) return "";
+  const vonStr = dt(von);
+  if (!vonStr) return "";
+  if (bis && bis !== von) {
+    const bisStr = dt(bis);
+    if (bisStr) return `vom ${vonStr} bis ${bisStr}`;
+  }
+  return `am ${vonStr}`;
 }
 
 

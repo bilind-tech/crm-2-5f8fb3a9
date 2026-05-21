@@ -22,7 +22,6 @@ export interface PositionDraft {
   einheit: Einheit;
   einzelpreisNetto: number;
   pauschalpreisNetto: number;
-  ausfuehrung: string;
   steuersatz: number;
   rabatt: number;
 }
@@ -31,8 +30,6 @@ interface Props {
   positionen: PositionDraft[];
   onChange: (next: PositionDraft[]) => void;
   defaultSteuersatz?: number;
-  /** Wird vom Form als Default-Wert für „Ausführung" durchgereicht (z. B. „Mo–Fr · 5× wöchentlich"). */
-  defaultAusfuehrung?: string;
 }
 
 const EINHEITEN: { value: Einheit; label: string }[] = [
@@ -53,7 +50,6 @@ export function emptyPosition(steuersatz = 19, modus: PositionModus = "pauschal"
     einheit: modus === "pauschal" ? "pauschal" : modus === "stunden" ? "h" : "stk",
     einzelpreisNetto: 0,
     pauschalpreisNetto: 0,
-    ausfuehrung: "",
     steuersatz,
     rabatt: 0,
   };
@@ -81,7 +77,6 @@ export function PositionenEditor({
   positionen,
   onChange,
   defaultSteuersatz = 19,
-  defaultAusfuehrung,
 }: Props) {
   const totals = summen(positionen);
 
@@ -95,7 +90,6 @@ export function PositionenEditor({
   }
   function add(modus: PositionModus) {
     const p = emptyPosition(defaultSteuersatz, modus);
-    if (modus === "pauschal" && defaultAusfuehrung) p.ausfuehrung = defaultAusfuehrung;
     onChange([...positionen, p]);
   }
 
@@ -200,18 +194,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-              Ausführung (optional, z. B. „Mo–Fr · 5× wöchentlich")
-            </label>
-            <Input
-              value={p.ausfuehrung}
-              onChange={(e) => onChange({ ausfuehrung: e.target.value })}
-              placeholder="z. B. Täglich · Mo–Fr · 5× wöchentlich"
-              className="h-10"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
               Leistungsbeschreibung
             </label>
             <LeistungsBeschreibung
@@ -224,10 +206,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
               maxRows={20}
               withToolbar
             />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Tipp: <kbd className="rounded border border-border bg-muted px-1">Enter</kbd> nach „•"
-              setzt automatisch einen neuen Aufzählungspunkt.
-            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -430,7 +408,6 @@ export function toApiPositionen(draft: PositionDraft[]): Position[] {
     rabatt: p.rabatt,
     modus: p.modus,
     pauschalpreisNetto: p.modus === "pauschal" ? p.pauschalpreisNetto : undefined,
-    ausfuehrung: p.ausfuehrung || undefined,
   }));
 }
 
@@ -444,7 +421,6 @@ export function fromApiPosition(p: Position): PositionDraft {
     einheit: p.einheit,
     einzelpreisNetto: p.einzelpreisNetto,
     pauschalpreisNetto: p.pauschalpreisNetto ?? 0,
-    ausfuehrung: p.ausfuehrung ?? "",
     steuersatz: p.steuersatz,
     rabatt: p.rabatt,
   };

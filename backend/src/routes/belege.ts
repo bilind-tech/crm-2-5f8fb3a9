@@ -37,8 +37,12 @@ const positionSchema = z.object({
   rabatt: z.number().min(0).max(100).optional(),
   modus: z.enum(["einzel", "pauschal", "stunden"]).optional(),
   pauschalpreisNetto: z.number().optional(),
+  // ausfuehrung: deprecated — wird vom Frontend nicht mehr gesetzt.
+  // Im DTO weiterhin akzeptiert (Bestands-Clients), aber im Repo auf null gemappt.
   ausfuehrung: z.string().max(200).optional(),
 });
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export async function belegeRoutes(app: FastifyInstance): Promise<void> {
   app.register(async (scoped) => {
@@ -80,6 +84,8 @@ export async function belegeRoutes(app: FastifyInstance): Promise<void> {
         rabattGesamt: z.number().min(0).max(100).optional(),
         steuersatz: z.number().min(0).max(100).optional(),
         gueltigBis: z.string().optional(),
+        einsatzVon: isoDate.nullish(),
+        einsatzBis: isoDate.nullish(),
         notizen: z.string().max(10000).optional(),
         optionen: z.unknown().optional(),
       });
@@ -191,6 +197,8 @@ export async function belegeRoutes(app: FastifyInstance): Promise<void> {
         rechnungsdatum: z.string().optional(),
         faelligkeitsdatum: z.string().optional(),
         leistungsmonat: z.string().regex(/^\d{4}-\d{2}$/).nullish(),
+        einsatzVon: isoDate.nullish(),
+        einsatzBis: isoDate.nullish(),
         notizen: z.string().max(10000).optional(),
         optionen: z.unknown().optional(),
       });
