@@ -65,6 +65,12 @@ function pdfDependencySignature(
   ].join("|");
 }
 
+function objektAusKunde(kunde: Kunde | undefined, objektId?: string): Objekt | null {
+  if (!kunde || !objektId) return null;
+  const objekte = (kunde as Kunde & { objekte?: Objekt[] }).objekte ?? [];
+  return objekte.find((o) => o.id === objektId) ?? null;
+}
+
 interface PdfData {
   blob: Blob;
   fileName?: string;
@@ -154,7 +160,7 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
   const { data: kunde } = useKunde(angebot?.kundeId ?? "");
   const { data: firma } = useFirmendaten();
   const objektQuery = useObjekt(angebot?.objektId ?? "");
-  const objekt = objektQuery.data ?? null;
+  const objekt = objektQuery.data ?? objektAusKunde(kunde, angebot?.objektId) ?? null;
   const needsObjekt = !!angebot?.objektId;
   const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
   const enabled = !!angebot && !!kunde && !!firma && objektReady;
@@ -194,7 +200,7 @@ export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
   const { data: kunde } = useKunde(rechnung?.kundeId ?? "");
   const { data: firma } = useFirmendaten();
   const objektQuery = useObjekt(rechnung?.objektId ?? "");
-  const objekt = objektQuery.data ?? null;
+  const objekt = objektQuery.data ?? objektAusKunde(kunde, rechnung?.objektId) ?? null;
   const needsObjekt = !!rechnung?.objektId;
   const objektReady = !needsObjekt || !!objekt || objektQuery.isError;
   const enabled = !!rechnung && !!kunde && !!firma && objektReady;
