@@ -626,5 +626,13 @@ export function localPreviewMutate<T>(method: string, path: string, body?: unkno
     return next as T;
   }
 
+  if (method === "PATCH" && cleanPath === "/einstellungen/firma") {
+    const current = store.firma ?? previewFirma;
+    const next: Firmendaten = { ...current, ...(body as Partial<Firmendaten>) };
+    store.firma = next;
+    writeStore(store);
+    return next as T;
+  }
+
   return null;
 }
