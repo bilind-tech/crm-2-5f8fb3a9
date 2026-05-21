@@ -139,6 +139,33 @@ function abrechnungsartText(p: ApiPosition): string {
   return "Pauschal";
 }
 
+function beschreibungZeilen(text: string): string[] {
+  const lines = (text || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const source = lines.length > 0 ? lines : [text || "Pauschal"];
+  const chunks: string[] = [];
+  const maxChars = 135;
+  for (const raw of source) {
+    const prefixMatch = raw.match(/^([•\-*]\s+)(.*)$/);
+    const prefix = prefixMatch?.[1] ?? "";
+    const body = prefixMatch?.[2] ?? raw;
+    let current = "";
+    for (const word of body.split(/\s+/).filter(Boolean)) {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > maxChars && current) {
+        chunks.push(prefix + current);
+        current = word;
+      } else {
+        current = next;
+      }
+    }
+    if (current) chunks.push(prefix + current);
+  }
+  return chunks.length > 0 ? chunks : ["Pauschal"];
+}
+
 function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
   const showStunden = hasStundenPositionen(positionen);
   const colCount = showStunden ? 4 : 3;
@@ -156,6 +183,27 @@ function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; s
 
   const body: unknown[][] = [headerRow];
   positionen.forEach((p) => {
+    if (p.modus === "pauschal") {
+      const zeilen = beschreibungZeilen(p.beschreibung || "Pauschal");
+      zeilen.forEach((line, index) => {
+        const row: unknown[] = [
+          {
+            text: line,
+            fontSize: 10,
+            bold: index === 0 && !line.startsWith("•") && !line.startsWith("-") && !line.startsWith("*"),
+            margin: [0, 0, 0, 0],
+          },
+        ];
+        if (showStunden) row.push({ text: "", fontSize: 10, alignment: "center" });
+        row.push(
+          { text: index === 0 ? abrechnungsartText(p) : "", fontSize: 10, alignment: "center" },
+          { text: index === 0 ? eur(summe(p)) : "", fontSize: 10, alignment: "right" },
+        );
+        body.push(row);
+      });
+      return;
+    }
+
     const row: unknown[] = [{ stack: [beschreibungBlock(p.beschreibung || "")] }];
     if (showStunden) row.push({ text: stundenText(p), fontSize: 10, alignment: "center" });
     row.push(
@@ -173,10 +221,6 @@ function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; s
   const positionsTabelle = {
     table: {
       headerRows: 1,
-      keepWithHeaderRows: 1,
-      // dontBreakRows: false (Default) — sehr lange Beschreibungszeilen
-      // dürfen über mehrere Seiten umbrechen, sonst „verschluckt" pdfmake
-      // die ganze Tabelle.
       widths,
       body,
     },
