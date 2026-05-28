@@ -106,7 +106,7 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
 
   const kuerzelFreiQ = useKuerzelFrei(kuerzel, kunde.id);
   const kuerzelKonflikt =
-    kuerzel.length >= 3 && kuerzelFreiQ.data && !kuerzelFreiQ.data.frei
+    kuerzel.length >= 1 && kuerzelFreiQ.data && !kuerzelFreiQ.data.frei
       ? kuerzelFreiQ.data.kunde
       : null;
 
