@@ -168,6 +168,7 @@ export interface DbRechnung {
   mahn_pausiert_bis: string | null;
   inkasso_markiert: number;
   dauerauftrag_id: string | null;
+  vertrag_id: string | null;
   erstellt_am: string;
   geaendert_am: string;
 }
@@ -234,6 +235,14 @@ export interface ApiRechnung {
   mahnPausiertBis?: string;
   inkassoMarkiert?: boolean;
   dauerauftragId?: string;
+  vertragId?: string;
+  /** Wird vom GET /rechnungen/:id eingebettet (Komfort fürs Frontend). */
+  vertrag?: {
+    id: string;
+    bezeichnung: string;
+    startDatum: string;
+    endDatum?: string;
+  };
   erstelltAm: string;
   geaendertAm: string;
 }
@@ -272,6 +281,7 @@ export function rechnungRowToApi(
     mahnPausiertBis: r.mahn_pausiert_bis ?? undefined,
     inkassoMarkiert: r.inkasso_markiert === 1,
     dauerauftragId: r.dauerauftrag_id ?? undefined,
+    vertragId: r.vertrag_id ?? undefined,
     erstelltAm: isoFromSqlite(r.erstellt_am),
     geaendertAm: isoFromSqlite(r.geaendert_am),
   };

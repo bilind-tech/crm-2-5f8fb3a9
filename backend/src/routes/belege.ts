@@ -201,6 +201,7 @@ export async function belegeRoutes(app: FastifyInstance): Promise<void> {
         einsatzBis: isoDate.nullish(),
         notizen: z.string().max(10000).optional(),
         optionen: z.unknown().optional(),
+        vertragId: z.string().min(1).nullish(),
       });
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) {
@@ -211,7 +212,17 @@ export async function belegeRoutes(app: FastifyInstance): Promise<void> {
         reply.status(404);
         return { error: "kunde-not-found" };
       }
-      const r = createRechnung(parsed.data);
+      let r;
+      try {
+        r = createRechnung(parsed.data);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "create-failed";
+        if (msg === "vertrag-falscher-kunde") {
+          reply.status(422);
+          return { error: "vertrag-falscher-kunde" };
+        }
+        throw e;
+      }
 
       // Auto-Anlage: Wenn als wiederkehrend markiert und (noch) kein DA verknüpft,
       // direkt einen Dauerauftrag aus dieser Rechnung ableiten.
@@ -251,7 +262,17 @@ export async function belegeRoutes(app: FastifyInstance): Promise<void> {
     });
 
     scoped.patch<{ Params: { id: string } }>("/rechnungen/:id", async (req, reply) => {
-      const r = updateRechnung(req.params.id, (req.body ?? {}) as Record<string, unknown>);
+      let r;
+      try {
+        r = updateRechnung(req.params.id, (req.body ?? {}) as Record<string, unknown>);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "update-failed";
+        if (msg === "vertrag-falscher-kunde" || msg === "vertrag-not-found") {
+          reply.status(422);
+          return { error: msg };
+        }
+        throw e;
+      }
       if (!r) {
         reply.status(404);
         return { error: "not-found" };
