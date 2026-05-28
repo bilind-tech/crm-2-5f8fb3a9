@@ -182,7 +182,7 @@ export const useKuerzelFrei = (kuerzel: string, exceptId?: string) => {
         `/kunden/kuerzel-frei?${params.toString()}`,
       );
     },
-    enabled: norm.length >= 3,
+    enabled: norm.length >= 1,
     staleTime: 10_000,
   });
 };
