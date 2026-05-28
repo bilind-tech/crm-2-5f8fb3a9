@@ -17,13 +17,14 @@ import {
 } from "./positionen.js";
 import { recomputeRechnungStatus } from "./status.js";
 import { emitBelegMutated } from "./events.js";
+import { getVertrag } from "../kunden/vertraege-repo.js";
 
 const RECHNUNG_COLS = `
   id, nummer, kunde_id, objekt_id, ansprechpartner_id, quell_angebot_id,
   titel, intro_text, outro_text, rabatt_gesamt, steuersatz,
   rechnungsdatum, faelligkeitsdatum, leistungsmonat, notizen, status, versendet_am,
   einsatz_von, einsatz_bis, archiviert, optionen, drive, mahnungen, mahn_pausiert_bis,
-  inkasso_markiert, dauerauftrag_id, erstellt_am, geaendert_am
+  inkasso_markiert, dauerauftrag_id, vertrag_id, erstellt_am, geaendert_am
 `;
 
 const ZAHLUNG_COLS = `
@@ -90,11 +91,23 @@ export function getRechnung(id: string): ApiRechnung | null {
     | DbRechnung
     | undefined;
   if (!row) return null;
-  return rechnungRowToApi(
+  const dto = rechnungRowToApi(
     row,
     listPositionen(db, "rechnung_position", "rechnung_id", id),
     listZahlungen(id),
   );
+  if (dto.vertragId) {
+    const v = getVertrag(dto.vertragId);
+    if (v) {
+      dto.vertrag = {
+        id: v.id,
+        bezeichnung: v.bezeichnung,
+        startDatum: v.startDatum,
+        endDatum: v.endDatum,
+      };
+    }
+  }
+  return dto;
 }
 
 export interface RechnungWrite {
@@ -115,6 +128,7 @@ export interface RechnungWrite {
   einsatzBis?: string | null;
   notizen?: string;
   optionen?: unknown;
+  vertragId?: string | null;
 }
 
 function todayISO(): string {
@@ -145,15 +159,22 @@ export function createRechnung(data: RechnungWrite): ApiRechnung {
   const tx = db.transaction(() => {
     const bezugsdatum = new Date(rechnungsdatum + "T00:00:00Z");
     const { nummer, periode } = vergebeBelegnummer(data.kundeId, "rechnung", bezugsdatum);
+    // Vertrag muss zum Kunden gehören, sonst ignorieren (defense in depth).
+    let vertragId: string | null = null;
+    if (data.vertragId) {
+      const v = getVertrag(data.vertragId);
+      if (v && v.kundeId === data.kundeId) vertragId = v.id;
+      else if (v) throw new Error("vertrag-falscher-kunde");
+    }
     db.prepare(
       `INSERT INTO rechnung (
          id, nummer, nummer_periode, nummer_quelle, kunde_id, objekt_id, ansprechpartner_id, quell_angebot_id,
          titel, intro_text, outro_text, rabatt_gesamt, steuersatz,
-         rechnungsdatum, faelligkeitsdatum, leistungsmonat, einsatz_von, einsatz_bis, notizen, status, archiviert, optionen
+         rechnungsdatum, faelligkeitsdatum, leistungsmonat, einsatz_von, einsatz_bis, notizen, status, archiviert, optionen, vertrag_id
        ) VALUES (
          @id, @nummer, @nummer_periode, 'auto', @kunde_id, @objekt_id, @ansprechpartner_id, @quell_angebot_id,
          @titel, @intro_text, @outro_text, @rabatt_gesamt, @steuersatz,
-         @rechnungsdatum, @faelligkeitsdatum, @leistungsmonat, @einsatz_von, @einsatz_bis, @notizen, 'entwurf', 0, @optionen
+         @rechnungsdatum, @faelligkeitsdatum, @leistungsmonat, @einsatz_von, @einsatz_bis, @notizen, 'entwurf', 0, @optionen, @vertrag_id
        )`,
     ).run({
       id,
@@ -175,6 +196,7 @@ export function createRechnung(data: RechnungWrite): ApiRechnung {
       einsatz_bis: data.einsatzBis ?? null,
       notizen: data.notizen ?? null,
       optionen: data.optionen != null ? JSON.stringify(data.optionen) : null,
+      vertrag_id: vertragId,
     });
     if (data.positionen?.length) {
       replacePositionen(db, "rechnung_position", "rechnung_id", id, data.positionen);
@@ -204,6 +226,7 @@ const RECHNUNG_UPDATABLE: Record<string, string> = {
   optionen: "optionen",
   mahnPausiertBis: "mahn_pausiert_bis",
   inkassoMarkiert: "inkasso_markiert",
+  vertragId: "vertrag_id",
 };
 
 export function updateRechnung(id: string, patch: Record<string, unknown>): ApiRechnung | null {
