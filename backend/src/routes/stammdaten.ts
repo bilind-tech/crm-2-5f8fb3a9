@@ -29,7 +29,7 @@ import { findKuerzelOwner, isKuerzelFormatOk, normalizeKuerzel } from "../kunden
 import { listAngebote } from "../belege/angebote-repo.js";
 import { listRechnungen } from "../belege/rechnungen-repo.js";
 import { listDokumente } from "../dokumente/repo.js";
-import { peekBelegNummer, periodeMMYY } from "../kunden/nummern.js";
+import { bumpBelegNummerMindestens, peekBelegNummer, periodeMMYY } from "../kunden/nummern.js";
 import { suche } from "../kunden/search.js";
 
 export async function stammdatenRoutes(app: FastifyInstance): Promise<void> {
@@ -110,7 +110,16 @@ export async function stammdatenRoutes(app: FastifyInstance): Promise<void> {
           return { error: "kuerzel-belegt", kunde: owner };
         }
       }
-      const k = createKunde({ ...body, kuerzel } as Parameters<typeof createKunde>[0]);
+      const startRaw = Number(body.startZaehlerAktuellerMonat);
+      // Unbekanntes Feld nicht an createKunde durchreichen.
+      const cleanBody = { ...body };
+      delete (cleanBody as Record<string, unknown>).startZaehlerAktuellerMonat;
+      const k = createKunde({ ...cleanBody, kuerzel } as Parameters<typeof createKunde>[0]);
+      if (k.kuerzel && Number.isFinite(startRaw) && startRaw > 1) {
+        const periode = periodeMMYY();
+        bumpBelegNummerMindestens(k.id, "rechnung", periode, startRaw);
+        bumpBelegNummerMindestens(k.id, "angebot", periode, startRaw);
+      }
       audit({ userId: req.user?.id, action: "kunde.create", detail: { id: k.id, nummer: k.nummer }, ip: req.ip });
       return k;
     });
@@ -132,11 +141,19 @@ export async function stammdatenRoutes(app: FastifyInstance): Promise<void> {
         }
         body.kuerzel = k;
       }
+      const startRaw = Number(body.startZaehlerAktuellerMonat);
+      // Unbekanntes Feld nicht an updateKunde durchreichen.
+      delete (body as Record<string, unknown>).startZaehlerAktuellerMonat;
       try {
         const result = updateKunde(req.params.id, body);
         if (!result) {
           reply.status(404);
           return { error: "not-found" };
+        }
+        if (result.kuerzel && Number.isFinite(startRaw) && startRaw > 1) {
+          const periode = periodeMMYY();
+          bumpBelegNummerMindestens(result.id, "rechnung", periode, startRaw);
+          bumpBelegNummerMindestens(result.id, "angebot", periode, startRaw);
         }
         audit({ userId: req.user?.id, action: "kunde.update", detail: { id: result.id }, ip: req.ip });
         return result;
