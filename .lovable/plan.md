@@ -1,91 +1,68 @@
-## Ziel
+# Kürzel & Startzähler — robust machen
 
-Beide Fehler werden an der Ursache behoben:
+Zwei zusammenhängende Fixes. Beide ändern Verhalten, das aktuell schlicht falsch ist.
 
-1. **Testdaten löschen** ist wieder einmalig nutzbar und zeigt den Lösch-Button wieder an.
-2. **Firmendaten** bleiben nach dem Speichern erhalten, inklusive Leerzeichen in `My Clean Center GmbH` und gespeicherter Website; PDFs/Rechnungen/Angebote zeigen sofort die aktuellen Werte im Footer.
+## Problem
 
-## Gefundene Ursachen
-
-### 1. Testdaten-Reset
-
-Die vorherige Einmal-Migration wurde als `032_testdaten_reset_unlock_once.sql` angelegt. Es gibt aber bereits eine andere `032_...` Migration.
-
-Der Migrationslauf merkt sich nur die **Versionsnummer**. Wenn Version `032` schon bekannt ist, wird die neue Datei mit derselben Nummer übersprungen. Deshalb wurde `reset_state` auf deinem System sehr wahrscheinlich nie zurückgesetzt.
-
-### 2. Firmendaten / Website / PDF-Footer
-
-Es gibt mehrere Schwachstellen zusammen:
-
-- Nach dem Speichern wird der React-Query-Cache für Firmendaten nur invalidiert, aber nicht sofort mit der Server-Antwort aktualisiert. Dadurch kann das Formular kurz oder dauerhaft wieder alte Werte anzeigen.
-- Die PDF-Query hängt aktuell nicht von den Firmendaten ab. Wenn eine Rechnung/Angebot-PDF schon einmal geladen wurde, kann der alte PDF-Blob im Cache bleiben, obwohl Firmendaten geändert wurden.
-- Alte Datenbanken können noch exakt den alten Namen `MyCleanCenter GmbH` gespeichert haben. Updates dürfen Daten normalerweise nicht überschreiben, aber für diesen exakten Legacy-Wert brauchen wir eine sichere Korrektur, ohne echte eigene Firmennamen anzufassen.
+1. **Kürzel max 4 Zeichen.** Frontend kappt hart auf 4 (`slice(0,4)`, `maxLength={4}`). Backend-Format erlaubt bereits beliebig viele Zeichen. Du willst freie Länge.
+2. **„Beginne ab NN" wird ignoriert.** Frontend schickt `startZaehlerAktuellerMonat` beim Kunde anlegen UND bearbeiten — aber **das Backend wertet das Feld weder in `POST /kunden` noch in `PATCH /kunden/:id` aus**. Folge:
+   - Erste Rechnung beginnt trotzdem bei `01`.
+   - Beim erneuten Bearbeiten zeigt das Dialog-Feld wieder „1", weil der Zähler nie auf 26 hochgesetzt wurde.
 
 ## Umsetzung
 
-### A. Testdaten-Reset wirklich freischalten
+### A) Kürzel-Länge freigeben
 
-1. Die fehlerhafte doppelte Migration `032_testdaten_reset_unlock_once.sql` wird entfernt oder in eine eindeutige Version überführt.
-2. Neue eindeutige Migration anlegen, z. B. `038_testdaten_reset_unlock_once.sql`:
-   - setzt nur `reset_state.id = 1` zurück
-   - `testdaten_reset_genutzt_am = NULL`
-   - `testdaten_reset_von_user_id = NULL`
-   - läuft durch die eindeutige Versionsnummer garantiert beim nächsten Backend-Start genau einmal
-3. Den eigentlichen Reset-Endpunkt nicht lockern:
-   - Passwort bleibt Pflicht
-   - Bestätigung `ALLES LÖSCHEN` bleibt Pflicht
-   - Sicherheits-Backup vor dem Löschen bleibt Pflicht
-   - nach erfolgreichem Löschen sperrt sich die Funktion wieder selbst
-4. Zusätzlich eine kleine technische Schutzprüfung/Test ergänzen, damit doppelte Migrationsnummern künftig auffallen und nicht wieder still Migrationen übersprungen werden.
+- `src/components/forms/KundeForm.tsx`
+  - `sanitizeKuerzel`: `.slice(0, 4)` entfernen.
+  - Auto-Vorschlag (`vorschlagKuerzel`): die beiden `.slice(0, 4)` auf eine großzügigere Obergrenze (z. B. 6) für den Auto-Vorschlag setzen — manueller Tipp bleibt unbegrenzt.
+  - `<Input maxLength={4}>` entfernen (oder auf z. B. 12 erhöhen als reine Schutzgrenze).
+  - Hinweistext „3–4 Zeichen" → „mind. 1 Zeichen (A–Z, 0–9)".
+  - Validierungs-Toast „Kürzel muss 3–4 Zeichen haben" entfernen (Backend-Format-Check reicht).
+- `src/components/forms/KundeBearbeitenDialog.tsx`
+  - Gleiche Anpassungen: `sanitizeKuerzel` ohne `slice`, `maxLength` weg, Hinweistext + Validierung anpassen.
+- Backend (`backend/src/kunden/kuerzel.ts`): bleibt wie es ist — `^[A-Z0-9]+$` erlaubt jede Länge ≥ 1. **Nichts ändern.**
+- Live-Check (`useKuerzelFrei`): aktuell triggert er erst ab `length >= 3`. Auf `>= 1` senken in beiden Dialogen.
 
-### B. Firmendaten stabil speichern und anzeigen
+### B) Startzähler zuverlässig anwenden
 
-1. Frontend-Hook `useUpdateFirmendaten` stabilisieren:
-   - nach erfolgreichem `PATCH /einstellungen/firma` sofort `qk.einstellungen.firma` mit der Antwort setzen
-   - danach gezielt neu laden
-   - zusätzlich alle PDF-Queries invalidieren, damit Rechnung/Angebot nicht den alten Footer behalten
-2. Firmendaten vor dem Speichern normalisieren:
-   - `firmenname` und `webseite` bleiben die UI-Felder
-   - zusätzlich werden die Backend-Aliasse `name` und `web` konsistent mitgeschickt
-   - interne Leerzeichen werden nicht entfernt; nur äußere Leerzeichen werden wie bisher bereinigt
-3. Einstellungen-Formular robuster machen:
-   - nach erfolgreichem Speichern wird der Formularzustand auf die gespeicherte Server-Antwort gesetzt
-   - dadurch wird das Feld nicht wieder leer oder auf alte Daten zurückgesetzt
-4. PDF-Cache-Abhängigkeit erweitern:
-   - PDF-Signatur enthält relevante Firmendaten: `firmenname`, `webseite`, Adresse, Steuerdaten, Bankdaten, Logo
-   - wenn Firmendaten geändert werden, erzeugt die Rechnung/Angebot-PDF automatisch eine neue Version
-5. Backend/PDF-Legacy-Namen absichern:
-   - nur der exakte Altwert `MyCleanCenter GmbH` wird beim Lesen/Rendern als `My Clean Center GmbH` behandelt
-   - eigene Firmennamen werden nicht verändert
-   - `webseite`/`web` werden weiterhin sauber gemappt
+Kern: Backend muss `startZaehlerAktuellerMonat` aus dem Body lesen und in `belegnummer_zaehler` setzen. Helper dafür existiert bereits: `bumpBelegNummerMindestens(kundeId, art, periode, mindestens)` (idempotent, MAX-Logik).
 
-### C. Tests / Prüfung
+- `backend/src/routes/stammdaten.ts`
+  - Imports ergänzen: `bumpBelegNummerMindestens, periodeMMYY` aus `../kunden/nummern.js`.
+  - **POST `/kunden`** (nach erfolgreichem `createKunde`, vor `return k`):
+    ```ts
+    const start = Number(body.startZaehlerAktuellerMonat);
+    if (k.kuerzel && Number.isFinite(start) && start > 1) {
+      const periode = periodeMMYY();
+      bumpBelegNummerMindestens(k.id, "rechnung", periode, start);
+      bumpBelegNummerMindestens(k.id, "angebot", periode, start);
+    }
+    ```
+  - **PATCH `/kunden/:id`** (nach erfolgreichem `updateKunde`, vor Audit/Return): gleiche Logik mit `result.kuerzel` und `req.params.id`. Wichtig: vor dem Aufruf `delete body.startZaehlerAktuellerMonat`, damit `updateKunde` das unbekannte Feld nicht verschluckt/ablehnt.
+- Belegart-Trennung: Da die Frontend-Vorschau im Dialog/Form sowohl Rechnung als auch Angebot betrifft und die Eingabe „nächste Nummer ab" als gemeinsamer Startpunkt gemeint ist, beide Belegarten (`rechnung`, `angebot`) auf denselben Mindestwert heben. (Bestehende, höhere Zähler werden durch `MAX` nicht heruntergesetzt — sicher.)
+- `GET /kunden/:id/zaehler` liest danach den korrekten Wert → der Bearbeiten-Dialog zeigt beim nächsten Öffnen `26` statt `1`.
+- Vergabe (`vergebeBelegnummer` → `nextBelegNummer`): nutzt bereits `belegnummer_zaehler.naechster_start` per UPSERT. Sobald der Zähler auf `26` steht, vergibt die nächste Rechnung `26`, danach `27` usw. → erfüllt automatisch deinen 26 → 27 Wunsch ohne weitere Codeänderung.
 
-1. Backend-Test ergänzen/erweitern:
-   - Firmendaten-Roundtrip mit `My Clean Center GmbH` und Website bleibt exakt erhalten
-   - interne Felder `name/web` und UI-Felder `firmenname/webseite` bleiben synchron
-2. PDF-relevante Prüfung:
-   - PDF-Firmendatenquelle liefert den Firmennamen mit Leerzeichen und die Website korrekt
-3. Migrationstest:
-   - keine doppelten Migrationsnummern mehr
-   - neue Reset-Unlock-Migration ist höher als die aktuelle letzte Migration
-4. Nach Umsetzung in der Preview prüfen:
-   - Einstellungen → Firmendaten: Name mit Leerzeichen + Website speichern
-   - Seite/Tab wechseln und zurück: Werte bleiben erhalten
-   - Rechnung/Angebot öffnen: Footer zeigt neuen Namen + Website
-   - Einstellungen → Sicherheit: Testdaten löschen zeigt wieder den Button, solange noch nicht erneut gelöscht wurde
+### C) Tests / Smoke
 
-## Nach dem Update auf dem Pi
+- Bestehende `backend/test/belege.spec.ts` ergänzen oder neuen Test:
+  - Kunde anlegen mit `kuerzel: "XYZ"`, `startZaehlerAktuellerMonat: 26`.
+  - `GET /kunden/:id/zaehler?art=rechnung` → `naechsterStart === 26`.
+  - Rechnung anlegen → Nummer endet auf `/26`.
+  - Zweite Rechnung → `/27`.
+  - PATCH mit `startZaehlerAktuellerMonat: 50` → Zähler springt auf 50, niedrigere Werte werden ignoriert (MAX-Verhalten).
 
-Nach Installation/Update einmal Backend neu starten:
+## Was NICHT geändert wird
 
-```text
-systemctl restart mycleancenter
-```
+- Format-Regeln (Großschreibung, A–Z/0–9), Eindeutigkeit, 409-Konflikt-Flow.
+- Bestehende Belege/Nummern.
+- Logik in `belegnummer.ts` / `nummern.ts` — der vorhandene Helper macht genau das Richtige.
+- Preview-Modus (`localPreviewData.ts`) — der Fix betrifft den echten Pi-Backend-Pfad, den du laut Beschreibung benutzt. (Falls du explizit den Preview auch fixen willst: separat sagen.)
 
-Danach sollte gelten:
+## Dateien
 
-- **Einstellungen → Sicherheit** zeigt den Button **Testdaten löschen…** wieder an.
-- Nach erfolgreichem Testdaten-Reset sperrt er sich wieder dauerhaft.
-- **Einstellungen → Firmendaten** speichert `My Clean Center GmbH` mit Leerzeichen und die Website dauerhaft.
-- **Rechnungen/Angebote** zeigen den aktuellen Namen und die Website im Footer.
+- `src/components/forms/KundeForm.tsx`
+- `src/components/forms/KundeBearbeitenDialog.tsx`
+- `backend/src/routes/stammdaten.ts`
+- `backend/test/belege.spec.ts` (Test-Ergänzung)
