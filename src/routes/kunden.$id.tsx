@@ -168,6 +168,9 @@ function Page() {
           <TabsTrigger value="ansprechpartner" className="shrink-0 rounded-full px-3 sm:px-5">
             Ansprechpartner ({ansprechpartner.length})
           </TabsTrigger>
+          <TabsTrigger value="vertraege" className="shrink-0 rounded-full px-3 sm:px-5">
+            Verträge
+          </TabsTrigger>
           <TabsTrigger value="objekte" className="shrink-0 rounded-full px-3 sm:px-5">
             Objekte ({objekte.length})
           </TabsTrigger>
