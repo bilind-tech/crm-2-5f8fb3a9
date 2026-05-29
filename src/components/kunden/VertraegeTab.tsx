@@ -86,8 +86,8 @@ export function VertraegeTab({ kundeId }: Props) {
           id: editId,
           bezeichnung: bezeichnung.trim(),
           startDatum,
-          endDatum: (endDatum || null) as never,
-          notiz: (notiz.trim() || null) as never,
+          endDatum: endDatum || null,
+          notiz: notiz.trim() || null,
         });
         toast.success("Vertrag aktualisiert");
       }
