@@ -210,6 +210,31 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
         />
       )}
 
+      {kundeId && vertraege.length > 0 && (
+        <Field
+          label={
+            vertraege.length === 1 ? "Vertragsbezug" : "Vertragsbezug (mehrere verfügbar)"
+          }
+        >
+          <Select value={vertragId} onValueChange={(v) => setVertragId(v)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— ohne Vertragsbezug —</SelectItem>
+              {vertraege.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  {(v.bezeichnung || "Vertrag")} · ab {v.startDatum}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Wird im PDF oberhalb der Leistungen erwähnt (z.&nbsp;B. „Gemäß unserem Vertrag »…« vom …").
+          </p>
+        </Field>
+      )}
+
       <div className="flex items-end gap-3">
         <div className="flex-1">
           <Field label="Titel *">
