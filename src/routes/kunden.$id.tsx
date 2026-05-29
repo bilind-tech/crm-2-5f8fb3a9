@@ -246,6 +246,10 @@ function Page() {
           <AnsprechpartnerTab kundeId={k.id} liste={ansprechpartner} />
         </TabsContent>
 
+        <TabsContent value="vertraege" className="mt-6">
+          <VertraegeTab kundeId={k.id} />
+        </TabsContent>
+
         <TabsContent value="objekte" className="mt-6 space-y-3">
           <div className="flex justify-end">
             <Button onClick={() => setOpenObjekt(true)} variant="outline" className="rounded-full">
