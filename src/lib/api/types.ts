@@ -261,6 +261,19 @@ export interface Rechnung {
   geaendertAm: ISODateTime;
 }
 
+// ---------- Verträge ----------
+
+export interface Vertrag {
+  id: ID;
+  kundeId: ID;
+  bezeichnung: string;
+  startDatum: ISODate;
+  endDatum?: ISODate;
+  notiz?: string;
+  erstelltAm: ISODateTime;
+  geaendertAm: ISODateTime;
+}
+
 // ---------- Dokumente ----------
 
 export type DokumentTyp =
