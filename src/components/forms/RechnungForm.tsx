@@ -16,6 +16,7 @@ import {
   useCreateRechnung,
   useNummernkreise,
   useKundenZaehler,
+  useVertraege,
 } from "@/hooks/useApi";
 import { vorschauBelegnummer } from "@/lib/belegNummer";
 import { toast } from "sonner";
@@ -63,11 +64,25 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
   const [positionen, setPositionen] = useState<PositionDraft[]>(() => [emptyPosition(19)]);
   const [optionen, setOptionen] = useState<OptionenState>(defaultOptionen);
   const [ansprechpartnerId, setAnsprechpartnerId] = useState<string | undefined>();
+  const [vertragId, setVertragId] = useState<string | "__none__">("__none__");
 
   const objekteVonKunde = useMemo(
     () => objekteAlle.filter((o) => o.kundeId === kundeId),
     [objekteAlle, kundeId],
   );
+
+  const { data: vertraege = [] } = useVertraege(kundeId);
+  // Beim Kundenwechsel sinnvolle Default-Auswahl setzen:
+  // - 0 Verträge → none
+  // - 1 Vertrag  → vorausgewählt
+  // - mehrere    → none (User wählt aktiv)
+  const lastKundeRef = useRef<string>("");
+  if (lastKundeRef.current !== kundeId) {
+    lastKundeRef.current = kundeId;
+    // setState in render ist okay, weil identitätsgesichert (ref-gated)
+    if (vertraege.length === 1) setVertragId(vertraege[0].id);
+    else setVertragId("__none__");
+  }
 
   const monatsOptionen = useMemo(() => {
     const out: { value: string; label: string }[] = [];
