@@ -291,6 +291,10 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="vertraege" className="mt-5">
+            <VertraegeTab kundeId={kunde.id} />
+          </TabsContent>
         </Tabs>
 
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
