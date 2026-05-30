@@ -127,15 +127,18 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
       return;
     }
     try {
+      // Leere Strings explizit als null senden — `undefined` würde von
+      // JSON.stringify gestrippt und das Backend würde den alten DB-Wert
+      // behalten. Cast nötig, weil Kunde-Type nur string|undefined kennt.
       await update.mutateAsync({
-        firmenname: firmenname || null,
-        vorname: vorname || null,
+        firmenname: (firmenname || null) as unknown as string | undefined,
+        vorname: (vorname || null) as unknown as string | undefined,
         nachname: nachname || undefined,
-        email: email || null,
-        telefon: telefon || null,
-        strasse: strasse || null,
-        plz: plz || null,
-        ort: ort || null,
+        email: (email || null) as unknown as string | undefined,
+        telefon: (telefon || null) as unknown as string | undefined,
+        strasse: (strasse || null) as unknown as string | undefined,
+        plz: (plz || null) as unknown as string | undefined,
+        ort: (ort || null) as unknown as string | undefined,
         status,
         // Nur senden, wenn der User wirklich getippt hat. Verhindert, dass
         // ein versehentlich initialisiertes Objekt zurück ans Backend geht.
