@@ -14,6 +14,7 @@ interface FirmaSettings {
   plz?: string;
   ort?: string;
   telefon?: string;
+  mobil?: string;
   email?: string;
   web?: string;
   ustId?: string;
@@ -38,6 +39,7 @@ export function loadFirmaForPdf(): FirmaForPdf {
     plz: f.plz ?? null,
     ort: f.ort ?? null,
     telefon: f.telefon ?? null,
+    mobil: f.mobil ?? null,
     email: f.email ?? null,
     webseite: f.web ?? null,
     ustId: f.ustId ?? null,
