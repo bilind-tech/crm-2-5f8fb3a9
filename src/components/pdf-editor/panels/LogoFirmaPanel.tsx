@@ -19,6 +19,7 @@ const FIRMA_FIELDS: { key: keyof Firmendaten; label: string }[] = [
   { key: "plz", label: "PLZ" },
   { key: "ort", label: "Ort" },
   { key: "telefon", label: "Telefon" },
+  { key: "mobil", label: "Mobil" },
   { key: "email", label: "E-Mail" },
   { key: "webseite", label: "Webseite" },
   { key: "ustId", label: "USt-IdNr." },
