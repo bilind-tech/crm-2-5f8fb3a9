@@ -128,14 +128,14 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
     }
     try {
       await update.mutateAsync({
-        firmenname: firmenname || undefined,
-        vorname: vorname || undefined,
+        firmenname: firmenname || null,
+        vorname: vorname || null,
         nachname: nachname || undefined,
-        email: email || undefined,
-        telefon: telefon || undefined,
-        strasse: strasse || undefined,
-        plz: plz || undefined,
-        ort: ort || undefined,
+        email: email || null,
+        telefon: telefon || null,
+        strasse: strasse || null,
+        plz: plz || null,
+        ort: ort || null,
         status,
         // Nur senden, wenn der User wirklich getippt hat. Verhindert, dass
         // ein versehentlich initialisiertes Objekt zurück ans Backend geht.
