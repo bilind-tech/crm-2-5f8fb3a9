@@ -1,43 +1,27 @@
-## Ziel
+## Bug
 
-1. In **Einstellungen → Firmendaten → Kontakt** ein neues Feld **Mobil** ergänzen (zwischen Telefon und E-Mail).
-2. Auf allen Beleg-PDFs (Rechnung, Angebot, Übergabe-/Schlüsselprotokoll) den Footer umbauen:
-   - **Spalte 1 (links, max. 3 Zeilen):** Firmenname · Straße · PLZ Ort
-   - **Spalte 2 (Mitte links):** Bank, Bankname, IBAN (unverändert)
-   - **Spalte 3 (Mitte rechts):** Telefon · Mobil · E-Mail
-   - **Spalte 4 (rechts):** Handelsregister · USt-ID · Webseite · **Geschäftsführer** (neu unten angehängt)
+Im `KundeBearbeitenDialog` wird beim Speichern jedes leere Stammdaten-Feld als `undefined` übergeben (`strasse: strasse || undefined`, dasselbe für `plz`, `ort`, `telefon`, `email`, `firmenname`, `vorname`).
 
-## Änderungen
+Beim JSON-Serialisieren entfernt `JSON.stringify` `undefined`-Keys vollständig — der PATCH-Request enthält das Feld dann gar nicht. Das Backend (`updateKunde` in `backend/src/kunden/repo.ts`) iteriert nur über tatsächlich gesendete Keys → der alte DB-Wert bleibt erhalten. Beim erneuten Öffnen sieht der Nutzer wieder die alte Adresse.
 
-### Datenmodell
-- `backend/src/settings/schemas.ts` → `FirmaSchema`: Feld `mobil: optStr.default("")` ergänzen.
-- `backend/src/pdf/types.ts` → `FirmaForPdf`: `mobil?: string | null`.
-- `backend/src/pdf/firma.ts` → `FirmaSettings.mobil` + Mapping in `loadFirmaForPdf()`.
-- `src/lib/api/types.ts` → `Firmendaten.mobil?: string`.
+## Fix
 
-### Einstellungen-UI
-- `src/routes/einstellungen.tsx` Sektion „Kontakt": Grid bleibt 3-spaltig; neue Reihenfolge **Telefon | Mobil | E-Mail**, Website rutscht in eine zweite Zeile (1 Feld).
+In `src/components/forms/KundeBearbeitenDialog.tsx` (Submit-Block ab Zeile 130) bei allen leerbaren Stammdaten-Feldern `|| undefined` durch `|| null` ersetzen:
 
-### PDF-Footer (3 Stellen identisch anpassen)
-- `backend/src/pdf/layout.ts` `footer()`
-- `src/lib/pdf/belegPdf.ts` `footer()`
-- `src/lib/pdf/werkzeugePdf.ts` `footer()`
-
-Neue Spalten:
-```text
-cell([firmenname, strasse, "PLZ Ort"])               // links, exakt 3 Zeilen
-cell(["Bank", bankName, iban], "center")             // unverändert
-cell([telefon, mobil, email], "center")              // Tel/Mobil/Mail
-cell([handelsregister, "USt-ID: …", webseite,
-      geschaeftsfuehrer ? "Geschäftsführer: …" : null], "right")
+```ts
+strasse: strasse || null,
+plz: plz || null,
+ort: ort || null,
+telefon: telefon || null,
+email: email || null,
+firmenname: firmenname || null,
+vorname: vorname || null,
 ```
-Geschäftsführer-Zeile aus Spalte 1 entfernen.
 
-### Backend-Routenmapping
-- `backend/src/routes/einstellungen.ts`: `firmaToWire/firmaFromWire` braucht keine Anpassung — `mobil` heißt UI- und Backend-seitig gleich und fließt automatisch durch.
+`null` überlebt `JSON.stringify` und wird im Backend (`v ?? null`) als SQL-NULL gespeichert → Feld wird tatsächlich geleert.
 
-### Tests
-- `backend/test/firma-settings.spec.ts`: `mobil` ins Payload aufnehmen und im Roundtrip-Assert prüfen.
+`nachname` bleibt unverändert (Pflichtfeld, Validierung weiter oben). `kuerzel` bleibt `|| undefined` (Backend-Logik unterscheidet "nicht gesendet" vs. "geleert" hier bewusst). `notizen` und `startZaehlerAktuellerMonat` bleiben wie sie sind (touched-Logik).
 
-### Migration / Bestandsdaten
-Keine DB-Migration nötig (Settings liegen in JSON-Store). `mobil` ist optional und defaultet auf `""`.
+## Scope
+
+Nur eine Datei: `src/components/forms/KundeBearbeitenDialog.tsx`. Backend, Typen und `KundeForm.tsx` (Neuanlage — dort macht `|| undefined` Sinn, weil bei INSERT nicht zwischen „nicht gesetzt" und „geleert" unterschieden werden muss) bleiben unverändert.
