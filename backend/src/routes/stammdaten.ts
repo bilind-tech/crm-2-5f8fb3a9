@@ -30,7 +30,6 @@ import { listAngebote } from "../belege/angebote-repo.js";
 import { listRechnungen } from "../belege/rechnungen-repo.js";
 import { listDokumente } from "../dokumente/repo.js";
 import {
-  bumpBelegNummerMindestens,
   peekBelegNummer,
   periodeMMYY,
   setBelegNummerStart,
