@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { printPdfBlob, printPdfBlobUrl } from "@/lib/pdf/printBlob";
+import { printPdfBlob, printPdfBlobUrl, printRequiresOpenWindow } from "@/lib/pdf/printBlob";
 import { cn } from "@/lib/utils";
 
 type Common = {
@@ -36,28 +36,45 @@ export function PrintButton(props: Props) {
     e.stopPropagation();
     e.preventDefault();
     if (busy) return;
+    // Safari/iOS: Tab MUSS synchron im Click-Handler geöffnet werden,
+    // sonst blockiert der Popup-Blocker. Im sonstigen Pfad (Chromium/FF)
+    // bleibt winRef null und wir drucken im aktuellen Tab via iframe.
+    let winRef: Window | null = null;
+    if (printRequiresOpenWindow() && (props.blob || props.url || props.getBlob)) {
+      try {
+        winRef = window.open("", "_blank");
+      } catch {
+        winRef = null;
+      }
+    }
     try {
       // Blob bevorzugen — vermeidet fetch(blobUrl), das in WebKit/Safari mit
       // „Load failed" abbricht, sobald die Blob-URL revoked wurde.
       if (props.blob) {
         setBusy(true);
-        await printPdfBlob(props.blob);
+        await printPdfBlob(props.blob, winRef);
         return;
       }
       if (props.url) {
         setBusy(true);
-        await printPdfBlobUrl(props.url);
+        await printPdfBlobUrl(props.url, winRef);
         return;
       }
       if (props.getBlob) {
         setBusy(true);
         const blob = await props.getBlob();
-        await printPdfBlob(blob);
+        await printPdfBlob(blob, winRef);
         return;
+      }
+      if (winRef) {
+        try { winRef.close(); } catch { /* noop */ }
       }
       toast.error("PDF ist noch nicht bereit.");
     } catch (err) {
       console.error(err);
+      if (winRef) {
+        try { winRef.close(); } catch { /* noop */ }
+      }
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Drucken fehlgeschlagen: ${msg}`);
     } finally {
