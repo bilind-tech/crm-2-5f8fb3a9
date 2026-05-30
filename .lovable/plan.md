@@ -1,64 +1,52 @@
-## Bug
+# Empfänger nicht fett + Druck passt auf A4
 
-Beim Bearbeiten eines Kunden lässt sich die nächste Belegnummer (Startzähler des Monats) nicht nach **unten** korrigieren und der Wert `1` wird komplett ignoriert.
+## 1. Empfänger-Adressblock: Firmenname nicht mehr fett
 
-Ursachen im Backend:
+In allen PDF-Generatoren (Angebot, Rechnung, Übergabeprotokoll, Schlüsselübergabe) wird die erste Zeile des Empfänger-Blocks aktuell mit `bold: i === 0` fett gesetzt. Das wird in folgenden Dateien entfernt — die Adresszeilen erscheinen einheitlich in normaler Schriftstärke:
 
-1. **`backend/src/kunden/nummern.ts` → `bumpBelegNummerMindestens()`** verwendet
-   ```sql
-   DO UPDATE SET naechster_start = MAX(naechster_start, excluded.naechster_start)
-   ```
-   D. h. der Zähler kann nur erhöht, nie gesenkt werden. Trägt der User eine kleinere Zahl ein als der gespeicherte Wert, wird sie verworfen.
+- `src/lib/pdf/belegPdf.ts` (Zeile ~661, Frontend-Beleg-PDF)
+- `backend/src/pdf/layout.ts` (Zeile ~471, Backend-Beleg-PDF)
+- `src/lib/pdf/werkzeugePdf.ts` (Zeilen ~356 und ~538, Übergabe-/Schlüsselprotokoll)
 
-2. **`backend/src/routes/stammdaten.ts` Zeile 160**:
-   ```ts
-   if (result.kuerzel && Number.isFinite(startRaw) && startRaw > 1) { … }
-   ```
-   Mit `startRaw > 1` wird ein bewusst gewähltes `1` (Reset auf Monatsanfang) gar nicht ans Backend weitergegeben.
+Reihenfolge und Inhalt der Zeilen bleiben unverändert (Firmenname, Person, Straße, PLZ Ort).
 
-Effekt aus User-Sicht: PATCH läuft scheinbar durch (200 OK), DB-Wert bleibt aber unverändert → beim erneuten Öffnen erscheint die alte Zahl.
+## 2. Druckdialog: PDF passt sauber auf A4, mehrseitig
 
-## Fix
+Aktuell rendert `src/lib/pdf/printBlob.ts` jede PDF-Seite als PNG in ein Iframe mit:
+```css
+@page { size: A4; margin: 0; }
+.page img { width: 100%; height: auto; }
+```
+Das führt im macOS-Druckdialog dazu, dass das Bild oben angeschnitten wird (Logo halb abgeschnitten), weil `height: auto` die Bildhöhe nicht an die A4-Seite bindet und Browser/Drucker eigene Skalierung anwenden.
 
-### `backend/src/kunden/nummern.ts`
-Neue, eindeutige Setter-Funktion ergänzen, die den Wert **exakt** schreibt:
-
-```ts
-export function setBelegNummerStart(
-  kundeId: string,
-  belegart: BelegArt,
-  periodeMMYY: string,
-  naechsterStart: number,
-): void {
-  const v = Math.max(1, Math.floor(naechsterStart));
-  getDatabase()
-    .prepare(
-      `INSERT INTO belegnummer_zaehler (kunde_id, belegart, periode, naechster_start)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(kunde_id, belegart, periode)
-         DO UPDATE SET naechster_start = excluded.naechster_start`,
-    )
-    .run(kundeId, belegart, periodeMMYY, v);
+Fix in `src/lib/pdf/printBlob.ts` (Funktion `buildPrintHtml`): Bild fest auf A4-Maße zwingen, jede Seite genau eine A4-Seite, mehrseitige PDFs sauber umbrechen:
+```css
+@page { size: A4; margin: 0; }
+html, body { margin: 0; padding: 0; background: #fff; }
+.page {
+  width: 210mm;
+  height: 297mm;
+  page-break-after: always;
+  overflow: hidden;
+}
+.page:last-child { page-break-after: auto; }
+.page img {
+  width: 210mm;
+  height: 297mm;
+  display: block;
+  object-fit: contain;
 }
 ```
 
-`bumpBelegNummerMindestens` bleibt für Import/Migration unverändert.
+Damit:
+- jede Seite belegt exakt eine A4-Seite (kein Anschnitt oben, Logo vollständig sichtbar),
+- `object-fit: contain` verhindert Verzerrung, falls der PDF-Renderer minimal abweichende Proportionen liefert,
+- mehrseitige Rechnungen brechen automatisch auf Seite 2, 3 … um (via `page-break-after: always`).
 
-### `backend/src/routes/stammdaten.ts`
-- Import `setBelegNummerStart` zusätzlich.
-- PATCH-Route (Zeile 160): Guard von `startRaw > 1` auf `startRaw >= 1` ändern und `setBelegNummerStart` statt `bumpBelegNummerMindestens` aufrufen — für `rechnung` UND `angebot`.
-- POST-Route (Zeile 120): analog auf `setBelegNummerStart` umstellen, damit der Startwert auch beim Anlegen exakt übernommen wird (statt nur „bumpen").
+Der eigentliche PDF-Inhalt (pdfmake-Layout, Seitenränder, Tabellen-Umbruch) bleibt unverändert — die Mehrseitigkeit funktioniert dort bereits über pdfmake und wird durch die CSS-Anpassung nur korrekt im Druckdialog wiedergegeben.
 
-### Tests
-- `backend/test/belege.spec.ts` (oder neue `kunden-zaehler.spec.ts`): zwei Cases
-  1. Start auf 7 setzen → GET `/kunden/:id/zaehler` liefert 7. Danach auf 3 senken → GET liefert 3.
-  2. Start auf 1 setzen wird persistiert.
+## Out of Scope
 
-## Scope
-
-Nur Backend:
-- `backend/src/kunden/nummern.ts`
-- `backend/src/routes/stammdaten.ts`
-- ein Test
-
-Frontend (`KundeBearbeitenDialog.tsx`, `useKundenZaehler`-Invalidation) ist bereits korrekt und bleibt unverändert.
+- Keine Änderungen an pdfmake-Seitenrändern, Header, Footer oder Tabellen.
+- Keine Backend-/Datenänderungen.
+- Keine UI-Änderungen außerhalb der PDF-Generierung.
