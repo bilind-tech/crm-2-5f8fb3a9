@@ -655,10 +655,9 @@ async function buildDoc(
     id: "kunde",
     width: "*",
     stack: [
-      ...kundeAdresse(ctx.kunde, ctx.ansprechpartner, ctx.objekt ?? null).map((l, i) => ({
+      ...kundeAdresse(ctx.kunde, ctx.ansprechpartner, ctx.objekt ?? null).map((l) => ({
         text: l,
         fontSize: 10,
-        bold: i === 0,
       })),
     ],
   };

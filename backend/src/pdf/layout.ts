@@ -465,10 +465,9 @@ function buildDoc(args: BuildArgs) {
         columns: [
           {
             width: "*",
-            stack: kundeAdresse(args.kunde, args.ansprechpartner, args.objekt ?? null).map((l, i) => ({
+            stack: kundeAdresse(args.kunde, args.ansprechpartner, args.objekt ?? null).map((l) => ({
               text: l,
               fontSize: 10,
-              bold: i === 0,
             })),
           },
           metaBox(args.meta, args.metaVariant, args.metaNote),
