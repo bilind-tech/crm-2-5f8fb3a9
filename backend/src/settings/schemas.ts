@@ -20,6 +20,7 @@ export const FirmaSchema = z.object({
   ort: optStr.default(""),
   land: optStr.default(""),
   telefon: optStr.default(""),
+  mobil: optStr.default(""),
   email: optStr.default(""),
   web: optStr.default(""),
   ustId: optStr.default(""),
