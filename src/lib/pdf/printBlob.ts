@@ -39,58 +39,92 @@ function wrapError(stage: string, err: unknown): Error {
   return wrapped;
 }
 
-/**
- * Safari-Druckpfad: PDF nativ in einem neuen Tab anzeigen. Eine kleine
- * HTML-Hülle bettet das PDF in ein <iframe> ein, ruft nach dem Laden
- * automatisch `window.print()` auf und schließt den Tab, sobald der
- * Druckdialog beendet wird (oder fällt geräuschlos zurück).
- *
- * `winRef` MUSS synchron im User-Klick geöffnet sein, sonst blockiert Safari
- * das spätere Auto-`print()`.
- */
-async function printPdfNativeTab(blob: Blob, winRef: Window | null): Promise<void> {
+type PrintTabWindow = Window & {
+  __attachPdfForPrint?: (url: string) => void;
+  __markPrintTabLoading?: (message?: string) => void;
+  __pendingPrintPdfUrl?: string;
+  __pendingPrintError?: string;
+  __showPrintTabError?: (message?: string) => void;
+};
+
+function ensurePrintTabShell(winRef: Window | null): PrintTabWindow {
   if (!winRef) {
     throw new Error(
       "Druck-Tab konnte nicht geöffnet werden (Popup-Blocker?). Bitte Popups für diese Seite zulassen.",
     );
   }
-  const url = URL.createObjectURL(blob);
-  const html = buildAutoPrintTabHtml(url);
+  const child = winRef as PrintTabWindow;
   try {
-    // document.write hält den Tab als „vom User geöffnet" markiert,
-    // sodass Safari window.print()/window.close() darin erlaubt.
-    const doc = winRef.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-  } catch (err) {
-    try {
-      winRef.close();
-    } catch {
-      /* noop */
+    const doc = child.document;
+    const hasShell = doc.getElementById("pdf") && doc.getElementById("loader");
+    if (!hasShell) {
+      doc.open();
+      doc.write(buildPrintTabShellHtml());
+      doc.close();
     }
-    URL.revokeObjectURL(url);
-    throw wrapError("Druck-Tab konnte nicht geladen werden", err);
+    child.__markPrintTabLoading?.("PDF wird vorbereitet…");
+    child.focus?.();
+    return child;
+  } catch (err) {
+    throw wrapError("Druck-Tab konnte nicht initialisiert werden", err);
   }
-  // URL großzügig freigeben — die HTML-Hülle hält eine Referenz darauf,
-  // solange der Tab offen ist; danach räumt der Browser auf.
+}
+
+function attachPdfToPrintTab(winRef: Window | null, blob: Blob): void {
+  const child = ensurePrintTabShell(winRef);
+  const url = URL.createObjectURL(blob);
+  try {
+    child.focus?.();
+    child.__pendingPrintPdfUrl = url;
+    if (typeof child.__attachPdfForPrint === "function") {
+      child.__attachPdfForPrint(url);
+    } else {
+      const frame = child.document.getElementById("pdf") as HTMLIFrameElement | null;
+      if (!frame) throw new Error("PDF-Frame im Druck-Tab nicht gefunden");
+      frame.src = url;
+    }
+  } catch (err) {
+    URL.revokeObjectURL(url);
+    throw wrapError("PDF konnte nicht an den Druck-Tab übergeben werden", err);
+  }
   setTimeout(() => URL.revokeObjectURL(url), 10 * 60_000);
 }
 
 /**
- * HTML für den Druck-Tab: Vollflächiges PDF-Iframe + Auto-Print + Auto-Close
- * + Fallback-Hinweis, wenn der Browser den automatischen Druck verweigert.
+ * Safari-Druckpfad: Druck-Tab zuerst mit eigener HTML-Hülle initialisieren,
+ * danach PDF-Blob an das Child-Window übergeben. So bleibt die User-Geste
+ * erhalten und Safari erlaubt eher Fokus + `window.print()`.
  */
-function buildAutoPrintTabHtml(pdfUrl: string): string {
-  // Inline-Script, das auf das echte Rendern des PDFs wartet und dann
-  // window.print() aufruft. Nach Abschluss (afterprint ODER Fokus-Rückkehr
-  // ODER Sicherheits-Timeout) schließt sich der Tab.
+async function printPdfNativeTab(blob: Blob, winRef: Window | null): Promise<void> {
+  attachPdfToPrintTab(winRef, blob);
+}
+
+function buildPrintTabShellHtml(): string {
   const script = `
 (function(){
   var didPrint = false;
   var didClose = false;
+  var closeHooksBound = false;
   var hint = document.getElementById('hint');
-  function showHint(){ if(hint){ hint.style.display='block'; } }
+  var frame = document.getElementById('pdf');
+  var loader = document.getElementById('loader');
+  var status = document.getElementById('status');
+  var hintTimer = 0;
+  function setStatus(text){ if(status){ status.textContent = text || ''; } }
+  function showHint(text){
+    if(text && hint){ hint.textContent = text; }
+    if(hint){ hint.style.display='block'; }
+  }
+  function hideHint(){ if(hint){ hint.style.display='none'; } }
+  function showLoader(text){
+    if(loader){ loader.style.display='flex'; }
+    if(frame){ frame.style.display='none'; }
+    setStatus(text || 'PDF wird vorbereitet…');
+  }
+  function showFrame(){
+    if(loader){ loader.style.display='none'; }
+    if(frame){ frame.style.display='block'; }
+  }
   function closeSoon(delay){
     if(didClose) return;
     didClose = true;
@@ -98,19 +132,9 @@ function buildAutoPrintTabHtml(pdfUrl: string): string {
       try { window.close(); } catch(e){}
     }, delay || 200);
   }
-  function triggerPrint(){
-    if(didPrint) return;
-    didPrint = true;
-    try {
-      window.focus();
-      window.print();
-    } catch(e){
-      showHint();
-      return;
-    }
-    // Auto-Close-Heuristik:
-    //  - 'afterprint' feuert auf Desktop-Safari/Chrome zuverlässig
-    //  - iOS Safari feuert oft kein 'afterprint' → wir nutzen visibilitychange/focus als Backup
+  function bindCloseHooks(){
+    if(closeHooksBound) return;
+    closeHooksBound = true;
     window.addEventListener('afterprint', function(){ closeSoon(150); });
     var seenHidden = false;
     document.addEventListener('visibilitychange', function(){
@@ -118,30 +142,92 @@ function buildAutoPrintTabHtml(pdfUrl: string): string {
       else if(seenHidden){ closeSoon(150); }
     });
     window.addEventListener('focus', function(){
-      // Wenn der Druckdialog weg ist, bekommen wir Fokus zurück.
-      // Kleine Verzögerung, damit afterprint zuerst eine Chance hat.
       setTimeout(function(){ closeSoon(50); }, 800);
     });
-    // Letzte Reißleine: nach 5 Minuten Inaktivität schließen.
     setTimeout(function(){ closeSoon(0); }, 5 * 60 * 1000);
   }
-  function ready(){
-    // Etwas Sicherheitspuffer, damit Safari die PDF-Seiten wirklich gerendert hat,
-    // bevor der Druckdialog kommt.
-    setTimeout(triggerPrint, 350);
+  function triggerPrint(){
+    if(didPrint) return;
+    didPrint = true;
+    bindCloseHooks();
+    showFrame();
+    hideHint();
+    setStatus('Druckdialog wird geöffnet…');
+    try {
+      window.focus();
+    } catch(e){
+      didPrint = false;
+      showFrame();
+      showHint('Falls der Druckdialog nicht erscheint: bitte zu diesem Tab wechseln und manuell drucken.');
+      setStatus('Automatisches Drucken wurde blockiert.');
+      return;
+    }
+    setTimeout(function(){
+      try {
+        window.print();
+      } catch(e){
+        didPrint = false;
+        showFrame();
+        showHint('Falls der Druckdialog nicht erscheint: bitte zu diesem Tab wechseln und manuell drucken.');
+        setStatus('Automatisches Drucken wurde blockiert.');
+      }
+    }, 100);
   }
-  var f = document.getElementById('pdf');
-  if(!f){ showHint(); return; }
-  if(f.complete || f.readyState === 'complete'){ ready(); }
-  else {
-    f.addEventListener('load', ready, { once: true });
-    f.addEventListener('error', showHint, { once: true });
-    // Fallback, falls 'load' im PDF-Viewer nie feuert (manche Versionen)
-    setTimeout(ready, 2500);
+  function ready(){
+    if(hintTimer){ window.clearTimeout(hintTimer); hintTimer = 0; }
+    setTimeout(triggerPrint, 450);
+  }
+  function bindFrame(){
+    if(!frame || frame.__printBound) return;
+    frame.__printBound = true;
+    frame.addEventListener('load', ready);
+    frame.addEventListener('error', function(){
+      showLoader('PDF konnte nicht geladen werden.');
+      showHint('Bitte diesen Tab schließen und es erneut versuchen.');
+    });
+  }
+  window.__markPrintTabLoading = function(message){
+    didPrint = false;
+    hideHint();
+    showLoader(message || 'PDF wird vorbereitet…');
+    try { window.focus(); } catch(e){}
+  };
+  window.__attachPdfForPrint = function(url){
+    bindFrame();
+    didPrint = false;
+    hideHint();
+    showLoader('PDF wird geladen…');
+    try { window.focus(); } catch(e){}
+    if(!frame){
+      showHint('Druckansicht konnte nicht vorbereitet werden.');
+      setStatus('Druckansicht fehlt.');
+      return;
+    }
+    if(hintTimer){ window.clearTimeout(hintTimer); }
+    hintTimer = window.setTimeout(function(){
+      showFrame();
+      showHint('Falls kein Druckdialog erscheint: bitte zu diesem Tab wechseln und Cmd+P bzw. Teilen > Drucken nutzen.');
+      setStatus('PDF ist bereit.');
+    }, 4000);
+    frame.src = url;
+  };
+  window.__showPrintTabError = function(message){
+    if(hintTimer){ window.clearTimeout(hintTimer); hintTimer = 0; }
+    didPrint = true;
+    showLoader(message || 'PDF konnte nicht vorbereitet werden.');
+    showHint('Dieser Tab kann geschlossen werden.');
+  };
+  bindFrame();
+  showLoader('PDF wird vorbereitet…');
+  if(window.__pendingPrintError){
+    window.__showPrintTabError(window.__pendingPrintError);
+    window.__pendingPrintError = '';
+  } else if(window.__pendingPrintPdfUrl){
+    window.__attachPdfForPrint(window.__pendingPrintPdfUrl);
+    window.__pendingPrintPdfUrl = '';
   }
 })();
 `.trim();
-  // pdfUrl ist eine blob:-URL, daher keine HTML-Escape-Sorgen.
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -150,21 +236,52 @@ function buildAutoPrintTabHtml(pdfUrl: string): string {
 <title>Drucken</title>
 <style>
   html, body { margin:0; padding:0; height:100%; background:#525659; }
-  #pdf { position:fixed; inset:0; width:100%; height:100%; border:0; }
+  body { font:14px -apple-system,BlinkMacSystemFont,system-ui,sans-serif; }
+  #pdf { position:fixed; inset:0; width:100%; height:100%; border:0; display:none; background:#525659; }
+  #loader {
+    position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:14px; color:#fff; text-align:center; padding:24px;
+  }
+  #spinner {
+    width:32px; height:32px; border-radius:999px; border:3px solid rgba(255,255,255,.28);
+    border-top-color:#fff; animation:spin .8s linear infinite;
+  }
+  #status { max-width:360px; line-height:1.45; opacity:.95; }
   #hint {
     display:none; position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
     background:#111; color:#fff; padding:10px 16px; border-radius:8px;
     font:14px -apple-system,system-ui,sans-serif; box-shadow:0 6px 24px rgba(0,0,0,.35);
-    z-index:10;
+    z-index:10; max-width:min(calc(100vw - 32px), 560px); text-align:center;
   }
+  @keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
-<iframe id="pdf" src="${pdfUrl}" title="PDF"></iframe>
-<div id="hint">Falls der Druckdialog nicht erscheint: bitte über das Browser-Menü drucken.</div>
+<iframe id="pdf" title="PDF"></iframe>
+<div id="loader">
+  <div id="spinner" aria-hidden="true"></div>
+  <div id="status">PDF wird vorbereitet…</div>
+</div>
+<div id="hint">Falls der Druckdialog nicht erscheint: bitte zu diesem Tab wechseln und manuell drucken.</div>
 <script>${script}</script>
 </body>
 </html>`;
+}
+
+export function initializePrintTab(winRef: Window | null): void {
+  ensurePrintTabShell(winRef);
+}
+
+export function showPrintTabError(winRef: Window | null, message: string): void {
+  if (!winRef) return;
+  try {
+    const child = ensurePrintTabShell(winRef);
+    child.__pendingPrintError = message;
+    child.__showPrintTabError?.(message);
+    child.focus?.();
+  } catch {
+    /* noop */
+  }
 }
 
 async function renderPdfToImages(data: ArrayBuffer): Promise<string[]> {
@@ -346,15 +463,11 @@ export async function printPdfBlobUrl(url: string, winRef?: Window | null): Prom
   try {
     res = await fetch(url);
   } catch (err) {
-    if (winRef) {
-      try { winRef.close(); } catch { /* noop */ }
-    }
+    showPrintTabError(winRef ?? null, "PDF konnte nicht geladen werden.");
     throw wrapError("PDF-Quelle nicht erreichbar (Blob-URL evtl. abgelaufen)", err);
   }
   if (!res.ok) {
-    if (winRef) {
-      try { winRef.close(); } catch { /* noop */ }
-    }
+    showPrintTabError(winRef ?? null, "PDF konnte nicht geladen werden.");
     throw new Error(`PDF-Quelle antwortete HTTP ${res.status}`);
   }
   if (isWebKitSafari()) {
