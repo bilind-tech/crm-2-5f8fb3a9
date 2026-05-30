@@ -246,18 +246,17 @@ function footer(firma: Firmendaten) {
           columns: [
             cell([
               firma.firmenname,
-              firma.geschaeftsfuehrer ? `Geschäftsführer: ${firma.geschaeftsfuehrer}` : null,
-              [firma.strasse, [firma.plz, firma.ort].filter(Boolean).join(" ")]
-                .filter(Boolean)
-                .join(" - "),
+              firma.strasse,
+              [firma.plz, firma.ort].filter(Boolean).join(" ") || null,
             ]),
             cell(["Bank", firma.bankName, firma.iban], "center"),
-            cell([firma.telefon, firma.email], "center"),
+            cell([firma.telefon, firma.mobil, firma.email], "center"),
             cell(
               [
                 firma.handelsregister,
                 firma.ustId ? `USt-ID: ${firma.ustId}` : null,
                 firma.webseite,
+                firma.geschaeftsfuehrer ? `Geschäftsführer: ${firma.geschaeftsfuehrer}` : null,
               ],
               "right",
             ),
