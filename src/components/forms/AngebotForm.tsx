@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { KundePicker } from "./KundePicker";
 import {
   useKunden,
   useObjekte,
