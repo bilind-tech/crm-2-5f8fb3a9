@@ -69,6 +69,13 @@ cd "$BUILD_DIR"
 WORKERD_SKIP_INSTALL=1 npm ci --no-audit --no-fund --ignore-scripts
 # Native Module für die Tools, die wir wirklich brauchen, nachträglich bauen (esbuild).
 npm rebuild esbuild --no-audit --no-fund || true
+# npm lockt optionale native Pakete manchmal nur für die Architektur, auf der
+# package-lock.json erzeugt wurde. Auf dem Pi fehlt dann z. B. das
+# lightningcss-ARM64-Binary, obwohl lightningcss selbst installiert ist.
+if [[ "$(uname -s)" == "Linux" && "$(uname -m)" == "aarch64" ]]; then
+  LIGHTNINGCSS_VERSION="$(node -p "require('./node_modules/lightningcss/package.json').version")"
+  npm install --no-save --no-audit --no-fund "lightningcss-linux-arm64-gnu@$LIGHTNINGCSS_VERSION"
+fi
 npm run build:spa
 
 echo "==> 2b/6  Frontend-node_modules entfernen (verhindert esbuild-Versions-Kollision beim Backend-Postinstall)"
