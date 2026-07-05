@@ -62,6 +62,7 @@ function kundeAdresse(k: ApiKunde, ap?: ApiAnsprechpartner, o?: ApiObjekt | null
   const apPerson = ap ? [ap.vorname, ap.nachname].filter(Boolean).join(" ").trim() : "";
   const person = apPerson || [k.vorname, k.nachname].filter(Boolean).join(" ");
   if (person) lines.push(person);
+  if (o?.name) lines.push(o.name);
   // Wenn ein Objekt ausgewählt ist, ist dessen Einsatzadresse maßgeblich.
   // Falls dort nichts gepflegt ist, fällt die PDF auf die Kundenadresse zurück.
   const strasse = o?.strasse || k.strasse || "";
